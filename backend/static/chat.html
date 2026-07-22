@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Puente Bot — Chat de Prueba</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f1a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      height: 90vh;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(108, 99, 255, 0.3);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid rgba(108,99,255,0.3);
+      flex-shrink: 0;
+    }
+
+    .avatar {
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(135deg, #6C63FF, #00BFA5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .header-info h2 {
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .header-info p {
+      color: #00BFA5;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #00BFA5;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .user-bar {
+      background: #16213e;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(108,99,255,0.15);
+    }
+
+    .user-bar label {
+      color: #888;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .user-bar input {
+      background: #0f0f1a;
+      border: 1px solid rgba(108,99,255,0.3);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 13px;
+      width: 130px;
+    }
+
+    .user-bar input:focus {
+      outline: none;
+      border-color: #6C63FF;
+    }
+
+    .clear-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid rgba(231,76,60,0.4);
+      color: #E74C3C;
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .clear-btn:hover {
+      background: rgba(231,76,60,0.1);
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: #13131f;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: #6C63FF44; border-radius: 4px; }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 80%;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user { align-self: flex-end; align-items: flex-end; }
+    .message.bot  { align-self: flex-start; align-items: flex-start; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .message.user .bubble {
+      background: linear-gradient(135deg, #6C63FF, #5a52e0);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.bot .bubble {
+      background: #1e1e35;
+      color: #e8e8f0;
+      border-bottom-left-radius: 4px;
+      border: 1px solid rgba(108,99,255,0.2);
+    }
+
+    .message-time {
+      font-size: 10px;
+      color: #555;
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    .typing {
+      display: none;
+      align-self: flex-start;
+      background: #1e1e35;
+      border: 1px solid rgba(108,99,255,0.2);
+      border-radius: 18px;
+      border-bottom-left-radius: 4px;
+      padding: 14px 18px;
+    }
+
+    .typing span {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      background: #6C63FF;
+      border-radius: 50%;
+      margin: 0 2px;
+      animation: bounce 1.2s infinite;
+    }
+
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%           { transform: translateY(-8px); }
+    }
+
+    .input-area {
+      background: #16213e;
+      padding: 16px 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border-top: 1px solid rgba(108,99,255,0.2);
+      flex-shrink: 0;
+    }
+
+    .input-area input {
+      flex: 1;
+      background: #0f0f1a;
+      border: 1px solid rgba(108,99,255,0.3);
+      border-radius: 24px;
+      padding: 12px 18px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .input-area input:focus {
+      border-color: #6C63FF;
+    }
+
+    .input-area input::placeholder { color: #555; }
+
+    .send-btn {
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(135deg, #6C63FF, #00BFA5);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, opacity 0.2s;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover { transform: scale(1.08); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .send-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .welcome {
+      text-align: center;
+      padding: 30px 20px;
+      color: #555;
+    }
+
+    .welcome .icon { font-size: 40px; margin-bottom: 10px; }
+    .welcome p { font-size: 13px; line-height: 1.6; }
+
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    .chip {
+      background: rgba(108,99,255,0.15);
+      border: 1px solid rgba(108,99,255,0.3);
+      color: #6C63FF;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip:hover {
+      background: rgba(108,99,255,0.3);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="avatar">🛍️</div>
+    <div class="header-info">
+      <h2>Puente Bot</h2>
+      <p><span class="status-dot"></span>Centro Comercial El Puente</p>
+    </div>
+  </div>
+
+  <!-- Barra de usuario -->
+  <div class="user-bar">
+    <label>Tu nombre:</label>
+    <input type="text" id="userName" value="Sebastian" maxlength="30"/>
+    <label>ID:</label>
+    <input type="text" id="userId" value="test_001" maxlength="20"/>
+    <button class="clear-btn" onclick="clearHistory()">🗑 Limpiar</button>
+  </div>
+
+  <!-- Mensajes -->
+  <div class="messages" id="messages">
+    <div class="welcome">
+      <div class="icon">👋</div>
+      <p>Hola, soy <strong style="color:#6C63FF">Puente Bot</strong>.<br/>
+      Puedo ayudarte con el directorio de tiendas,<br/>horarios, eventos y más.</p>
+      <div class="suggestions">
+        <div class="chip" onclick="sendSuggestion('¿Qué tiendas de ropa hay?')">👕 Ropa</div>
+        <div class="chip" onclick="sendSuggestion('¿Dónde hay restaurantes?')">🍔 Comida</div>
+        <div class="chip" onclick="sendSuggestion('¿Cuál es el horario del mall?')">🕐 Horario</div>
+        <div class="chip" onclick="sendSuggestion('¿Dónde están los cajeros?')">💳 Cajeros</div>
+        <div class="chip" onclick="sendSuggestion('¿Hay parqueadero?')">🚗 Parqueadero</div>
+        <div class="chip" onclick="sendSuggestion('¿Qué eventos hay esta semana?')">🎉 Eventos</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typing indicator -->
+  <div class="typing" id="typing">
+    <span></span><span></span><span></span>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <input
+      type="text"
+      id="messageInput"
+      placeholder="Escribe tu mensaje..."
+      onkeydown="if(event.key==='Enter') sendMessage()"
+      autocomplete="off"
+    />
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  function getTime() {
+    return new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function addMessage(text, role) {
+    const msgs = document.getElementById('messages');
+
+    // Quitar welcome si existe
+    const welcome = msgs.querySelector('.welcome');
+    if (welcome) welcome.remove();
+
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    div.innerHTML = `
+      <div class="bubble">${text.replace(/\n/g, '<br/>')}</div>
+      <div class="message-time">${getTime()}</div>
+    `;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function showTyping(show) {
+    const t = document.getElementById('typing');
+    const msgs = document.getElementById('messages');
+    t.style.display = show ? 'flex' : 'none';
+    if (show) msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const input   = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const text    = input.value.trim();
+    if (!text) return;
+
+    const name  = document.getElementById('userName').value || 'Tester';
+    const phone = document.getElementById('userId').value || 'test_001';
+
+    addMessage(text, 'user');
+    input.value = '';
+    sendBtn.disabled = true;
+    showTyping(true);
+
+    try {
+      const res = await fetch(`${API}/webhook/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, phone, name }),
+      });
+
+      const data = await res.json();
+      showTyping(false);
+      addMessage(data.bot || '❌ Sin respuesta', 'bot');
+    } catch (err) {
+      showTyping(false);
+      addMessage('❌ Error conectando al servidor. ¿Está corriendo en localhost:8000?', 'bot');
+    }
+
+    sendBtn.disabled = false;
+    input.focus();
+  }
+
+  function sendSuggestion(text) {
+    document.getElementById('messageInput').value = text;
+    sendMessage();
+  }
+
+  async function clearHistory() {
+    const phone = document.getElementById('userId').value || 'test_001';
+    await fetch(`${API}/webhook/history/${phone}`, { method: 'DELETE' });
+    const msgs = document.getElementById('messages');
+    msgs.innerHTML = `
+      <div class="welcome">
+        <div class="icon">👋</div>
+        <p>Historial limpiado. Puedes empezar de nuevo.</p>
+      </div>`;
+  }
+</script>
+</body>
+</html>

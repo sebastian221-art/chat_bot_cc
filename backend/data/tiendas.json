@@ -1,0 +1,252 @@
+{
+  "mall": {
+    "name": "Centro Comercial El Puente",
+    "address": "Calle 15 #8-32, Bucaramanga, Santander",
+    "general_schedule": "Lunes a Sábado 10:00am - 9:00pm | Domingos y Festivos 11:00am - 8:00pm",
+    "phone": "607 123 4567",
+    "parking": "Parqueadero disponible en sótano y piso -1. Tarifa: $3.000 primera hora, $1.500 hora adicional. Motos: $1.000",
+    "wifi": "Red: ElPuente_Gratis | Sin contraseña",
+    "info_points": [
+      {"name": "Punto de información principal", "floor": "Piso 1", "location": "Entrada principal, junto a la fuente central"},
+      {"name": "Baños hombres y mujeres", "floor": "Piso 1", "location": "Zona norte, al fondo del pasillo principal"},
+      {"name": "Baños hombres y mujeres", "floor": "Piso 2", "location": "Junto a la zona de comidas"},
+      {"name": "Cajeros automáticos Bancolombia y Davivienda", "floor": "Piso 1", "location": "Entrada norte, al lado de la escalera eléctrica"},
+      {"name": "Parqueadero cubierto", "floor": "Sótano", "location": "Acceso por rampa principal calle 15"},
+      {"name": "Zona de juegos infantiles", "floor": "Piso 2", "location": "Ala este, frente al food court"},
+      {"name": "Sala de lactancia", "floor": "Piso 1", "location": "Junto a los baños zona norte"},
+      {"name": "Ascensor", "floor": "Todos los pisos", "location": "Centro del mall, junto a la fuente"}
+    ]
+  },
+  "stores": [
+    {
+      "name": "Nike Store",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado Deportivo",
+      "description": "Tienda oficial Nike con la colección completa de ropa, zapatillas y accesorios deportivos para hombre, mujer y niños.",
+      "schedule": "Lun-Sab 10am-8:30pm | Dom y Festivos 11am-7pm",
+      "phone": "607 111 2233",
+      "location_hint": "Piso 1, ala norte, frente a la entrada principal",
+      "tags": "nike,zapatillas,ropa deportiva,running,futbol,gym,tenis,deportivo"
+    },
+    {
+      "name": "Adidas",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado Deportivo",
+      "description": "Ropa deportiva, zapatillas Adidas Originals, Ultraboost y colecciones de fútbol y tenis.",
+      "schedule": "Lun-Sab 10am-8:30pm | Dom y Festivos 11am-7pm",
+      "phone": "607 111 3344",
+      "location_hint": "Piso 1, ala norte, al lado de Nike",
+      "tags": "adidas,zapatillas,ultraboost,futbol,deportivo,originals,ropa deportiva"
+    },
+    {
+      "name": "Zara",
+      "floor": "Piso 1",
+      "category": "Ropa y Moda",
+      "description": "Moda internacional para hombre, mujer y niños. Ropa casual, formal y de temporada con las últimas tendencias.",
+      "schedule": "Lun-Sab 10am-9pm | Dom 11am-8pm",
+      "phone": "607 222 1122",
+      "location_hint": "Piso 1, ala sur, esquina principal",
+      "tags": "zara,moda,ropa,casual,formal,tendencias,mujer,hombre,niños"
+    },
+    {
+      "name": "Studio F",
+      "floor": "Piso 2",
+      "category": "Ropa Mujer",
+      "description": "Moda femenina colombiana. Vestidos, blusas, pantalones y accesorios para mujer con diseños exclusivos.",
+      "schedule": "Lun-Sab 10am-8pm | Dom 11am-7pm",
+      "phone": "607 222 5566",
+      "location_hint": "Piso 2, entrada por escalera eléctrica lado derecho",
+      "tags": "studio f,moda mujer,vestidos,blusas,ropa femenina,colombiana"
+    },
+    {
+      "name": "Totto",
+      "floor": "Piso 1",
+      "category": "Accesorios y Maletas",
+      "description": "Mochilas, maletines, maletas de viaje, billeteras y accesorios. Reconocida marca colombiana para todos los estilos.",
+      "schedule": "Lun-Sab 10am-8:30pm | Dom 11am-7pm",
+      "phone": "607 333 1122",
+      "location_hint": "Piso 1, zona central, frente a los cajeros",
+      "tags": "totto,mochilas,maletines,maletas,viaje,accesorios,bolsos,colombiana"
+    },
+    {
+      "name": "iShop Apple Premium Reseller",
+      "floor": "Piso 1",
+      "category": "Tecnología",
+      "description": "Reseller oficial Apple. iPhone, MacBook, iPad, Apple Watch, AirPods y accesorios originales. Servicio técnico autorizado.",
+      "schedule": "Lun-Sab 10am-8pm | Dom 12pm-7pm",
+      "phone": "607 444 5566",
+      "location_hint": "Piso 1, ala sur, vitrina esquinera con letreros Apple",
+      "tags": "apple,iphone,macbook,ipad,airpods,tecnologia,celulares,computadores,ishop"
+    },
+    {
+      "name": "Samsung Store",
+      "floor": "Piso 1",
+      "category": "Tecnología",
+      "description": "Tienda oficial Samsung. Galaxy S series, tablets, smartwatches, TVs, electrodomésticos y accesorios.",
+      "schedule": "Lun-Sab 10am-8pm | Dom 12pm-7pm",
+      "phone": "607 444 7788",
+      "location_hint": "Piso 1, ala sur, al lado de iShop",
+      "tags": "samsung,galaxy,celulares,tablets,smartwatch,tecnologia,televisores"
+    },
+    {
+      "name": "Falabella",
+      "floor": "Piso 1 y Piso 2",
+      "category": "Tienda por Departamentos",
+      "description": "Tienda ancla del mall. Ropa para toda la familia, electrodomésticos, muebles, tecnología, cosméticos y más. CMR Falabella disponible.",
+      "schedule": "Lun-Dom 10am-9pm",
+      "phone": "607 555 0011",
+      "location_hint": "Piso 1 y 2, ala oeste, ocupa toda la sección",
+      "tags": "falabella,departamentos,ropa,electrodomesticos,muebles,cosmeticos,cmr"
+    },
+    {
+      "name": "McDonald's",
+      "floor": "Piso 2 - Zona de Comidas",
+      "category": "Comida Rápida",
+      "description": "Hamburguesas, McNuggets, papas fritas, desayunos y Happy Meal para niños. Servicio en sala y para llevar.",
+      "schedule": "Todos los días 9am-10pm",
+      "phone": "607 666 1234",
+      "location_hint": "Piso 2, zona de comidas food court, esquina izquierda",
+      "tags": "mcdonalds,hamburguesas,comida rapida,papas fritas,mcnuggets,desayuno,niños"
+    },
+    {
+      "name": "Crepes & Waffles",
+      "floor": "Piso 2 - Zona de Comidas",
+      "category": "Restaurante",
+      "description": "Crepes, waffles, helados artesanales, ensaladas y platos calientes. Ambiente familiar e ideal para pareja.",
+      "schedule": "Lun-Jue 11am-9pm | Vie-Dom 11am-10pm",
+      "phone": "607 666 5678",
+      "location_hint": "Piso 2, zona de comidas, zona central con terraza",
+      "tags": "crepes,waffles,helados,ensaladas,restaurante,familiar,postre,dulce"
+    },
+    {
+      "name": "El Corral",
+      "floor": "Piso 2 - Zona de Comidas",
+      "category": "Comida Rápida",
+      "description": "Hamburguesas artesanales colombianas, perros calientes, aros de cebolla y malteadas. La mejor hamburguesa del país.",
+      "schedule": "Todos los días 11am-9:30pm",
+      "phone": "607 666 9012",
+      "location_hint": "Piso 2, zona de comidas, frente a McDonald's",
+      "tags": "el corral,hamburguesas,colombiano,perros calientes,malteadas,comida rapida"
+    },
+    {
+      "name": "Subway",
+      "floor": "Piso 2 - Zona de Comidas",
+      "category": "Comida Rápida",
+      "description": "Sándwiches personalizados, ensaladas y wraps. Opciones saludables y vegetarianas disponibles.",
+      "schedule": "Todos los días 10am-9pm",
+      "phone": "607 666 3456",
+      "location_hint": "Piso 2, zona de comidas, pasillo lateral",
+      "tags": "subway,sandwiches,saludable,vegetariano,ensaladas,wraps,rapido"
+    },
+    {
+      "name": "Juan Valdez Café",
+      "floor": "Piso 1",
+      "category": "Cafetería",
+      "description": "Café colombiano de origen. Espresso, cappuccino, frappés, pasteles y snacks. El mejor café del país.",
+      "schedule": "Lun-Sab 8am-9pm | Dom 9am-8pm",
+      "phone": "607 777 1111",
+      "location_hint": "Piso 1, entrada principal lado derecho",
+      "tags": "juan valdez,cafe,colombiano,espresso,cappuccino,frappe,pasteles,desayuno"
+    },
+    {
+      "name": "Óptica La Visión",
+      "floor": "Piso 1",
+      "category": "Salud y Óptica",
+      "description": "Exámenes visuales gratuitos. Monturas nacionales e importadas, lentes de contacto y gafas de sol de las mejores marcas.",
+      "schedule": "Lun-Sab 9am-8pm | Dom 10am-6pm",
+      "phone": "607 888 2222",
+      "location_hint": "Piso 1, ala norte, junto a la escalera eléctrica",
+      "tags": "optica,gafas,lentes,vision,examen visual,monturas,gafas de sol,contacto"
+    },
+    {
+      "name": "Éxito Express",
+      "floor": "Piso 1",
+      "category": "Supermercado",
+      "description": "Supermercado con productos de primera necesidad, frutas, verduras, panadería, licores y artículos del hogar.",
+      "schedule": "Lun-Dom 8am-9pm",
+      "phone": "607 999 3333",
+      "location_hint": "Piso 1, extremo sur, acceso también desde el parqueadero",
+      "tags": "exito,supermercado,mercado,comida,frutas,verduras,hogar,panaderia,licores"
+    },
+    {
+      "name": "Bodytech",
+      "floor": "Piso 3",
+      "category": "Gimnasio y Wellness",
+      "description": "Gimnasio de alto rendimiento. Máquinas cardiovasculares, pesas, clases grupales de spinning, yoga y zumba. Planes mensuales y anuales.",
+      "schedule": "Lun-Vie 5am-10pm | Sab 6am-8pm | Dom 7am-4pm",
+      "phone": "607 555 4444",
+      "location_hint": "Piso 3, zona norte, con acceso directo desde el parqueadero nivel 2",
+      "tags": "bodytech,gimnasio,gym,ejercicio,yoga,zumba,spinning,fitness,wellness"
+    },
+    {
+      "name": "Cine Colombia",
+      "floor": "Piso 3",
+      "category": "Entretenimiento",
+      "description": "8 salas de cine con tecnología Dolby Atmos y sala VIP. Películas de estreno nacional e internacional. Compra online y en taquilla.",
+      "schedule": "Todos los días 11am-11pm (última función)",
+      "phone": "607 555 6666",
+      "location_hint": "Piso 3, zona sur, con gran cartelera en la entrada",
+      "tags": "cine,pelicula,cine colombia,dolby,vip,entretenimiento,estreno"
+    },
+    {
+      "name": "Claro",
+      "floor": "Piso 1",
+      "category": "Telecomunicaciones",
+      "description": "Tienda oficial Claro. Planes de celular, internet hogar, TV cable, equipos nuevos y servicio técnico.",
+      "schedule": "Lun-Sab 9am-8pm | Dom 10am-6pm",
+      "phone": "607 444 1100",
+      "location_hint": "Piso 1, zona central, frente a Totto",
+      "tags": "claro,celular,internet,planes,tv,telecomunicaciones,equipos"
+    },
+    {
+      "name": "Librería Nacional",
+      "floor": "Piso 2",
+      "category": "Librería y Papelería",
+      "description": "Libros de todas las categorías, papelería, útiles escolares, juguetes educativos y artículos de oficina.",
+      "schedule": "Lun-Sab 10am-8pm | Dom 11am-7pm",
+      "phone": "607 333 5577",
+      "location_hint": "Piso 2, ala norte, junto al ascensor",
+      "tags": "libros,libreria,papeleria,utiles,escolar,oficina,juguetes,educacion"
+    },
+    {
+      "name": "Dropi Farmacia",
+      "floor": "Piso 1",
+      "category": "Farmacia y Salud",
+      "description": "Farmacia con medicamentos, vitaminas, cosméticos, productos de cuidado personal y servicio de inyectología.",
+      "schedule": "Lun-Dom 8am-10pm",
+      "phone": "607 888 9900",
+      "location_hint": "Piso 1, entrada sur, abiertos hasta tarde",
+      "tags": "farmacia,medicamentos,vitaminas,cosmeticos,salud,inyectologia,drogueria"
+    }
+  ],
+  "events": [
+    {
+      "name": "Feria de Temporada — Descuentos hasta 50%",
+      "date": "2026-03-10",
+      "time": "Todo el día",
+      "location": "Tiendas participantes",
+      "description": "Más de 30 tiendas con descuentos de temporada. Busca los avisos amarillos en cada local."
+    },
+    {
+      "name": "Noche de Cine Gratis",
+      "date": "2026-03-14",
+      "time": "7:00pm",
+      "location": "Piso 3 — Cine Colombia",
+      "description": "Función gratuita para los primeros 100 asistentes. Reserva tu lugar en el punto de información."
+    },
+    {
+      "name": "Show Infantil — Los Backyardigans en vivo",
+      "date": "2026-03-15",
+      "time": "3:00pm y 5:00pm",
+      "location": "Plazoleta central, Piso 1",
+      "description": "Espectáculo en vivo para niños. Entrada gratuita. Dos funciones disponibles."
+    },
+    {
+      "name": "Feria Gastronómica — Sabores de Colombia",
+      "date": "2026-03-20",
+      "time": "12:00pm - 8:00pm",
+      "location": "Piso 2 — Zona de Comidas",
+      "description": "Platos típicos de distintas regiones colombianas. Chefs invitados y degustaciones gratuitas."
+    }
+  ]
+}

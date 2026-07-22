@@ -1,0 +1,18 @@
+# ---- Backend (Python) ----
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.env
+backend/*.db
+backend/data/chroma_db/
+
+# ---- Frontend (Next.js) ----
+panel/node_modules/
+panel/.next/
+panel/.env*
+panel/.env.local
+
+# ---- General ----
+*.log
+.DS_Store
+Thumbs.db
