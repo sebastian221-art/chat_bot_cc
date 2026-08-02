@@ -284,7 +284,7 @@ export default function RestaurantePage() {
           {(['name', 'description', 'category', 'photo_url'] as const).map(f => (
             <div key={f}>
               <label className="block text-zinc-400 text-xs mb-1 capitalize">{f.replace('_', ' ')}</label>
-              <input value={(newProduct as Record<string,unknown>)[f] as string || ''}
+              <input value={(newProduct as unknown as Record<string,unknown>)[f] as string || ''}
                 onChange={e => setNewProduct(p => ({ ...p, [f]: e.target.value }))}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white outline-none" />
             </div>

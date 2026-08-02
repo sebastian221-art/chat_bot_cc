@@ -90,6 +90,10 @@ export function getHomeRoute(user: AuthUser): string {
   return '/locales'
 }
 
+export function logout() {
+  clearAuth()
+}
+
 export function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     admin:       'Administrador',
