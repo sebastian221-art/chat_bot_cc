@@ -27,7 +27,7 @@ from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
 from services.whatsapp import send_text_message, parse_incoming_message
-from services.ai import generate_response, is_delivery_intent, needs_human_attention
+from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message
 from services.store_transfer import (
     find_store_by_message,
     build_transfer_message,
@@ -143,10 +143,11 @@ def _is_bot_paused(db: Session, phone_number: str) -> bool:
     return result
 
 
-def _flag_if_needs_human(db: Session, phone_number: str, message_text: str):
+def _flag_if_needs_human(db: Session, phone_number: str, message_text: str) -> bool:
+    """Marca la conversación si corresponde. Devuelve True si se activó el escalamiento."""
     escalate, reason = needs_human_attention(message_text)
     if not escalate:
-        return
+        return False
     flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone_number).first()
     if not flag:
         flag = ConversationFlag(phone_number=phone_number)
@@ -154,7 +155,8 @@ def _flag_if_needs_human(db: Session, phone_number: str, message_text: str):
     flag.needs_human = True
     flag.reason = reason
     db.commit()
-    print(f"  🆘  [{phone_number}] Marcado para atención humana (\"{reason}\")")
+    print(f"  🆘  [{phone_number}] Escalado a humano (\"{reason}\") — se responde con mensaje de transferencia, sin pasar por la IA")
+    return True
 
 
 # ── Procesamiento principal ───────────────────────────────────────
@@ -181,8 +183,10 @@ async def process_message(
         # 2. Limpiar historial viejo
         _trim_history(db, phone_number)
 
-        # 3. Marcar si el mensaje amerita atención humana (no bloquea la respuesta)
-        _flag_if_needs_human(db, phone_number, message_text)
+        # 3. Si el mensaje amerita atención humana, responde con el
+        #    mensaje de transferencia directo — SIN pasar por la IA
+        #    (para no arriesgarnos a que improvise datos falsos).
+        escalated = _flag_if_needs_human(db, phone_number, message_text)
 
         # 4. Si el bot está en pausa para este número (un admin lo está
         #    atendiendo manualmente), NO respondemos automático.
@@ -191,7 +195,10 @@ async def process_message(
             return
 
         # 5. Generar respuesta
-        response_text = await _route_message(db, phone_number, user_name, message_text)
+        if escalated:
+            response_text = build_handoff_message(user_name)
+        else:
+            response_text = await _route_message(db, phone_number, user_name, message_text)
 
         # 6. Guardar respuesta y enviar
         db.add(Conversation(
@@ -273,7 +280,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     db.commit()
     _trim_history(db, phone_number)
 
-    _flag_if_needs_human(db, phone_number, message_text)
+    escalated = _flag_if_needs_human(db, phone_number, message_text)
 
     paused = _is_bot_paused(db, phone_number)
     if paused:
@@ -285,7 +292,10 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             "time_seconds": round(time.time() - start, 2),
         }
 
-    response_text = await _route_message(db, phone_number, user_name, message_text)
+    if escalated:
+        response_text = build_handoff_message(user_name)
+    else:
+        response_text = await _route_message(db, phone_number, user_name, message_text)
 
     db.add(Conversation(
         phone_number=phone_number,

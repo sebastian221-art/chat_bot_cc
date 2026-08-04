@@ -234,3 +234,19 @@ def needs_human_attention(message: str) -> tuple[bool, str]:
         if keyword in msg:
             return True, keyword
     return False, ""
+
+
+def build_handoff_message(user_name: str = "") -> str:
+    """
+    Mensaje que ve el cliente cuando se detecta que necesita un humano.
+    No pasa por la IA generativa a propósito — así nunca improvisa
+    datos falsos (como números de teléfono inventados) en un momento
+    delicado.
+    """
+    saludo = f"¡Entendido, {user_name}!" if user_name else "¡Entendido!"
+    return (
+        f"{saludo} Ya le avisé a nuestro equipo del Centro Comercial El Puente "
+        f"para que te atienda personalmente 🙋 En un momento alguien continúa "
+        f"esta conversación contigo por aquí mismo.\n\n"
+        f"Mientras tanto, si hay algo más en lo que te pueda ayudar, dime."
+    )
