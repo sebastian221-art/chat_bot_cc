@@ -34,7 +34,7 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, event, user_profile, order, user
+from models import conversation, store, event, user_profile, order, user, conversation_flag
 from routers import webhook
 from routers.api    import router as api_router
 from routers.orders import router as orders_router

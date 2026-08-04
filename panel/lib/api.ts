@@ -51,6 +51,13 @@ export const getStats = () => req('/stats')
 export const getConversations       = () => req('/conversations')
 export const getConversationHistory = (phone: string) =>
   req(`/conversations/${encodeURIComponent(phone)}`)
+export const sendManualReply = (phone: string, message: string, pause_minutes = 45) =>
+  req(`/conversations/${encodeURIComponent(phone)}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ message, pause_minutes }),
+  })
+export const resumeBot = (phone: string) =>
+  req(`/conversations/${encodeURIComponent(phone)}/resume-bot`, { method: 'POST' })
 
 // ── Tiendas ──────────────────────────────────────────────────────
 export const getStores   = ()                            => req('/stores')
@@ -148,6 +155,7 @@ export interface StatsData {
 }
 export interface ConvUser {
   phone: string; name: string; total: number; last_seen: string
+  needs_human?: boolean; escalation_reason?: string | null; bot_paused?: boolean
 }
 export interface Order {
   id: number; order_number: string; client_phone: string; client_name: string

@@ -7,7 +7,7 @@ Endpoints que usa el panel de administración:
   GET                 /conversations
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -18,7 +18,9 @@ from models.database import get_db
 from models.conversation import Conversation
 from models.store import Store
 from models.event import Event
+from models.conversation_flag import ConversationFlag
 from services.rag import load_stores_to_rag
+from services.whatsapp import send_text_message
 
 logger = logging.getLogger("mall_bot")
 router = APIRouter(tags=["panel"])
@@ -43,6 +45,10 @@ class EventIn(BaseModel):
     location: str
     description: Optional[str] = ""
     priority: Optional[int] = 3
+
+class ReplyIn(BaseModel):
+    message: str
+    pause_minutes: Optional[int] = 45   # cuánto tiempo se pausa el bot para este número
 
 
 def _reindex(db: Session):
@@ -132,15 +138,34 @@ def get_conversations(db: Session = Depends(get_db)):
         .limit(100)
         .all()
     )
-    return [
-        {
+
+    # Traer todas las banderas de una vez (evita N+1 queries)
+    flags = {f.phone_number: f for f in db.query(ConversationFlag).all()}
+    now = datetime.now(timezone.utc)
+
+    result = []
+    for r in rows:
+        flag = flags.get(r.phone_number)
+        bot_paused = False
+        if flag and flag.bot_paused_until:
+            paused_until = flag.bot_paused_until
+            if paused_until.tzinfo is None:
+                paused_until = paused_until.replace(tzinfo=timezone.utc)
+            bot_paused = now < paused_until
+
+        result.append({
             "phone": r.phone_number,
             "name":  r.user_name,
             "total": r.total,
             "last_seen": str(r.last_seen),
-        }
-        for r in rows
-    ]
+            "needs_human": bool(flag.needs_human) if flag else False,
+            "escalation_reason": flag.reason if flag else None,
+            "bot_paused": bot_paused,
+        })
+
+    # Las que necesitan atención humana aparecen primero
+    result.sort(key=lambda x: x["needs_human"], reverse=True)
+    return result
 
 
 @router.get("/conversations/{phone}")
@@ -155,6 +180,48 @@ def get_conversation_history(phone: str, db: Session = Depends(get_db)):
     if not records:
         raise HTTPException(status_code=404, detail="Conversación no encontrada")
     return {"phone": phone, "messages": [r.to_dict() for r in records]}
+
+
+@router.post("/conversations/{phone}/reply")
+async def send_manual_reply(phone: str, body: ReplyIn, db: Session = Depends(get_db)):
+    """
+    Un administrador responde manualmente desde el panel. El mensaje
+    sale por WhatsApp real, queda guardado con role='admin', y el bot
+    se pausa para este número por un rato (para no chocar con el humano).
+    """
+    ok = await send_text_message(to=phone, message=body.message)
+    if not ok:
+        raise HTTPException(status_code=502, detail="No se pudo enviar el mensaje por WhatsApp")
+
+    conv = Conversation(
+        phone_number=phone,
+        user_name=None,
+        role="admin",
+        message=body.message,
+    )
+    db.add(conv)
+
+    flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone).first()
+    if not flag:
+        flag = ConversationFlag(phone_number=phone)
+        db.add(flag)
+    flag.needs_human = False  # un humano ya está atendiendo
+    flag.bot_paused_until = datetime.now(timezone.utc) + timedelta(minutes=body.pause_minutes)
+
+    db.commit()
+    print(f"  🧑‍💼  Respuesta manual enviada a {phone} — bot pausado {body.pause_minutes} min")
+    return {"ok": True}
+
+
+@router.post("/conversations/{phone}/resume-bot")
+def resume_bot(phone: str, db: Session = Depends(get_db)):
+    """El admin termina de atender manualmente y le devuelve el control al bot."""
+    flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone).first()
+    if flag:
+        flag.bot_paused_until = None
+        flag.needs_human = False
+        db.commit()
+    return {"ok": True}
 
 
 # ══════════════════════════════════════════════════════════════════

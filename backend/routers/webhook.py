@@ -1,13 +1,23 @@
 # 📄 ARCHIVO: backend/routers/webhook.py
 """
 Webhook de WhatsApp + test endpoint.
-FIXES:
-  - Sesión activa siempre tiene prioridad sobre is_delivery_intent
-  - Nueva intención estado_pedido: busca Order activo e inyecta contexto al AI
-  - El AI responde con info real del pedido cuando el cliente pregunta su estado
+
+CAMBIOS DE ESTA VERSIÓN:
+  - Domicilios: el bot ya NO gestiona el pedido completo. Detecta la
+    tienda mencionada y transfiere al cliente al WhatsApp de esa tienda
+    (ver services/store_transfer.py). El flujo viejo de
+    services/delivery_flow.py queda sin usarse (no se borró, por si
+    se retoma en el futuro).
+  - Escalamiento humano: si el mensaje dispara una palabra de alerta
+    (ver ai.needs_human_attention), la conversación queda marcada en
+    ConversationFlag para que el panel la resalte.
+  - Pausa del bot: si un admin respondió manualmente desde el panel,
+    el bot deja de responder automático a ese número por un rato
+    (ver ConversationFlag.bot_paused_until), para no chocar con el humano.
 """
 import logging
 import time
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -15,13 +25,13 @@ from config import get_settings
 from models.database import get_db
 from models.conversation import Conversation
 from models.user_profile import UserProfile
-from models.delivery_session import DeliverySession
-from models.order import Order, OrderStatus
+from models.conversation_flag import ConversationFlag
 from services.whatsapp import send_text_message, parse_incoming_message
-from services.ai import generate_response, is_delivery_intent, is_order_status_question
-from services.delivery_flow import (
-    handle_delivery_message,
-    get_or_create_session,
+from services.ai import generate_response, is_delivery_intent, needs_human_attention
+from services.store_transfer import (
+    find_store_by_message,
+    build_transfer_message,
+    build_ask_which_store_message,
 )
 
 settings = get_settings()
@@ -68,6 +78,79 @@ async def receive_message(
     return {"status": "ok"}
 
 
+# ── Núcleo compartido: decide qué responder ────────────────────────
+
+async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> str:
+    """
+    Decide y genera la respuesta del bot para un mensaje entrante.
+    Compartido entre el webhook real y el endpoint /test para que
+    ambos se comporten exactamente igual.
+    """
+    if is_delivery_intent(message_text):
+        store = find_store_by_message(db, message_text)
+        if store:
+            return build_transfer_message(store)
+        return build_ask_which_store_message()
+
+    # También intenta resolver tienda si el mensaje anterior fue
+    # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
+    store = find_store_by_message(db, message_text)
+    if store and _last_bot_message_was_ask(db, phone_number):
+        return build_transfer_message(store)
+
+    records = _get_history(db, phone_number)
+    history = [
+        {"role": "assistant" if r.role == "admin" else r.role, "content": r.message}
+        for r in reversed(records)
+    ]
+    profile = db.query(UserProfile).filter(UserProfile.phone_number == phone_number).first()
+    profile_text = profile.to_context_string() if profile else ""
+
+    return await generate_response(
+        user_message=message_text,
+        user_name=user_name,
+        conversation_history=history,
+        user_profile=profile_text,
+    )
+
+
+def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
+    last = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number, Conversation.role.in_(["assistant", "admin"]))
+        .order_by(Conversation.timestamp.desc())
+        .first()
+    )
+    if not last:
+        return False
+    return "de qué tienda" in last.message.lower() or "qué restaurante" in last.message.lower()
+
+
+def _is_bot_paused(db: Session, phone_number: str) -> bool:
+    flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone_number).first()
+    if not flag or not flag.bot_paused_until:
+        return False
+    now = datetime.now(timezone.utc)
+    paused_until = flag.bot_paused_until
+    if paused_until.tzinfo is None:
+        paused_until = paused_until.replace(tzinfo=timezone.utc)
+    return now < paused_until
+
+
+def _flag_if_needs_human(db: Session, phone_number: str, message_text: str):
+    escalate, reason = needs_human_attention(message_text)
+    if not escalate:
+        return
+    flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone_number).first()
+    if not flag:
+        flag = ConversationFlag(phone_number=phone_number)
+        db.add(flag)
+    flag.needs_human = True
+    flag.reason = reason
+    db.commit()
+    print(f"  🆘  [{phone_number}] Marcado para atención humana (\"{reason}\")")
+
+
 # ── Procesamiento principal ───────────────────────────────────────
 
 async def process_message(
@@ -92,70 +175,19 @@ async def process_message(
         # 2. Limpiar historial viejo
         _trim_history(db, phone_number)
 
-        # 3. Verificar sesión activa de domicilio
-        #    PRIORIDAD: si hay sesión activa, SIEMPRE va al flujo de domicilio
-        session = get_or_create_session(db, phone_number)
-        in_delivery_flow = session.step != "idle"
+        # 3. Marcar si el mensaje amerita atención humana (no bloquea la respuesta)
+        _flag_if_needs_human(db, phone_number, message_text)
 
-        response_text = None
+        # 4. Si el bot está en pausa para este número (un admin lo está
+        #    atendiendo manualmente), NO respondemos automático.
+        if _is_bot_paused(db, phone_number):
+            print(f"  ⏸️   [{phone_number}] Bot en pausa — un admin lo está atendiendo, no se autoresponde")
+            return
 
-        if in_delivery_flow:
-            # Sesión activa → flujo de domicilio siempre
-            response_text = await handle_delivery_message(
-                db=db,
-                phone_number=phone_number,
-                user_name=user_name,
-                message=message_text,
-            )
+        # 5. Generar respuesta
+        response_text = await _route_message(db, phone_number, user_name, message_text)
 
-        elif is_order_status_question(message_text):
-            # 4. El cliente pregunta sobre su pedido pero la sesión ya está idle
-            #    (puede pasar si el local aceptó y el cliente pregunta después)
-            #    Buscamos el último pedido activo o reciente
-            active_order = _get_recent_order(db, phone_number)
-            active_order_context = _build_order_context(active_order) if active_order else ""
-
-            records = _get_history(db, phone_number)
-            history = [{"role": r.role, "content": r.message} for r in reversed(records)]
-            profile = db.query(UserProfile).filter(
-                UserProfile.phone_number == phone_number
-            ).first()
-            profile_text = profile.to_context_string() if profile else ""
-
-            response_text = await generate_response(
-                user_message=message_text,
-                user_name=user_name,
-                conversation_history=history,
-                user_profile=profile_text,
-                active_order_context=active_order_context,
-            )
-
-        elif is_delivery_intent(message_text):
-            # 5. Quiere iniciar un nuevo pedido
-            response_text = await handle_delivery_message(
-                db=db,
-                phone_number=phone_number,
-                user_name=user_name,
-                message=message_text,
-            )
-
-        else:
-            # 6. Flujo normal de IA — consulta general del mall
-            records = _get_history(db, phone_number)
-            history = [{"role": r.role, "content": r.message} for r in reversed(records)]
-            profile = db.query(UserProfile).filter(
-                UserProfile.phone_number == phone_number
-            ).first()
-            profile_text = profile.to_context_string() if profile else ""
-
-            response_text = await generate_response(
-                user_message=message_text,
-                user_name=user_name,
-                conversation_history=history,
-                user_profile=profile_text,
-            )
-
-        # 7. Guardar respuesta y enviar
+        # 6. Guardar respuesta y enviar
         db.add(Conversation(
             phone_number=phone_number,
             user_name=user_name,
@@ -187,63 +219,6 @@ def _get_history(db: Session, phone_number: str):
         .limit(12)
         .all()
     )
-
-
-def _get_recent_order(db: Session, phone_number: str) -> Order | None:
-    """
-    Busca el pedido más reciente del cliente que no esté terminado,
-    o el último que haya tenido (para responder 'ya fue entregado').
-    """
-    # Primero intentar pedido activo
-    terminal = {OrderStatus.DELIVERED, OrderStatus.CANCELLED}
-    active = (
-        db.query(Order)
-        .filter(
-            Order.client_phone == phone_number,
-            Order.status.notin_(terminal),
-        )
-        .order_by(Order.created_at.desc())
-        .first()
-    )
-    if active:
-        return active
-
-    # Si no hay activo, buscar el más reciente (para responder sobre entregados)
-    return (
-        db.query(Order)
-        .filter(Order.client_phone == phone_number)
-        .order_by(Order.created_at.desc())
-        .first()
-    )
-
-
-def _build_order_context(order: Order) -> str:
-    """Construye el texto de contexto del pedido para inyectar al AI."""
-    status_labels = {
-        OrderStatus.PENDING:    "Pendiente — esperando que el local lo acepte",
-        OrderStatus.ACCEPTED:   "Aceptado — el local lo confirmó",
-        OrderStatus.PREPARING:  "En preparación — lo están haciendo",
-        OrderStatus.READY:      "Listo — por salir a domicilio",
-        OrderStatus.ON_THE_WAY: "En camino — ya salió a domicilio",
-        OrderStatus.DELIVERED:  "Entregado",
-        OrderStatus.CANCELLED:  "Cancelado",
-    }
-
-    lines = [
-        f"Número de pedido: {order.order_number}",
-        f"Local: {order.store_name}",
-        f"Estado actual: {status_labels.get(order.status, order.status)}",
-        f"Dirección: {order.delivery_address}",
-        f"Pago: {order.payment_method or 'No especificado'}",
-    ]
-    if order.delivery_time_minutes:
-        lines.append(f"Tiempo estimado: {order.delivery_time_minutes} minutos")
-    if order.total and order.total > 5000:
-        lines.append(f"Total: ${order.total:,.0f} COP")
-    if order.store_message:
-        lines.append(f"Mensaje del local: {order.store_message}")
-
-    return "\n".join(lines)
 
 
 def _trim_history(db: Session, phone_number: str):
@@ -290,49 +265,19 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     db.commit()
     _trim_history(db, phone_number)
 
-    session = get_or_create_session(db, phone_number)
-    in_delivery_flow = session.step != "idle"
+    _flag_if_needs_human(db, phone_number, message_text)
 
-    active_order_context = ""
+    paused = _is_bot_paused(db, phone_number)
+    if paused:
+        return {
+            "user": message_text,
+            "bot": None,
+            "phone": phone_number,
+            "note": "Bot en pausa para este número — un admin lo está atendiendo manualmente.",
+            "time_seconds": round(time.time() - start, 2),
+        }
 
-    if in_delivery_flow:
-        response_text = await handle_delivery_message(
-            db=db,
-            phone_number=phone_number,
-            user_name=user_name,
-            message=message_text,
-        )
-    elif is_order_status_question(message_text):
-        active_order = _get_recent_order(db, phone_number)
-        active_order_context = _build_order_context(active_order) if active_order else ""
-        records = _get_history(db, phone_number)
-        history = [{"role": r.role, "content": r.message} for r in reversed(records)]
-        response_text = await generate_response(
-            user_message=message_text,
-            user_name=user_name,
-            conversation_history=history,
-            active_order_context=active_order_context,
-        )
-    elif is_delivery_intent(message_text):
-        response_text = await handle_delivery_message(
-            db=db,
-            phone_number=phone_number,
-            user_name=user_name,
-            message=message_text,
-        )
-    else:
-        records = _get_history(db, phone_number)
-        history = [{"role": r.role, "content": r.message} for r in reversed(records)]
-        profile = db.query(UserProfile).filter(
-            UserProfile.phone_number == phone_number
-        ).first()
-        profile_text = profile.to_context_string() if profile else ""
-        response_text = await generate_response(
-            user_message=message_text,
-            user_name=user_name,
-            conversation_history=history,
-            user_profile=profile_text,
-        )
+    response_text = await _route_message(db, phone_number, user_name, message_text)
 
     db.add(Conversation(
         phone_number=phone_number,
@@ -346,23 +291,19 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
 
     return {
-        "user":                message_text,
-        "bot":                 response_text,
-        "phone":               phone_number,
-        "delivery_step":       session.step,
-        "active_order_ctx":    active_order_context[:100] if active_order_context else None,
-        "time_seconds":        elapsed,
+        "user":         message_text,
+        "bot":          response_text,
+        "phone":        phone_number,
+        "time_seconds": elapsed,
     }
 
 
 @router.delete("/history/{phone}")
 async def clear_history(phone: str, db: Session = Depends(get_db)):
     db.query(Conversation).filter(Conversation.phone_number == phone).delete()
-    session = db.query(DeliverySession).filter(
-        DeliverySession.phone_number == phone
-    ).first()
-    if session:
-        session.reset()
+    flag = db.query(ConversationFlag).filter(ConversationFlag.phone_number == phone).first()
+    if flag:
+        db.delete(flag)
     db.commit()
     print(f"  🗑️   Historial de {phone} eliminado")
     return {"message": f"Historial de {phone} eliminado"}

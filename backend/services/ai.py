@@ -59,11 +59,12 @@ def classify_intent(message: str) -> str:
 
 # ── Persona base ──────────────────────────────────────────────────
 
-BASE_PERSONA = """Eres Puente Bot 🛍️, el asistente virtual del Centro Comercial El Puente en Bucaramanga.
+BASE_PERSONA = """Eres Any 🛍️, el asistente virtual del Centro Comercial El Puente en San Gil, Santander.
 Eres amigable, cálido y directo — como un buen guía del mall que conoce todo de memoria.
 
 REGLAS SIEMPRE:
 - Responde en español
+- Preséntate como "Any" cuando corresponda (nunca como "Puente Bot" ni ningún otro nombre)
 - NUNCA inventes datos — solo usa la info que te dan abajo
 - Si no sabes algo, dilo con amabilidad y sugiere el Punto de Información (Piso 1)
 - Usa máximo 1-2 emojis por mensaje, solo cuando aporten
@@ -77,7 +78,7 @@ PROMPTS = {
 TIPO DE RESPUESTA: Saludo
 - 1-2 líneas máximo
 - Cálido, breve, invita a preguntar
-- Ejemplo tono: "¡Hola! Soy Puente Bot 👋 ¿En qué te puedo ayudar hoy?"
+- Ejemplo tono: "¡Hola! Soy Any 👋 ¿En qué te puedo ayudar hoy?"
 """,
 
     "horario": BASE_PERSONA + """
@@ -94,20 +95,20 @@ TIPO DE RESPUESTA: Ubicación
 - Menciona el piso y una referencia visual concreta
 """,
 
+    # NOTA: ya no gestionamos pedidos ni su estado — redirige al local,
+    # igual que el flujo de domicilio.
     "estado_pedido": BASE_PERSONA + """
 
-TIPO DE RESPUESTA: Estado del pedido activo
-- El cliente ya tiene un pedido en curso y pregunta cómo va
-- USA SIEMPRE la info del pedido que se te provee abajo
-- Sé cálido, tranquilizador y específico
-- Si hay tiempo estimado, menciónalo
-- Si el pedido ya fue aceptado, díselo con entusiasmo
-- Si aún está pendiente, dile que en cuanto el local confirme se le notifica
-- Máximo 3-4 líneas, tono conversacional
-- NUNCA digas "no tengo información" si te dan datos del pedido
-- Si no hay datos del pedido, di que el sistema está verificando y que ya viene la confirmación
+TIPO DE RESPUESTA: Preguntan por el estado de un pedido
+- Ya no gestionamos el estado de pedidos directamente por este chat
+- Explica con amabilidad que para el estado de su pedido deben escribirle directo a la tienda o restaurante donde lo hicieron
+- Si en el mensaje o el historial se menciona qué tienda, dilo explícitamente
+- Máximo 3 líneas, tono cálido y resolutivo
 """,
 
+    # NOTA: esta intención ya NO usa este prompt para responder — ver
+    # services/store_transfer.py. Se deja aquí solo por si se quiere
+    # revertir al flujo antiguo en el futuro.
     "domicilio": BASE_PERSONA + """
 
 TIPO DE RESPUESTA: Domicilio
@@ -198,3 +199,38 @@ def is_delivery_intent(message: str) -> bool:
     Las preguntas de estado ('cuánto se demora', 'ya llegó') ya NO disparan esto.
     """
     return classify_intent(message) == "domicilio"
+
+
+# ── Escalamiento a humano ──────────────────────────────────────────
+
+ESCALATION_KEYWORDS = [
+    # Pide explícitamente una persona
+    "hablar con una persona", "hablar con alguien", "persona real",
+    "atención al cliente", "un humano", "hablar con un humano",
+    "quiero hablar con alguien de verdad",
+    # Queja / reclamo serio
+    "queja", "reclamo", "denuncia", "pésimo servicio", "muy mal servicio",
+    "terrible servicio", "esto es una estafa", "es un fraude", "me robaron",
+    "no funciona nada", "esto no sirve",
+    # Urgencia
+    "es urgente", "emergencia", "urgente por favor",
+    # Frustración explícita con el bot
+    "no me estás ayudando", "no me entiendes", "esto es inútil",
+    "quiero cancelar mi cuenta",
+]
+
+
+def needs_human_attention(message: str) -> tuple[bool, str]:
+    """
+    Detecta si el mensaje amerita que un administrador revise la
+    conversación. No bloquea la respuesta del bot — el bot igual
+    responde su mejor intento, pero la conversación queda marcada
+    para que un humano le haga seguimiento desde el panel.
+
+    Devuelve (True/False, razón_detectada_o_vacío).
+    """
+    msg = message.lower()
+    for keyword in ESCALATION_KEYWORDS:
+        if keyword in msg:
+            return True, keyword
+    return False, ""

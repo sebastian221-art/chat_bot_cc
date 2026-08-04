@@ -1,8 +1,8 @@
 // 📄 ARCHIVO: panel/app/conversaciones/page.tsx
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { getConversations, getConversationHistory, ConvUser } from '@/lib/api'
-import { RefreshCw, User, Clock, MessageSquare, Sparkles } from 'lucide-react'
+import { getConversations, getConversationHistory, sendManualReply, resumeBot, ConvUser } from '@/lib/api'
+import { RefreshCw, User, Clock, MessageSquare, Sparkles, AlertTriangle, Send, PauseCircle } from 'lucide-react'
 
 interface Message {
   role:      string
@@ -28,6 +28,8 @@ export default function ConversacionesPage() {
   const [loadingH, setLoadingH]     = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [replyText, setReplyText]   = useState('')
+  const [sending, setSending]       = useState(false)
 
   const loadUsers = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true)
@@ -68,6 +70,21 @@ export default function ConversacionesPage() {
   }
 
   const selectedUser = users.find(u => u.phone === selected)
+
+  const handleSendReply = async () => {
+    if (!selected || !replyText.trim()) return
+    setSending(true)
+    try {
+      await sendManualReply(selected, replyText.trim())
+      setReplyText('')
+      await selectUser(selected)
+      await loadUsers(true)
+    } catch (e: any) {
+      alert('Error al enviar: ' + e.message)
+    } finally {
+      setSending(false)
+    }
+  }
 
   const freqColor = (freq?: string): string => {
     const map: Record<string, string> = {
@@ -113,14 +130,30 @@ export default function ConversacionesPage() {
               onClick={() => selectUser(u.phone)}
               className={`w-full text-left px-4 py-3.5 hover:bg-zinc-900 transition-colors ${
                 selected === u.phone ? 'bg-zinc-900 border-l-2 border-indigo-500' : ''
-              }`}
+              } ${u.needs_human ? 'bg-rose-950/20' : ''}`}
             >
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-600/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <User size={15} className="text-indigo-400" />
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                  u.needs_human ? 'bg-rose-600/20' : 'bg-indigo-600/20'
+                }`}>
+                  {u.needs_human
+                    ? <AlertTriangle size={15} className="text-rose-400" />
+                    : <User size={15} className="text-indigo-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium truncate">{u.name || 'Sin nombre'}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-white text-sm font-medium truncate">{u.name || 'Sin nombre'}</p>
+                    {u.needs_human && (
+                      <span className="text-rose-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/15 flex-shrink-0">
+                        NECESITA ATENCIÓN
+                      </span>
+                    )}
+                    {u.bot_paused && !u.needs_human && (
+                      <span className="text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 flex-shrink-0 flex items-center gap-0.5">
+                        <PauseCircle size={9} /> PAUSADO
+                      </span>
+                    )}
+                  </div>
                   <p className="text-zinc-500 text-xs truncate">{u.phone}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-zinc-600 text-xs flex items-center gap-1">
@@ -155,6 +188,35 @@ export default function ConversacionesPage() {
                 </span>
               </div>
 
+              {selectedUser?.needs_human && (
+                <div className="mt-3 p-3 bg-rose-950/40 border border-rose-900/50 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-rose-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-rose-400 text-xs font-semibold">Esta conversación necesita atención humana</p>
+                      {selectedUser.escalation_reason && (
+                        <p className="text-zinc-500 text-xs mt-0.5">Detectado por: "{selectedUser.escalation_reason}"</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedUser?.bot_paused && (
+                <div className="mt-3 p-3 bg-amber-950/30 border border-amber-900/40 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <PauseCircle size={14} className="text-amber-400 flex-shrink-0" />
+                    <p className="text-amber-400 text-xs font-medium">El bot está en pausa — solo tú estás respondiendo</p>
+                  </div>
+                  <button
+                    onClick={async () => { if (selected) { await resumeBot(selected); await loadUsers() } }}
+                    className="text-xs text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg transition-all flex-shrink-0"
+                  >
+                    Devolver al bot
+                  </button>
+                </div>
+              )}
+
               {selectedUser?.profile?.summary && (
                 <div className="mt-3 p-3 bg-indigo-950/40 border border-indigo-900/50 rounded-xl">
                   <p className="text-indigo-400 text-xs font-medium flex items-center gap-1.5 mb-1.5">
@@ -182,16 +244,40 @@ export default function ConversacionesPage() {
                     <div className={`max-w-[72%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                       msg.role === 'user'
                         ? 'bg-indigo-600 text-white rounded-br-sm'
+                        : msg.role === 'admin'
+                        ? 'bg-emerald-700 text-white rounded-bl-sm'
                         : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
                     }`}>
+                      {msg.role === 'admin' && (
+                        <p className="text-emerald-200 text-[10px] font-bold mb-1">TÚ (RESPUESTA MANUAL)</p>
+                      )}
                       <p>{msg.message}</p>
-                      <p className={`text-xs mt-1.5 ${msg.role === 'user' ? 'text-indigo-300' : 'text-zinc-500'}`}>
+                      <p className={`text-xs mt-1.5 ${msg.role === 'user' ? 'text-indigo-300' : 'text-zinc-400'}`}>
                         {new Date(msg.timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
                 ))
               )}
+            </div>
+
+            {/* Responder manualmente */}
+            <div className="border-t border-zinc-800 p-4 flex-shrink-0 flex gap-2">
+              <input
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                placeholder="Escribe una respuesta manual — se envía por WhatsApp real..."
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !sending) handleSendReply() }}
+                disabled={sending}
+              />
+              <button
+                onClick={handleSendReply}
+                disabled={sending || !replyText.trim() || !selected}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all flex-shrink-0"
+              >
+                <Send size={14} /> {sending ? 'Enviando...' : 'Enviar'}
+              </button>
             </div>
           </>
         ) : (
