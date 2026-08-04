@@ -7,6 +7,7 @@ class Store(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     name          = Column(String(150), nullable=False, index=True)
+    local_number  = Column(String(20), nullable=True)   # ej: "104", "S/N"
     floor         = Column(String(20), nullable=False)
     category      = Column(String(80), nullable=False)
     description   = Column(Text, nullable=True)
@@ -22,6 +23,7 @@ class Store(Base):
         return {
             "id": self.id,
             "name": self.name,
+            "local_number": self.local_number,
             "floor": self.floor,
             "category": self.category,
             "description": self.description,
@@ -32,9 +34,21 @@ class Store(Base):
             "active": self.active,
         }
 
+    def whatsapp_link(self) -> str | None:
+        """Genera el link wa.me a partir del teléfono, para transferencias de domicilio."""
+        if not self.phone:
+            return None
+        digits = "".join(c for c in self.phone if c.isdigit())
+        if not digits:
+            return None
+        if not digits.startswith("57") and len(digits) == 10:
+            digits = "57" + digits
+        return f"https://wa.me/{digits}"
+
     def to_rag_text(self) -> str:
         parts = [
             f"Tienda: {self.name}",
+            f"Local: {self.local_number or 'S/N'}",
             f"Piso: {self.floor}",
             f"Categoría: {self.category}",
         ]

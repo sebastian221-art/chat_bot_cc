@@ -5,7 +5,16 @@ import { getEvents, createEvent, updateEvent, deleteEvent, EventPayload } from '
 import Modal from '@/components/Modal'
 import { Plus, Pencil, Trash2, RefreshCw, Calendar } from 'lucide-react'
 
-const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '' }
+const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3 }
+
+const PRIORITY_LABELS: Record<number, string> = {
+  1: 'Baja', 2: 'Baja', 3: 'Normal', 4: 'Alta', 5: 'Máxima',
+}
+const PRIORITY_COLORS: Record<number, string> = {
+  1: 'bg-zinc-800 text-zinc-500', 2: 'bg-zinc-800 text-zinc-500',
+  3: 'bg-indigo-500/10 text-indigo-400', 4: 'bg-amber-500/10 text-amber-400',
+  5: 'bg-rose-500/10 text-rose-400',
+}
 
 export default function EventosPage() {
   const [events, setEvents]     = useState<(EventPayload & { _idx: number })[]>([])
@@ -20,7 +29,7 @@ export default function EventosPage() {
     setLoading(true)
     try {
       const data = await getEvents()
-      setEvents(data.map((e: EventPayload, i: number) => ({ ...e, _idx: i })))
+      setEvents(data.map((e: EventPayload) => ({ ...e, _idx: e.id! })))
     } finally { setLoading(false) }
   }
 
@@ -161,13 +170,16 @@ export default function EventosPage() {
                   <p className="text-zinc-500 text-xs leading-relaxed mb-3">{ev.description}</p>
                 )}
 
-                <div className="flex flex-wrap gap-3 pt-3 border-t border-zinc-800">
+                <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-800">
                   {ev.time && (
                     <span className="text-zinc-500 text-xs">🕐 {ev.time}</span>
                   )}
                   {ev.location && (
                     <span className="text-zinc-500 text-xs">📍 {ev.location}</span>
                   )}
+                  <span className={`ml-auto px-2 py-0.5 rounded-lg text-xs font-semibold ${PRIORITY_COLORS[ev.priority] || PRIORITY_COLORS[3]}`}>
+                    📢 {PRIORITY_LABELS[ev.priority] || 'Normal'}
+                  </span>
                 </div>
               </div>
             )
@@ -227,6 +239,23 @@ export default function EventosPage() {
               placeholder="Detalles del evento para informar a los visitantes..."
               {...f('description')}
             />
+          </div>
+
+          <div>
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Nivel de promoción — qué tanto Any lo menciona proactivamente
+            </label>
+            <select
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              value={form.priority}
+              onChange={e => setForm(p => ({ ...p, priority: Number(e.target.value) }))}
+            >
+              <option value={1}>1 - Baja (solo si preguntan)</option>
+              <option value={2}>2 - Baja</option>
+              <option value={3}>3 - Normal</option>
+              <option value={4}>4 - Alta (lo menciona seguido)</option>
+              <option value={5}>5 - Máxima (lo promociona activamente)</option>
+            </select>
           </div>
 
         </div>

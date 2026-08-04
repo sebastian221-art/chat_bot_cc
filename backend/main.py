@@ -34,7 +34,7 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, user_profile, order, user
+from models import conversation, store, event, user_profile, order, user
 from routers import webhook
 from routers.api    import router as api_router
 from routers.orders import router as orders_router
@@ -70,13 +70,12 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         create_default_admin(db)
-    finally:
-        db.close()
-    try:
-        load_stores_to_rag()
+        load_stores_to_rag(db)
         print(f"{GREEN}  ✓  RAG cargado{RESET}")
     except Exception as e:
         print(f"{YELLOW}  ⚠  RAG no cargó: {e}{RESET}")
+    finally:
+        db.close()
     print(sep)
     print(f"  {CYAN}🌐  Backend{RESET}  →  http://localhost:8000")
     print(f"  {CYAN}📊  Panel{RESET}    →  http://localhost:3000")

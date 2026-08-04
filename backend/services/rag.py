@@ -4,11 +4,19 @@ from pathlib import Path
 from typing import List
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+from sqlalchemy.orm import Session
+
+from models.store import Store
+from models.event import Event
 
 logger = logging.getLogger("mall_bot")
 
-DATA_PATH   = Path(__file__).parent.parent / "data" / "tiendas.json"
-CHROMA_PATH = Path(__file__).parent.parent / "data" / "chroma_db"
+# La info GENERAL del mall (dirección, horario general, wifi, puntos de
+# interés) sigue viviendo en este archivo por ahora — cambia poco y no
+# tiene todavía un CRUD propio en el panel. Tiendas y Eventos SÍ ya
+# viven en la base de datos (ver models/store.py y models/event.py).
+MALL_INFO_PATH = Path(__file__).parent.parent / "data" / "tiendas.json"
+CHROMA_PATH    = Path(__file__).parent.parent / "data" / "chroma_db"
 
 _collection = None
 
@@ -29,36 +37,16 @@ def _get_collection():
     return _collection
 
 
-def _build_store_text(store: dict) -> str:
-    """
-    Construye un texto rico y completo para cada tienda.
-    Cuanto más detallado, mejor puede responder la IA.
-    """
-    lines = []
-
-    lines.append(f"TIENDA: {store['name']}")
-    lines.append(f"PISO Y UBICACIÓN: {store['floor']} — {store.get('location_hint', '')}")
-    lines.append(f"CATEGORÍA: {store['category']}")
-
-    if store.get('description'):
-        lines.append(f"QUÉ VENDE / DESCRIPCIÓN: {store['description']}")
-
-    if store.get('schedule'):
-        lines.append(f"HORARIO: {store['schedule']}")
-
-    if store.get('phone'):
-        lines.append(f"TELÉFONO: {store['phone']}")
-
-    if store.get('tags'):
-        # Convertir tags en texto legible
-        tags_readable = store['tags'].replace(',', ', ')
-        lines.append(f"PRODUCTOS Y PALABRAS CLAVE: {tags_readable}")
-
-    return "\n".join(lines)
+def _load_mall_info() -> dict:
+    try:
+        with open(MALL_INFO_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("mall", {})
+    except FileNotFoundError:
+        logger.warning("tiendas.json no encontrado - info general del mall vacía")
+        return {}
 
 
 def _build_mall_text(mall_info: dict) -> str:
-    """Texto completo con info general del mall."""
     lines = [
         f"INFORMACIÓN GENERAL DEL MALL: {mall_info.get('name', 'Centro Comercial El Puente')}",
         f"DIRECCIÓN: {mall_info.get('address', '')}",
@@ -67,18 +55,21 @@ def _build_mall_text(mall_info: dict) -> str:
         f"PARQUEADERO: {mall_info.get('parking', '')}",
         f"WIFI GRATIS: {mall_info.get('wifi', '')}",
     ]
-    return "\n".join(l for l in lines if l.split(': ')[1])
+    return "\n".join(l for l in lines if l.split(": ", 1)[1])
 
 
-def load_stores_to_rag() -> int:
+def load_stores_to_rag(db: Session) -> int:
+    """
+    Reindexar todo en ChromaDB, leyendo tiendas y eventos desde la
+    base de datos (Postgres/SQLite) en vez del archivo JSON.
+    Se llama al arrancar el backend y cada vez que se crea/edita/borra
+    una tienda o evento desde el panel.
+    """
     collection = _get_collection()
+    mall_info = _load_mall_info()
 
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    stores    = data.get("stores", [])
-    mall_info = data.get("mall", {})
-    events    = data.get("events", [])
+    stores = db.query(Store).filter(Store.active == True).all()
+    events = db.query(Event).all()
 
     # Limpiar colección antes de reindexar
     existing = collection.get()
@@ -103,47 +94,44 @@ def load_stores_to_rag() -> int:
         metadatas.append({"source": "poi", "type": "service", "name": point['name']})
         ids.append(f"poi_{idx:03d}")
 
-    # ── 3. Tiendas — texto completo y detallado ───────────────────
-    for i, store in enumerate(stores):
-        documents.append(_build_store_text(store))
+    # ── 3. Tiendas — desde la base de datos ─────────────────────────
+    for store in stores:
+        documents.append(store.to_rag_text())
         metadatas.append({
             "source": "store",
             "type": "store",
-            "name": store["name"],
-            "floor": store["floor"],
-            "category": store["category"],
+            "name": store.name,
+            "floor": store.floor,
+            "category": store.category,
         })
-        ids.append(f"store_{i:03d}")
+        ids.append(f"store_{store.id:04d}")
 
-    # ── 4. Eventos ────────────────────────────────────────────────
-    for idx, event in enumerate(events):
-        text = (
-            f"EVENTO: {event['name']}\n"
-            f"FECHA: {event['date']}\n"
-            f"HORA: {event.get('time', '')}\n"
-            f"LUGAR: {event['location']}\n"
-            f"DESCRIPCIÓN: {event.get('description', '')}"
-        )
-        documents.append(text)
-        metadatas.append({"source": "event", "type": "event", "name": event['name']})
-        ids.append(f"event_{idx:03d}")
+    # ── 4. Eventos — desde la base de datos ─────────────────────────
+    for event in events:
+        documents.append(event.to_rag_text())
+        metadatas.append({
+            "source": "event",
+            "type": "event",
+            "name": event.name,
+            "priority": event.priority,
+        })
+        ids.append(f"event_{event.id:04d}")
 
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
 
     total = len(documents)
-    print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + {len(mall_info.get('info_points',[]))} servicios = {total} entradas indexadas")
+    print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + "
+          f"{len(mall_info.get('info_points', []))} servicios = {total} entradas indexadas")
     return len(stores)
 
 
 def search_stores(query: str, n_results: int = 8) -> List[str]:
-    """
-    Busca en el índice semántico.
-    Devuelve los documentos más relevantes para la consulta.
-    """
+    """Busca en el índice semántico. Devuelve los documentos más relevantes."""
     collection = _get_collection()
 
     if collection.count() == 0:
-        load_stores_to_rag()
+        logger.warning("Colección RAG vacía en búsqueda - probablemente falta reindexar")
+        return []
 
     try:
         total = collection.count()

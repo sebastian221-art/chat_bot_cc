@@ -16,7 +16,7 @@ const CATEGORIES = [
 const FLOORS = ['Sótano','Piso 1','Piso 2','Piso 3','Piso 1 y Piso 2']
 
 const EMPTY: StorePayload = {
-  name:'', floor:'Piso 1', category:'', description:'',
+  name:'', local_number:'', floor:'Piso 1', category:'', description:'',
   schedule:'', phone:'', location_hint:'', tags:'',
 }
 
@@ -34,7 +34,7 @@ export default function TiendasPage() {
     setLoading(true)
     try {
       const data = await getStores()
-      setStores(data.map((s: StorePayload, i: number) => ({ ...s, _idx: i })))
+      setStores(data.map((s: StorePayload) => ({ ...s, _idx: s.id! })))
     } finally { setLoading(false) }
   }
 
@@ -85,8 +85,8 @@ export default function TiendasPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-7">
         <div>
-          <h1 className="text-2xl font-bold text-white">Tiendas</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">{stores.length} tiendas en el directorio</p>
+          <h1 className="text-2xl font-bold text-white">Locales</h1>
+          <p className="text-zinc-500 text-sm mt-0.5">{stores.length} locales en el directorio</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -125,8 +125,8 @@ export default function TiendasPage() {
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
           {/* Header */}
-          <div className="grid gap-4 px-5 py-3 border-b border-zinc-800 bg-zinc-950" style={{ gridTemplateColumns: '2fr 1fr 1.2fr 1fr auto' }}>
-            {['Tienda','Piso','Categoría','Horario',''].map(h => (
+          <div className="grid gap-4 px-5 py-3 border-b border-zinc-800 bg-zinc-950" style={{ gridTemplateColumns: '0.6fr 2fr 1fr 1.2fr 1fr auto' }}>
+            {['Local #','Nombre','Piso','Categoría','Horario',''].map(h => (
               <p key={h} className="text-xs text-zinc-600 font-semibold uppercase tracking-wider">{h}</p>
             ))}
           </div>
@@ -141,8 +141,9 @@ export default function TiendasPage() {
               <div
                 key={s._idx}
                 className="grid gap-4 px-5 py-3.5 hover:bg-zinc-800/50 transition-colors items-center border-b border-zinc-800/60 last:border-0"
-                style={{ gridTemplateColumns: '2fr 1fr 1.2fr 1fr auto' }}
+                style={{ gridTemplateColumns: '0.6fr 2fr 1fr 1.2fr 1fr auto' }}
               >
+                <span className="text-xs text-zinc-400 font-mono">{s.local_number || 'S/N'}</span>
                 <div>
                   <p className="font-semibold text-white text-sm">{s.name}</p>
                   {s.phone && <p className="text-zinc-500 text-xs mt-0.5">{s.phone}</p>}
@@ -183,6 +184,11 @@ export default function TiendasPage() {
           <div className="col-span-2">
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Nombre *</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="ej: Nike Store" {...field('name')} />
+          </div>
+
+          <div>
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Número de local</label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="ej: 104" {...field('local_number')} />
           </div>
 
           <div>

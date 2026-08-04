@@ -118,13 +118,13 @@ export interface UserIn {
   is_active?:  boolean
 }
 export interface StorePayload {
-  name: string; floor: string; category: string
+  id?: number; name: string; local_number: string; floor: string; category: string
   description: string; schedule: string
   phone: string; location_hint: string; tags: string
 }
 export interface EventPayload {
-  name: string; date: string; time: string
-  location: string; description: string
+  id?: number; name: string; date: string; time: string
+  location: string; description: string; priority: number
 }
 export interface ProductPayload {
   store_name: string; name: string; description: string

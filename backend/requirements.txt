@@ -8,6 +8,7 @@ python-multipart==0.0.9
 # Base de datos
 sqlalchemy==2.0.35
 alembic==1.13.3
+psycopg2-binary==2.9.9   # driver Postgres (Railway)
 
 # AI / LLM
 groq==0.11.0

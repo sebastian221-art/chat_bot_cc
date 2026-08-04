@@ -1,15 +1,13 @@
 """
 routers/api.py
 Endpoints que usa el panel de administración:
-  GET/POST/PUT/DELETE /stores
-  GET/POST/PUT/DELETE /events
+  GET/POST/PUT/DELETE /stores   (base de datos)
+  GET/POST/PUT/DELETE /events   (base de datos)
   GET                 /stats
   GET                 /conversations
 """
-import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -19,17 +17,17 @@ from pydantic import BaseModel
 from models.database import get_db
 from models.conversation import Conversation
 from models.store import Store
+from models.event import Event
 from services.rag import load_stores_to_rag
 
 logger = logging.getLogger("mall_bot")
 router = APIRouter(tags=["panel"])
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "tiendas.json"
-
 # ── Pydantic schemas ──────────────────────────────────────────────
 
 class StoreIn(BaseModel):
     name: str
+    local_number: Optional[str] = ""
     floor: str
     category: str
     description: Optional[str] = ""
@@ -44,20 +42,12 @@ class EventIn(BaseModel):
     time: str
     location: str
     description: Optional[str] = ""
+    priority: Optional[int] = 3
 
 
-# ── Helpers para leer/escribir tiendas.json ───────────────────────
-
-def _read_json():
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def _write_json(data: dict):
-    with open(DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    # Reindexar RAG automáticamente al guardar
+def _reindex(db: Session):
     try:
-        load_stores_to_rag()
+        load_stores_to_rag(db)
     except Exception as e:
         logger.warning(f"RAG no se pudo actualizar: {e}")
 
@@ -85,10 +75,9 @@ def get_stats(db: Session = Depends(get_db)):
         Conversation.timestamp >= week_ago
     ).count()
 
-    # Tiendas activas
-    data = _read_json()
-    total_stores = len(data.get("stores", []))
-    total_events = len(data.get("events", []))
+    # Tiendas y eventos activos (ahora desde la base de datos)
+    total_stores = db.query(Store).filter(Store.active == True).count()
+    total_events = db.query(Event).count()
 
     # Mensajes por día (últimos 7 días)
     daily = []
@@ -169,96 +158,96 @@ def get_conversation_history(phone: str, db: Session = Depends(get_db)):
 
 
 # ══════════════════════════════════════════════════════════════════
-# STORES
+# STORES  (ahora en base de datos — persiste entre redeploys)
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/stores")
-def list_stores():
-    data = _read_json()
-    return data.get("stores", [])
+def list_stores(db: Session = Depends(get_db)):
+    stores = db.query(Store).order_by(Store.name).all()
+    return [s.to_dict() for s in stores]
 
 
 @router.post("/stores", status_code=201)
-def create_store(store: StoreIn):
-    data = _read_json()
-    stores = data.get("stores", [])
-    new_store = store.model_dump()
-    stores.append(new_store)
-    data["stores"] = stores
-    _write_json(data)
-    print(f"  ✅  Tienda agregada: {store.name}")
-    return {"ok": True, "store": new_store}
+def create_store(store: StoreIn, db: Session = Depends(get_db)):
+    new_store = Store(**store.model_dump())
+    db.add(new_store)
+    db.commit()
+    db.refresh(new_store)
+    _reindex(db)
+    print(f"  ✅  Tienda agregada: {new_store.name} (id={new_store.id})")
+    return {"ok": True, "store": new_store.to_dict()}
 
 
-@router.put("/stores/{index}")
-def update_store(index: int, store: StoreIn):
-    data = _read_json()
-    stores = data.get("stores", [])
-    if index < 0 or index >= len(stores):
+@router.put("/stores/{store_id}")
+def update_store(store_id: int, store: StoreIn, db: Session = Depends(get_db)):
+    existing = db.query(Store).filter(Store.id == store_id).first()
+    if not existing:
         raise HTTPException(status_code=404, detail="Tienda no encontrada")
-    stores[index] = store.model_dump()
-    data["stores"] = stores
-    _write_json(data)
-    print(f"  ✅  Tienda actualizada: {store.name}")
-    return {"ok": True, "store": stores[index]}
+    for field, value in store.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  ✅  Tienda actualizada: {existing.name} (id={existing.id})")
+    return {"ok": True, "store": existing.to_dict()}
 
 
-@router.delete("/stores/{index}")
-def delete_store(index: int):
-    data = _read_json()
-    stores = data.get("stores", [])
-    if index < 0 or index >= len(stores):
+@router.delete("/stores/{store_id}")
+def delete_store(store_id: int, db: Session = Depends(get_db)):
+    existing = db.query(Store).filter(Store.id == store_id).first()
+    if not existing:
         raise HTTPException(status_code=404, detail="Tienda no encontrada")
-    removed = stores.pop(index)
-    data["stores"] = stores
-    _write_json(data)
-    print(f"  🗑️   Tienda eliminada: {removed['name']}")
-    return {"ok": True, "removed": removed["name"]}
+    name = existing.name
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Tienda eliminada: {name}")
+    return {"ok": True, "removed": name}
 
 
 # ══════════════════════════════════════════════════════════════════
-# EVENTS
+# EVENTS  (ahora en base de datos — persiste entre redeploys)
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/events")
-def list_events():
-    data = _read_json()
-    return data.get("events", [])
+def list_events(db: Session = Depends(get_db)):
+    events = db.query(Event).order_by(Event.date).all()
+    return [e.to_dict() for e in events]
 
 
 @router.post("/events", status_code=201)
-def create_event(event: EventIn):
-    data = _read_json()
-    events = data.get("events", [])
-    new_event = event.model_dump()
-    events.append(new_event)
-    data["events"] = events
-    _write_json(data)
-    print(f"  ✅  Evento agregado: {event.name}")
-    return {"ok": True, "event": new_event}
+def create_event(event: EventIn, db: Session = Depends(get_db)):
+    new_event = Event(**event.model_dump())
+    db.add(new_event)
+    db.commit()
+    db.refresh(new_event)
+    _reindex(db)
+    print(f"  ✅  Evento agregado: {new_event.name} (id={new_event.id})")
+    return {"ok": True, "event": new_event.to_dict()}
 
 
-@router.put("/events/{index}")
-def update_event(index: int, event: EventIn):
-    data = _read_json()
-    events = data.get("events", [])
-    if index < 0 or index >= len(events):
+@router.put("/events/{event_id}")
+def update_event(event_id: int, event: EventIn, db: Session = Depends(get_db)):
+    existing = db.query(Event).filter(Event.id == event_id).first()
+    if not existing:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    events[index] = event.model_dump()
-    data["events"] = events
-    _write_json(data)
-    print(f"  ✅  Evento actualizado: {event.name}")
-    return {"ok": True, "event": events[index]}
+    for field, value in event.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  ✅  Evento actualizado: {existing.name} (id={existing.id})")
+    return {"ok": True, "event": existing.to_dict()}
 
 
-@router.delete("/events/{index}")
-def delete_event(index: int):
-    data = _read_json()
-    events = data.get("events", [])
-    if index < 0 or index >= len(events):
+@router.delete("/events/{event_id}")
+def delete_event(event_id: int, db: Session = Depends(get_db)):
+    existing = db.query(Event).filter(Event.id == event_id).first()
+    if not existing:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    removed = events.pop(index)
-    data["events"] = events
-    _write_json(data)
-    print(f"  🗑️   Evento eliminado: {removed['name']}")
-    return {"ok": True, "removed": removed["name"]}
+    name = existing.name
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Evento eliminado: {name}")
+    return {"ok": True, "removed": name}
