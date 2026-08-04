@@ -179,8 +179,11 @@ async def generate_response(
             max_tokens=500,
             temperature=0.7,
             top_p=0.9,
+            reasoning_effort="low",     # gpt-oss-120b razona siempre — lo dejamos en bajo para respuestas rápidas
+            reasoning_format="hidden",  # y ocultamos ese razonamiento del cliente, por si acaso
         )
-        return completion.choices[0].message.content
+        raw = completion.choices[0].message.content or ""
+        return _strip_thinking_tags(raw)
 
     except Exception as e:
         logger.error(f"Error Groq API: {str(e)}")
@@ -259,8 +262,12 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
     """
     Usa el modelo de visión de Groq para describir en pocas palabras
     qué producto aparece en una foto que manda el cliente — pensado
-    para buscar algo parecido en el directorio del mall, no para
-    identificar marcas exactas (eso sería inventar datos).
+    para buscar algo parecido en el directorio del mall.
+
+    Puede mencionar un diseño/estilo muy icónico y reconocible (ej. las
+    3 franjas de Adidas, el swoosh de Nike) para que el cliente entienda
+    qué tipo de producto es — pero no debe afirmar que esa marca está
+    disponible en el mall si no aparece en el directorio real.
     """
     client = _get_groq_client()
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -269,8 +276,13 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
         "Un cliente de un centro comercial mandó esta foto de un producto que "
         "le interesa. Describe en 1-2 líneas QUÉ es (tipo de prenda, calzado, "
         "accesorio, comida, tecnología, etc.), su categoría general, color "
-        "principal y estilo. Sé breve y concreto, en español. "
-        "No inventes marcas ni asumas cuáles — describe solo lo que se ve."
+        "principal y estilo. Sé breve y concreto, en español.\n\n"
+        "Si el diseño tiene un detalle MUY icónico y reconocible de una marca "
+        "conocida (ej. las 3 franjas de Adidas, el swoosh de Nike, las suelas "
+        "rojas de Louboutin), puedes mencionarlo como referencia de estilo "
+        "(ej. \"estilo con 3 franjas laterales, similar a Adidas\") — pero deja "
+        "claro que es una referencia visual, no una confirmación de marca. "
+        "Si no hay nada así de obvio, no adivines ninguna marca."
     )
     if caption:
         prompt += f'\n\nEl cliente escribió junto a la foto: "{caption}"'
@@ -287,10 +299,23 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
                     ],
                 }
             ],
-            max_tokens=200,
+            max_tokens=250,
             temperature=0.4,
+            reasoning_format="hidden",  # oculta el <think>...</think> del modelo — solo queremos la respuesta final
         )
-        return (completion.choices[0].message.content or "").strip()
+        raw = (completion.choices[0].message.content or "").strip()
+        return _strip_thinking_tags(raw)
     except Exception as e:
         logger.error(f"Error Groq Vision: {str(e)}")
         return ""
+
+
+def _strip_thinking_tags(text: str) -> str:
+    """
+    Red de seguridad extra: si por cualquier motivo el modelo devuelve
+    contenido dentro de <think>...</think> (aunque reasoning_format=hidden
+    debería evitarlo), lo removemos antes de que le llegue al cliente.
+    """
+    import re
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
