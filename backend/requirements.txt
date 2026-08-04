@@ -8,7 +8,7 @@ python-multipart==0.0.9
 # Base de datos
 sqlalchemy==2.0.35
 alembic==1.13.3
-psycopg2-binary==2.9.9   # driver Postgres (Railway)
+pg8000==1.31.2   # driver Postgres 100% Python, sin dependencias nativas (evita error libpq.so.5 en Railway)
 
 # AI / LLM
 groq==0.11.0
