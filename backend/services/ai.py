@@ -284,7 +284,8 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
         "rojas de Louboutin), puedes mencionarlo como referencia de estilo "
         "(ej. \"estilo con 3 franjas laterales, similar a Adidas\") — pero deja "
         "claro que es una referencia visual, no una confirmación de marca. "
-        "Si no hay nada así de obvio, no adivines ninguna marca."
+        "Si no hay nada así de obvio, no adivines ninguna marca.\n\n"
+        "Responde directo, sin mostrar tu razonamiento paso a paso. /no_think"
     )
     if caption:
         prompt += f'\n\nEl cliente escribió junto a la foto: "{caption}"'
@@ -301,12 +302,16 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
                     ],
                 }
             ],
-            max_tokens=250,
+            max_tokens=700,  # antes 250 — muy poco, el modelo se cortaba a mitad
+                             # de su razonamiento interno sin llegar a cerrar el
+                             # bloque <think>, y eso se colaba entero en la respuesta
             temperature=0.4,
             # NOTA: NO usamos reasoning_format/reasoning_effort aquí — la
             # version de groq instalada (0.11.0) no los reconoce y el
-            # SDK lanza un TypeError antes de llegar a Groq. La limpieza
-            # del <think> se hace después, con _strip_thinking_tags().
+            # SDK lanza un TypeError antes de llegar a Groq. Por eso
+            # intentamos apagar el "pensar" directo en el prompt (/no_think,
+            # convención nativa de los modelos Qwen3) y además limpiamos
+            # cualquier <think> que se cuele, con _strip_thinking_tags().
         )
         raw = (completion.choices[0].message.content or "").strip()
         return _strip_thinking_tags(raw)
@@ -317,10 +322,23 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
 
 def _strip_thinking_tags(text: str) -> str:
     """
-    Red de seguridad extra: si por cualquier motivo el modelo devuelve
-    contenido dentro de <think>...</think> (aunque reasoning_format=hidden
-    debería evitarlo), lo removemos antes de que le llegue al cliente.
+    Red de seguridad de 2 niveles contra el "pensamiento" interno del
+    modelo colándose en la respuesta del cliente:
+
+    1. Caso normal: bloque <think>...</think> completo y bien cerrado
+       — se remueve entero.
+    2. Caso de respaldo: el modelo abrió <think> pero se quedó sin
+       tokens antes de cerrarlo (pasó una vez con max_tokens muy bajo).
+       Buscamos el signo "¡" como pista de dónde empieza la respuesta
+       real en español (casi no existe en texto en inglés). Si ni eso
+       aparece, preferimos devolver vacío — mejor un mensaje genérico
+       de respaldo que arriesgarnos a mandar razonamiento interno.
     """
     import re
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
-    return cleaned.strip()
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    if "<think" in cleaned.lower():
+        match = re.search(r"¡", cleaned)
+        cleaned = cleaned[match.start():].strip() if match else ""
+
+    return cleaned
