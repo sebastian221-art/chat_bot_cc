@@ -34,7 +34,7 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, event, user_profile, order, user, conversation_flag
+from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge
 from routers import webhook
 from routers.api    import router as api_router
 from routers.orders import router as orders_router
@@ -132,6 +132,12 @@ async def analytics_top_words(days: int = 7, db: Session = Depends(get_db)):
 async def analytics_categories(days: int = 7, db: Session = Depends(get_db)):
     from services.analytics import get_top_categories
     return get_top_categories(db, days=days)
+
+@app.get("/analytics/insights")
+async def analytics_insights(db: Session = Depends(get_db)):
+    """Acciones sugeridas — el motor de recomendaciones sobre los datos reales."""
+    from services.analytics import generate_insights
+    return generate_insights(db)
 
 @app.post("/run-profiling")
 async def run_profiling(db: Session = Depends(get_db)):

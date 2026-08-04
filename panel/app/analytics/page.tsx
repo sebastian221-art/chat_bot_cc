@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react'
 import {
   getAnalyticsSummary, getTopStores, getTopWords,
-  getTopCategories, getAnalyticsHeatmap
+  getTopCategories, getAnalyticsHeatmap, getAnalyticsInsights,
 } from '@/lib/api'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, Radar
 } from 'recharts'
-import { TrendingUp, TrendingDown, Store, Hash, Tag } from 'lucide-react'
+import { TrendingUp, TrendingDown, Store, Hash, Tag, Lightbulb, AlertTriangle, Star, Clock } from 'lucide-react'
 
 const DAYS_OPTIONS = [7, 14, 30]
 
@@ -19,6 +19,7 @@ export default function AnalyticsPage() {
   const [topStores, setTopStores] = useState<any[]>([])
   const [topWords, setTopWords]   = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [insights, setInsights]   = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
@@ -28,11 +29,13 @@ export default function AnalyticsPage() {
       getTopStores(days),
       getTopWords(days),
       getTopCategories(days),
-    ]).then(([s, st, tw, cats]) => {
+      getAnalyticsInsights(),
+    ]).then(([s, st, tw, cats, ins]) => {
       setSummary(s)
       setTopStores(st)
       setTopWords(tw)
       setCategories(cats)
+      setInsights(ins)
     }).catch(console.error)
     .finally(() => setLoading(false))
   }, [days])
@@ -67,6 +70,53 @@ export default function AnalyticsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Acciones Sugeridas — el motor de recomendaciones */}
+      <div>
+        <h2 className="text-white font-semibold mb-1 flex items-center gap-2">
+          <Lightbulb size={16} className="text-amber-400" /> Acciones Sugeridas
+        </h2>
+        <p className="text-zinc-500 text-xs mb-4">
+          Lo que los datos dicen que deberías hacer — actualizado en tiempo real
+        </p>
+        {insights.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center text-zinc-600 text-sm">
+            Todavía no hay suficientes datos para generar recomendaciones. Vuelve cuando haya más actividad en el chat.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {insights.map((ins: any, i: number) => {
+              const severityStyle: Record<string, { border: string; bg: string; icon: string; label: string }> = {
+                up:     { border: 'border-emerald-900/50', bg: 'bg-emerald-950/30', icon: 'text-emerald-400', label: 'text-emerald-400' },
+                down:   { border: 'border-rose-900/50',    bg: 'bg-rose-950/30',    icon: 'text-rose-400',    label: 'text-rose-400' },
+                urgent: { border: 'border-red-800',        bg: 'bg-red-950/40',     icon: 'text-red-400',     label: 'text-red-400' },
+                info:   { border: 'border-indigo-900/50',  bg: 'bg-indigo-950/30',  icon: 'text-indigo-400',  label: 'text-indigo-400' },
+              }
+              const style = severityStyle[ins.severity] || severityStyle.info
+              const IconComp = { 'trending-up': TrendingUp, 'trending-down': TrendingDown, 'clock': Clock, 'alert-triangle': AlertTriangle, 'star': Star }[ins.icon] || Lightbulb
+
+              return (
+                <div key={i} className={`${style.bg} border ${style.border} rounded-2xl p-5`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-zinc-900/60`}>
+                      <IconComp size={16} className={style.icon} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${style.label}`}>{ins.title}</p>
+                      <p className="text-zinc-400 text-xs mt-1.5 leading-relaxed">{ins.finding}</p>
+                      <div className="mt-2.5 pt-2.5 border-t border-zinc-800/60">
+                        <p className="text-zinc-300 text-xs leading-relaxed">
+                          <span className="font-semibold">💡 Acción sugerida:</span> {ins.action}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Resumen de tendencia */}

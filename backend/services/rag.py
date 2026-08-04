@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from models.store import Store
 from models.event import Event
+from models.knowledge import KnowledgeEntry
 
 logger = logging.getLogger("mall_bot")
 
@@ -70,6 +71,7 @@ def load_stores_to_rag(db: Session) -> int:
 
     stores = db.query(Store).filter(Store.active == True).all()
     events = db.query(Event).all()
+    knowledge = db.query(KnowledgeEntry).filter(KnowledgeEntry.active == True).all()
 
     # Limpiar colección antes de reindexar
     existing = collection.get()
@@ -117,11 +119,22 @@ def load_stores_to_rag(db: Session) -> int:
         })
         ids.append(f"event_{event.id:04d}")
 
+    # ── 5. Base de Conocimiento libre — desde la base de datos ──────
+    for entry in knowledge:
+        documents.append(entry.to_rag_text())
+        metadatas.append({
+            "source": "knowledge",
+            "type": "knowledge",
+            "title": entry.title,
+        })
+        ids.append(f"knowledge_{entry.id:04d}")
+
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
 
     total = len(documents)
     print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + "
-          f"{len(mall_info.get('info_points', []))} servicios = {total} entradas indexadas")
+          f"{len(mall_info.get('info_points', []))} servicios + "
+          f"{len(knowledge)} entradas de conocimiento = {total} indexadas")
     return len(stores)
 
 

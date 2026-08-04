@@ -31,6 +31,39 @@ async function req(path: string, options?: RequestInit) {
   return res.json()
 }
 
+// ── Helpers para archivos (import/export CSV) ──────────────────────
+async function uploadFile(path: string, file: File) {
+  const token = getToken()
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    // OJO: no ponemos Content-Type — el navegador lo arma solo con el
+    // boundary correcto para multipart/form-data
+    body: formData,
+  })
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
+  return res.json()
+}
+
+async function downloadFile(path: string, filename: string) {
+  const token = getToken()
+  const res = await fetch(`${API}${path}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  })
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
+  const blob = await res.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 // ── Auth ─────────────────────────────────────────────────────────
 export const login     = (username: string, password: string) =>
   req('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
@@ -64,19 +97,34 @@ export const getStores   = ()                            => req('/stores')
 export const createStore = (d: StorePayload)             => req('/stores', { method: 'POST', body: JSON.stringify(d) })
 export const updateStore = (i: number, d: StorePayload)  => req(`/stores/${i}`, { method: 'PUT', body: JSON.stringify(d) })
 export const deleteStore = (i: number)                   => req(`/stores/${i}`, { method: 'DELETE' })
+export const exportStores = ()          => downloadFile('/stores/export', 'locales.csv')
+export const importStores = (file: File) => uploadFile('/stores/import', file)
 
 // ── Eventos ──────────────────────────────────────────────────────
 export const getEvents   = ()                            => req('/events')
 export const createEvent = (d: EventPayload)             => req('/events', { method: 'POST', body: JSON.stringify(d) })
 export const updateEvent = (i: number, d: EventPayload)  => req(`/events/${i}`, { method: 'PUT', body: JSON.stringify(d) })
 export const deleteEvent = (i: number)                   => req(`/events/${i}`, { method: 'DELETE' })
+export const exportEvents = ()          => downloadFile('/events/export', 'eventos.csv')
+export const importEvents = (file: File) => uploadFile('/events/import', file)
+
+// ── Base de Conocimiento ────────────────────────────────────────────
+export interface KnowledgeEntry { id?: number; title: string; content: string; active?: boolean }
+export const getKnowledge    = ()                              => req('/knowledge')
+export const createKnowledge = (d: KnowledgeEntry)              => req('/knowledge', { method: 'POST', body: JSON.stringify(d) })
+export const updateKnowledge = (id: number, d: KnowledgeEntry)  => req(`/knowledge/${id}`, { method: 'PUT', body: JSON.stringify(d) })
+export const deleteKnowledge = (id: number)                     => req(`/knowledge/${id}`, { method: 'DELETE' })
+export const exportKnowledge = ()          => downloadFile('/knowledge/export', 'base_de_conocimiento.csv')
+export const importKnowledge = (file: File) => uploadFile('/knowledge/import', file)
 
 // ── Analytics ────────────────────────────────────────────────────
-export const getAnalyticsSummary = (days = 7) => req(`/analytics/summary`)
-export const getAnalyticsHeatmap = (days = 7) => req(`/analytics/heatmap?days=${days}`)
-export const getTopStores        = (days = 7) => req(`/analytics/top-stores?days=${days}`)
-export const getTopWords         = (days = 7) => req(`/analytics/top-words?days=${days}`)
-export const getTopCategories    = (days = 7) => req(`/analytics/categories?days=${days}`)
+export const getAnalyticsSummary  = (days = 7) => req(`/analytics/summary`)
+export const getAnalyticsHeatmap  = (days = 7) => req(`/analytics/heatmap?days=${days}`)
+export const getTopStores         = (days = 7) => req(`/analytics/top-stores?days=${days}`)
+export const getTopWords          = (days = 7) => req(`/analytics/top-words?days=${days}`)
+export const getTopCategories     = (days = 7) => req(`/analytics/categories?days=${days}`)
+export const getAnalyticsInsights = ()         => req(`/analytics/insights`)
+
 
 // ── Domicilios / Pedidos ─────────────────────────────────────────
 export const getOrders         = ()              => req('/orders')

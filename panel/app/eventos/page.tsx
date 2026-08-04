@@ -1,9 +1,9 @@
 // 📄 ARCHIVO: panel/app/eventos/page.tsx
 'use client'
-import { useEffect, useState } from 'react'
-import { getEvents, createEvent, updateEvent, deleteEvent, EventPayload } from '@/lib/api'
+import { useEffect, useState, useRef } from 'react'
+import { getEvents, createEvent, updateEvent, deleteEvent, exportEvents, importEvents, EventPayload } from '@/lib/api'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, RefreshCw, Calendar } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, Calendar, Download, Upload } from 'lucide-react'
 
 const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3 }
 
@@ -24,6 +24,8 @@ export default function EventosPage() {
   const [form, setForm]         = useState<EventPayload>(EMPTY)
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -34,6 +36,22 @@ export default function EventosPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const result = await importEvents(file)
+      alert(`Importación completa:\n✅ ${result.created} eventos nuevos\n🔄 ${result.updated} actualizados\n⏭️ ${result.skipped} saltados${result.errors?.length ? '\n\nAvisos:\n' + result.errors.join('\n') : ''}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al importar: ' + err.message)
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setModal(true) }
   const openEdit = (e: EventPayload & { _idx: number }) => {
@@ -82,6 +100,26 @@ export default function EventosPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> {importing ? 'Importando...' : 'Importar CSV'}
+          </button>
+          <button
+            onClick={() => exportEvents()}
+            className="flex items-center gap-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Download size={14} /> Exportar CSV
+          </button>
           <button
             onClick={load}
             className="p-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-all"

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Store, MessageSquare, CalendarDays,
   BarChart2, ShoppingBag, FileText, ChevronRight,
   Utensils, Shirt, Pill, Film, Gamepad2, Car,
-  Building2, ChevronDown, LogOut, Users, Shield,
+  Building2, ChevronDown, LogOut, Users, Shield, BookOpen,
 } from 'lucide-react'
 import { getUser, clearAuth, getRoleLabel, type AuthUser } from '@/lib/auth'
 
@@ -17,7 +17,8 @@ const TOP_LINKS = [
   { href: '/conversaciones', label: 'Conversaciones',  icon: MessageSquare,   roles: ['admin', 'supervisor'] },
   { href: '/domicilios',     label: 'Domicilios',      icon: ShoppingBag,     roles: ['admin'] },
   { href: '/eventos',        label: 'Eventos',          icon: CalendarDays,    roles: ['admin', 'supervisor'] },
-  { href: '/tiendas',        label: 'Tiendas',          icon: Store,           roles: ['admin', 'supervisor'] },
+  { href: '/tiendas',        label: 'Locales',          icon: Store,           roles: ['admin', 'supervisor'] },
+  { href: '/conocimiento',   label: 'Base de Conocimiento', icon: BookOpen,    roles: ['admin', 'supervisor'] },
   { href: '/analytics',      label: 'Analytics',        icon: BarChart2,       roles: ['admin'] },
   { href: '/reportes',       label: 'Reportes',         icon: FileText,        roles: ['admin'] },
   { href: '/usuarios',       label: 'Usuarios',         icon: Users,           roles: ['admin'] },

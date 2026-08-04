@@ -1,9 +1,9 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
-import { useEffect, useState } from 'react'
-import { getStores, createStore, updateStore, deleteStore, StorePayload } from '@/lib/api'
+import { useEffect, useState, useRef } from 'react'
+import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Search, RefreshCw, Store } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload } from 'lucide-react'
 
 const CATEGORIES = [
   'Ropa y Calzado','Ropa y Moda','Ropa Mujer','Ropa y Calzado Deportivo',
@@ -29,6 +29,8 @@ export default function TiendasPage() {
   const [form, setForm]         = useState<StorePayload>(EMPTY)
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -39,6 +41,22 @@ export default function TiendasPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const result = await importStores(file)
+      alert(`Importación completa:\n✅ ${result.created} locales nuevos\n🔄 ${result.updated} actualizados\n⏭️ ${result.skipped} saltados${result.errors?.length ? '\n\nAvisos:\n' + result.errors.join('\n') : ''}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al importar: ' + err.message)
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const filtered = stores.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -89,6 +107,26 @@ export default function TiendasPage() {
           <p className="text-zinc-500 text-sm mt-0.5">{stores.length} locales en el directorio</p>
         </div>
         <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> {importing ? 'Importando...' : 'Importar CSV'}
+          </button>
+          <button
+            onClick={() => exportStores()}
+            className="flex items-center gap-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Download size={14} /> Exportar CSV
+          </button>
           <button
             onClick={load}
             className="p-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-all"

@@ -14,10 +14,14 @@ from collections import Counter
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from models.conversation import Conversation
+from models.store import Store
+from models.conversation_flag import ConversationFlag
 
 logger = logging.getLogger("mall_bot")
 
 # ── Nombres de tiendas conocidas para detectar menciones ─────────
+# NOTA: ya no se usa — get_top_stores ahora consulta los nombres reales
+# de la tabla `stores`. Se deja por si se necesita como referencia.
 KNOWN_STORES = [
     "nike", "adidas", "zara", "studio f", "totto", "ishop", "apple",
     "samsung", "falabella", "mcdonald", "mcdonalds", "crepes", "waffles",
@@ -52,8 +56,17 @@ def _clean_message(text: str) -> str:
 
 
 def get_top_stores(db: Session, days: int = 7, limit: int = 10) -> list[dict]:
-    """Top tiendas mencionadas en conversaciones de los últimos N días."""
+    """
+    Top locales mencionados en conversaciones de los últimos N días.
+    Usa los nombres REALES de la tabla `stores` (no una lista fija de
+    marcas de ejemplo) — así funciona con el directorio real de
+    cualquier centro comercial, no solo con cadenas conocidas.
+    """
     since = datetime.utcnow() - timedelta(days=days)
+
+    store_names = [s.name for s in db.query(Store.name).filter(Store.active == True).all()]
+    if not store_names:
+        return []
 
     messages = (
         db.query(Conversation.message)
@@ -67,11 +80,9 @@ def get_top_stores(db: Session, days: int = 7, limit: int = 10) -> list[dict]:
     store_counts = Counter()
     for (msg,) in messages:
         clean = _clean_message(msg)
-        for store in KNOWN_STORES:
-            if store in clean:
-                # Normalizar nombre
-                display = store.title().replace("Mcdonald", "McDonald's")
-                store_counts[display] += 1
+        for name in store_names:
+            if name.lower() in clean:
+                store_counts[name] += 1
 
     return [
         {"store": store, "mentions": count, "rank": i + 1}
@@ -211,3 +222,113 @@ def get_weekly_summary(db: Session) -> dict:
         "top_categories": get_top_categories(db, days=7),
         "top_words":      get_top_words(db, days=7, limit=15),
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# MOTOR DE ACCIONES SUGERIDAS
+# ══════════════════════════════════════════════════════════════════
+#
+# No usa IA generativa a propósito — son reglas sobre los mismos datos
+# que ya se calculan arriba, así que es instantáneo, gratis y 100%
+# predecible (nunca inventa una recomendación rara).
+
+def _category_counts_for_window(db: Session, start, end) -> Counter:
+    messages = (
+        db.query(Conversation.message)
+        .filter(
+            Conversation.role == "user",
+            Conversation.timestamp >= start,
+            Conversation.timestamp < end,
+        )
+        .all()
+    )
+    counts = Counter()
+    for (msg,) in messages:
+        clean = _clean_message(msg)
+        for category, keywords in CATEGORY_KEYWORDS.items():
+            if any(kw in clean for kw in keywords):
+                counts[category] += 1
+    return counts
+
+
+def generate_insights(db: Session) -> list[dict]:
+    """
+    Devuelve una lista de "tarjetas" de acción sugerida, cada una con:
+      { type, icon, title, finding, action, severity }
+    severity: "up" (tendencia positiva) | "down" (alerta) | "info" | "urgent"
+    """
+    insights = []
+    now       = datetime.utcnow()
+    week_ago  = now - timedelta(days=7)
+    two_weeks = now - timedelta(days=14)
+
+    # ── 1. Categorías en alza o en baja fuerte ──────────────────────
+    this_week_counts = _category_counts_for_window(db, week_ago, now)
+    last_week_counts = _category_counts_for_window(db, two_weeks, week_ago)
+
+    for category, this_count in this_week_counts.items():
+        last_count = last_week_counts.get(category, 0)
+        if this_count < 5:
+            continue  # muy pocos datos para que la comparación sea confiable
+        if last_count == 0:
+            continue  # categoría nueva, no hay línea base para comparar
+        change = round((this_count - last_count) / last_count * 100, 0)
+        if change >= 30:
+            insights.append({
+                "type": "categoria_alza",
+                "icon": "trending-up",
+                "severity": "up",
+                "title": f"{category} está en alza",
+                "finding": f"Las consultas sobre {category.lower()} subieron {int(change)}% esta semana ({this_count} vs {last_count}).",
+                "action": f"Considera destacar promociones o contenido de {category.lower()} — hay demanda creciente ahora mismo.",
+            })
+        elif change <= -30:
+            insights.append({
+                "type": "categoria_baja",
+                "icon": "trending-down",
+                "severity": "down",
+                "title": f"{category} bajó fuerte",
+                "finding": f"Las consultas sobre {category.lower()} cayeron {abs(int(change))}% esta semana ({this_count} vs {last_count}).",
+                "action": "Revisa si hay algo cambiando en esa categoría (cierre de local, cambio de horario, etc.).",
+            })
+
+    # ── 2. Hora pico de la semana ────────────────────────────────────
+    heatmap = get_hourly_heatmap(db, days=7)
+    if heatmap:
+        peak = max(heatmap, key=lambda h: h["count"])
+        if peak["count"] > 0:
+            insights.append({
+                "type": "hora_pico",
+                "icon": "clock",
+                "severity": "info",
+                "title": "Hora pico de la semana",
+                "finding": f"El mayor volumen de consultas es los {peak['day']} a las {peak['hour']:02d}:00.",
+                "action": "Ese es el mejor momento para lanzar una promoción o anuncio — máxima audiencia activa.",
+            })
+
+    # ── 3. Conversaciones esperando atención humana ──────────────────
+    pending = db.query(ConversationFlag).filter(ConversationFlag.needs_human == True).count()
+    if pending > 0:
+        insights.append({
+            "type": "escalamiento_pendiente",
+            "icon": "alert-triangle",
+            "severity": "urgent",
+            "title": f"{pending} conversación(es) esperando atención humana",
+            "finding": "Hay clientes que pidieron hablar con una persona y todavía no han sido atendidos.",
+            "action": "Ve a la pestaña Conversaciones y respóndeles — están marcados en rojo.",
+        })
+
+    # ── 4. Categoría líder del mes (contexto general) ────────────────
+    top_month = get_top_categories(db, days=30)
+    if top_month:
+        leader = top_month[0]
+        insights.append({
+            "type": "categoria_lider",
+            "icon": "star",
+            "severity": "info",
+            "title": f"{leader['category']} es la categoría más consultada del mes",
+            "finding": f"Representa el {leader['percentage']}% de todas las consultas de los últimos 30 días.",
+            "action": f"Vale la pena asegurar que la información de {leader['category'].lower()} esté siempre actualizada y completa.",
+        })
+
+    return insights
