@@ -1,252 +1,1192 @@
 {
   "mall": {
     "name": "Centro Comercial El Puente",
-    "address": "Calle 15 #8-32, Bucaramanga, Santander",
-    "general_schedule": "Lunes a Sábado 10:00am - 9:00pm | Domingos y Festivos 11:00am - 8:00pm",
-    "phone": "607 123 4567",
-    "parking": "Parqueadero disponible en sótano y piso -1. Tarifa: $3.000 primera hora, $1.500 hora adicional. Motos: $1.000",
-    "wifi": "Red: ElPuente_Gratis | Sin contraseña",
+    "address": "Calle 10 # 12 - 184, San Gil, Santander",
+    "general_schedule": "Locales Comerciales: Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm. Plazoleta de Comidas: Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm. Punto de Información: mismo horario que locales comerciales. Punto de Pago: todos los días 7am-11pm. Parqueadero: 24 horas.",
+    "phone": "PENDIENTE - confirmar número de atención al público del CC",
+    "parking": "Parqueadero disponible las 24 horas. Tarifas por confirmar con el Centro Comercial.",
+    "wifi": "PENDIENTE - confirmar si el mall ofrece WiFi público y con qué credenciales",
     "info_points": [
-      {"name": "Punto de información principal", "floor": "Piso 1", "location": "Entrada principal, junto a la fuente central"},
-      {"name": "Baños hombres y mujeres", "floor": "Piso 1", "location": "Zona norte, al fondo del pasillo principal"},
-      {"name": "Baños hombres y mujeres", "floor": "Piso 2", "location": "Junto a la zona de comidas"},
-      {"name": "Cajeros automáticos Bancolombia y Davivienda", "floor": "Piso 1", "location": "Entrada norte, al lado de la escalera eléctrica"},
-      {"name": "Parqueadero cubierto", "floor": "Sótano", "location": "Acceso por rampa principal calle 15"},
-      {"name": "Zona de juegos infantiles", "floor": "Piso 2", "location": "Ala este, frente al food court"},
-      {"name": "Sala de lactancia", "floor": "Piso 1", "location": "Junto a los baños zona norte"},
-      {"name": "Ascensor", "floor": "Todos los pisos", "location": "Centro del mall, junto a la fuente"}
-    ]
+      {
+        "name": "Punto de información",
+        "floor": "Por confirmar",
+        "location": "Por confirmar ubicación exacta"
+      },
+      {
+        "name": "Punto de pago",
+        "floor": "Por confirmar",
+        "location": "Por confirmar ubicación exacta"
+      },
+      {
+        "name": "Acceso peatonal - Puente Peatonal",
+        "floor": "Nivel calle",
+        "location": "Acceso peatonal"
+      },
+      {
+        "name": "Acceso peatonal - Calle 10",
+        "floor": "Nivel calle",
+        "location": "Acceso peatonal"
+      },
+      {
+        "name": "Acceso peatonal - Calle 12",
+        "floor": "Nivel calle",
+        "location": "Acceso peatonal"
+      }
+    ],
+    "directorio_administrativo_interno": {
+      "_nota": "Uso interno del CC, no se expone al bot / clientes",
+      "Direccion Mercadeo": "3173671005",
+      "Direccion Operaciones": "3176649826",
+      "Coordinacion Comercial": "3176574494",
+      "Coordinacion Alianzas y parqueadero": "3115441103",
+      "Punto de informacion": "3174320138",
+      "Asistente administrativa": "3173680165",
+      "Auxiliar contable y financiera": "3236168588",
+      "Auxiliar de tesoreria": "3236144888",
+      "Coordinacion sostenibilidad": "3115255605"
+    }
   },
   "stores": [
     {
-      "name": "Nike Store",
+      "name": "Ibiza",
       "floor": "Piso 1",
-      "category": "Ropa y Calzado Deportivo",
-      "description": "Tienda oficial Nike con la colección completa de ropa, zapatillas y accesorios deportivos para hombre, mujer y niños.",
-      "schedule": "Lun-Sab 10am-8:30pm | Dom y Festivos 11am-7pm",
-      "phone": "607 111 2233",
-      "location_hint": "Piso 1, ala norte, frente a la entrada principal",
-      "tags": "nike,zapatillas,ropa deportiva,running,futbol,gym,tenis,deportivo"
+      "category": "Por confirmar con el CC",
+      "description": "Ibiza - local 101 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3143400583",
+      "location_hint": "Local 101. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "ibiza"
     },
     {
-      "name": "Adidas",
+      "name": "Zirus Pizza",
       "floor": "Piso 1",
-      "category": "Ropa y Calzado Deportivo",
-      "description": "Ropa deportiva, zapatillas Adidas Originals, Ultraboost y colecciones de fútbol y tenis.",
-      "schedule": "Lun-Sab 10am-8:30pm | Dom y Festivos 11am-7pm",
-      "phone": "607 111 3344",
-      "location_hint": "Piso 1, ala norte, al lado de Nike",
-      "tags": "adidas,zapatillas,ultraboost,futbol,deportivo,originals,ropa deportiva"
+      "category": "Restaurante",
+      "description": "Zirus Pizza - local 102 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3153265124",
+      "location_hint": "Local 102. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "zirus,pizza,restaurante"
     },
     {
-      "name": "Zara",
+      "name": "Mercagan",
       "floor": "Piso 1",
-      "category": "Ropa y Moda",
-      "description": "Moda internacional para hombre, mujer y niños. Ropa casual, formal y de temporada con las últimas tendencias.",
-      "schedule": "Lun-Sab 10am-9pm | Dom 11am-8pm",
-      "phone": "607 222 1122",
-      "location_hint": "Piso 1, ala sur, esquina principal",
-      "tags": "zara,moda,ropa,casual,formal,tendencias,mujer,hombre,niños"
+      "category": "Restaurante",
+      "description": "Mercagan - local 103 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "6077237070",
+      "location_hint": "Local 103. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "mercagan,restaurante"
     },
     {
-      "name": "Studio F",
-      "floor": "Piso 2",
-      "category": "Ropa Mujer",
-      "description": "Moda femenina colombiana. Vestidos, blusas, pantalones y accesorios para mujer con diseños exclusivos.",
-      "schedule": "Lun-Sab 10am-8pm | Dom 11am-7pm",
-      "phone": "607 222 5566",
-      "location_hint": "Piso 2, entrada por escalera eléctrica lado derecho",
-      "tags": "studio f,moda mujer,vestidos,blusas,ropa femenina,colombiana"
+      "name": "Havanna Cocina Casual",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Havanna Cocina Casual - local 104 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3015700400",
+      "location_hint": "Local 104. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "havanna,cocina,casual,restaurante"
+    },
+    {
+      "name": "Jarri's",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Jarri's - local 105 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "6363636",
+      "location_hint": "Local 105. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "jarri's,restaurante"
+    },
+    {
+      "name": "Deenys Sandwich",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Deenys Sandwich - local 106 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3174404154",
+      "location_hint": "Local 106. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "deenys,sandwich,restaurante"
+    },
+    {
+      "name": "Miyaki",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Miyaki - local 107 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3028377338",
+      "location_hint": "Local 107. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "miyaki,restaurante"
+    },
+    {
+      "name": "Wokland",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Wokland - local 108 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3213907359",
+      "location_hint": "Local 108. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "wokland,restaurante"
+    },
+    {
+      "name": "12B",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "12B - local 109 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3156945386",
+      "location_hint": "Local 109. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "restaurante"
+    },
+    {
+      "name": "Chivo Loco",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Chivo Loco - local 110 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3122252181",
+      "location_hint": "Local 110. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "chivo,loco,restaurante"
+    },
+    {
+      "name": "Mero Merito",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Mero Merito - local 111 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3022092020",
+      "location_hint": "Local 111. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "mero,merito,restaurante"
+    },
+    {
+      "name": "Pollo Árabe",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Pollo Árabe - local 112 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3157394666",
+      "location_hint": "Local 112. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "pollo,árabe,restaurante"
+    },
+    {
+      "name": "Jumbo",
+      "floor": "Piso 1",
+      "category": "Supermercado",
+      "description": "Jumbo - local 113 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3138705459",
+      "location_hint": "Local 113. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "jumbo,supermercado"
+    },
+    {
+      "name": "Levis",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Levis - local 114 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3232441717",
+      "location_hint": "Local 114. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "levis,ropa,calzado"
+    },
+    {
+      "name": "Chevignon",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Chevignon - local 117 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3203905893",
+      "location_hint": "Local 117. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "chevignon,ropa,calzado"
+    },
+    {
+      "name": "Americanino",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Americanino - local 119 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3209786357",
+      "location_hint": "Local 119. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "americanino,ropa,calzado"
+    },
+    {
+      "name": "Tennis",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Tennis - local 121 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3144705343",
+      "location_hint": "Local 121. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "tennis,ropa,calzado"
+    },
+    {
+      "name": "Brandstore",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Brandstore - local 123 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3144113038",
+      "location_hint": "Local 123. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "brandstore,ropa,calzado"
+    },
+    {
+      "name": "TRU",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "TRU - local 125 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3229653754",
+      "location_hint": "Local 125. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "tru,ropa,calzado"
+    },
+    {
+      "name": "HappySleep",
+      "floor": "Piso 1",
+      "category": "Colchones y Descanso",
+      "description": "HappySleep - local 127 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3217807970",
+      "location_hint": "Local 127. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "happysleep,colchones,descanso"
+    },
+    {
+      "name": "Supercool",
+      "floor": "Piso 1",
+      "category": "Comercio General",
+      "description": "Supercool - local 130 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3012873412",
+      "location_hint": "Local 130. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "supercool,comercio,general"
+    },
+    {
+      "name": "Koaj",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Koaj - local 133 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3145624769",
+      "location_hint": "Local 133. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "koaj,ropa,calzado"
+    },
+    {
+      "name": "Esprit",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Esprit - local 135 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3144113020",
+      "location_hint": "Local 135. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "esprit,ropa,calzado"
+    },
+    {
+      "name": "Alucinada",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Alucinada - local 140 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3125151854",
+      "location_hint": "Local 140. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "alucinada,ropa,calzado"
+    },
+    {
+      "name": "Ramona",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Ramona - local 141 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3155811791",
+      "location_hint": "Local 141. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "ramona,ropa,calzado"
+    },
+    {
+      "name": "Rivano",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Rivano - local 142 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3002167363",
+      "location_hint": "Local 142. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "rivano,ropa,calzado"
+    },
+    {
+      "name": "Stop Jeans",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Stop Jeans - local 144 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3103034634",
+      "location_hint": "Local 144. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "stop,jeans,ropa,calzado"
+    },
+    {
+      "name": "Yoyo Jeans",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Yoyo Jeans - local 145 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3226441054",
+      "location_hint": "Local 145. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "yoyo,jeans,ropa,calzado"
+    },
+    {
+      "name": "Celtel - Claro",
+      "floor": "Piso 1",
+      "category": "Tecnología y Telefonía",
+      "description": "Celtel - Claro - local 146 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3107964369",
+      "location_hint": "Local 146. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "celtel,claro,tecnología,telefonía"
     },
     {
       "name": "Totto",
       "floor": "Piso 1",
-      "category": "Accesorios y Maletas",
-      "description": "Mochilas, maletines, maletas de viaje, billeteras y accesorios. Reconocida marca colombiana para todos los estilos.",
-      "schedule": "Lun-Sab 10am-8:30pm | Dom 11am-7pm",
-      "phone": "607 333 1122",
-      "location_hint": "Piso 1, zona central, frente a los cajeros",
-      "tags": "totto,mochilas,maletines,maletas,viaje,accesorios,bolsos,colombiana"
+      "category": "Ropa y Calzado",
+      "description": "Totto - local 148 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3182654835",
+      "location_hint": "Local 148. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "totto,ropa,calzado"
     },
     {
-      "name": "iShop Apple Premium Reseller",
+      "name": "Moma",
       "floor": "Piso 1",
-      "category": "Tecnología",
-      "description": "Reseller oficial Apple. iPhone, MacBook, iPad, Apple Watch, AirPods y accesorios originales. Servicio técnico autorizado.",
-      "schedule": "Lun-Sab 10am-8pm | Dom 12pm-7pm",
-      "phone": "607 444 5566",
-      "location_hint": "Piso 1, ala sur, vitrina esquinera con letreros Apple",
-      "tags": "apple,iphone,macbook,ipad,airpods,tecnologia,celulares,computadores,ishop"
+      "category": "Ropa y Calzado",
+      "description": "Moma - local 149 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3175467516",
+      "location_hint": "Local 149. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "moma,ropa,calzado"
     },
     {
-      "name": "Samsung Store",
+      "name": "Mantra",
       "floor": "Piso 1",
-      "category": "Tecnología",
-      "description": "Tienda oficial Samsung. Galaxy S series, tablets, smartwatches, TVs, electrodomésticos y accesorios.",
-      "schedule": "Lun-Sab 10am-8pm | Dom 12pm-7pm",
-      "phone": "607 444 7788",
-      "location_hint": "Piso 1, ala sur, al lado de iShop",
-      "tags": "samsung,galaxy,celulares,tablets,smartwatch,tecnologia,televisores"
+      "category": "Ropa y Calzado",
+      "description": "Mantra - local 151 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3154249041",
+      "location_hint": "Local 151. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "mantra,ropa,calzado"
     },
     {
-      "name": "Falabella",
-      "floor": "Piso 1 y Piso 2",
-      "category": "Tienda por Departamentos",
-      "description": "Tienda ancla del mall. Ropa para toda la familia, electrodomésticos, muebles, tecnología, cosméticos y más. CMR Falabella disponible.",
-      "schedule": "Lun-Dom 10am-9pm",
-      "phone": "607 555 0011",
-      "location_hint": "Piso 1 y 2, ala oeste, ocupa toda la sección",
-      "tags": "falabella,departamentos,ropa,electrodomesticos,muebles,cosmeticos,cmr"
-    },
-    {
-      "name": "McDonald's",
-      "floor": "Piso 2 - Zona de Comidas",
-      "category": "Comida Rápida",
-      "description": "Hamburguesas, McNuggets, papas fritas, desayunos y Happy Meal para niños. Servicio en sala y para llevar.",
-      "schedule": "Todos los días 9am-10pm",
-      "phone": "607 666 1234",
-      "location_hint": "Piso 2, zona de comidas food court, esquina izquierda",
-      "tags": "mcdonalds,hamburguesas,comida rapida,papas fritas,mcnuggets,desayuno,niños"
-    },
-    {
-      "name": "Crepes & Waffles",
-      "floor": "Piso 2 - Zona de Comidas",
-      "category": "Restaurante",
-      "description": "Crepes, waffles, helados artesanales, ensaladas y platos calientes. Ambiente familiar e ideal para pareja.",
-      "schedule": "Lun-Jue 11am-9pm | Vie-Dom 11am-10pm",
-      "phone": "607 666 5678",
-      "location_hint": "Piso 2, zona de comidas, zona central con terraza",
-      "tags": "crepes,waffles,helados,ensaladas,restaurante,familiar,postre,dulce"
-    },
-    {
-      "name": "El Corral",
-      "floor": "Piso 2 - Zona de Comidas",
-      "category": "Comida Rápida",
-      "description": "Hamburguesas artesanales colombianas, perros calientes, aros de cebolla y malteadas. La mejor hamburguesa del país.",
-      "schedule": "Todos los días 11am-9:30pm",
-      "phone": "607 666 9012",
-      "location_hint": "Piso 2, zona de comidas, frente a McDonald's",
-      "tags": "el corral,hamburguesas,colombiano,perros calientes,malteadas,comida rapida"
-    },
-    {
-      "name": "Subway",
-      "floor": "Piso 2 - Zona de Comidas",
-      "category": "Comida Rápida",
-      "description": "Sándwiches personalizados, ensaladas y wraps. Opciones saludables y vegetarianas disponibles.",
-      "schedule": "Todos los días 10am-9pm",
-      "phone": "607 666 3456",
-      "location_hint": "Piso 2, zona de comidas, pasillo lateral",
-      "tags": "subway,sandwiches,saludable,vegetariano,ensaladas,wraps,rapido"
-    },
-    {
-      "name": "Juan Valdez Café",
+      "name": "Villa Shoes",
       "floor": "Piso 1",
-      "category": "Cafetería",
-      "description": "Café colombiano de origen. Espresso, cappuccino, frappés, pasteles y snacks. El mejor café del país.",
-      "schedule": "Lun-Sab 8am-9pm | Dom 9am-8pm",
-      "phone": "607 777 1111",
-      "location_hint": "Piso 1, entrada principal lado derecho",
-      "tags": "juan valdez,cafe,colombiano,espresso,cappuccino,frappe,pasteles,desayuno"
+      "category": "Ropa y Calzado",
+      "description": "Villa Shoes - local 152 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3004756040",
+      "location_hint": "Local 152. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "villa,shoes,ropa,calzado"
     },
     {
-      "name": "Óptica La Visión",
+      "name": "Oxford",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Oxford - local 153 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3177592316",
+      "location_hint": "Local 153. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "oxford,ropa,calzado"
+    },
+    {
+      "name": "La Scala",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "La Scala - local 154 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3118938204",
+      "location_hint": "Local 154. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "scala,ropa,calzado"
+    },
+    {
+      "name": "Roott + Co",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Roott + Co - local 155 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3012126989",
+      "location_hint": "Local 155. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "roott,co,ropa,calzado"
+    },
+    {
+      "name": "D'Italy Tennis",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "D'Italy Tennis - local 156 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3164437953",
+      "location_hint": "Local 156. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "d'italy,tennis,ropa,calzado"
+    },
+    {
+      "name": "First Class",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "First Class - local 157 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Local 157. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "first,class,ropa,calzado"
+    },
+    {
+      "name": "Cromantic",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Cromantic - local 158 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Local 158. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "cromantic,ropa,calzado"
+    },
+    {
+      "name": "Tomaticos",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Tomaticos - local 159 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3156089707",
+      "location_hint": "Local 159. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "tomaticos,ropa,calzado"
+    },
+    {
+      "name": "Fuera de Serie",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Fuera de Serie - local 160 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3042991523",
+      "location_hint": "Local 160. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "fuera,serie,ropa,calzado"
+    },
+    {
+      "name": "Footprints",
+      "floor": "Piso 1",
+      "category": "Calzado",
+      "description": "Footprints - local 161 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3170475097",
+      "location_hint": "Local 161. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "footprints,calzado"
+    },
+    {
+      "name": "Calzado Rich",
+      "floor": "Piso 1",
+      "category": "Calzado",
+      "description": "Calzado Rich - local 163 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3173026861",
+      "location_hint": "Local 163. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "calzado,rich"
+    },
+    {
+      "name": "Comodisimos",
+      "floor": "Piso 1",
+      "category": "Comercio General",
+      "description": "Comodisimos - local 164 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3012829850",
+      "location_hint": "Local 164. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "comodisimos,comercio,general"
+    },
+    {
+      "name": "Offcorss",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Offcorss - local 165 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3208345308",
+      "location_hint": "Local 165. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "offcorss,ropa,calzado"
+    },
+    {
+      "name": "Ápice Peluquería",
+      "floor": "Piso 1",
+      "category": "Belleza y Peluquería",
+      "description": "Ápice Peluquería - local 166 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3237964756",
+      "location_hint": "Local 166. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "ápice,peluquería,belleza"
+    },
+    {
+      "name": "Megastore",
+      "floor": "Piso 1",
+      "category": "Comercio General",
+      "description": "Megastore - local 167 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3227499113",
+      "location_hint": "Local 167. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "megastore,comercio,general"
+    },
+    {
+      "name": "Ortopedicos y más",
+      "floor": "Piso 1",
+      "category": "Salud y Farmacia",
+      "description": "Ortopedicos y más - local 168 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3154162121",
+      "location_hint": "Local 168. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "ortopedicos,salud,farmacia"
+    },
+    {
+      "name": "Cocoa Kids",
+      "floor": "Piso 1",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Cocoa Kids - local 169 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3042322556",
+      "location_hint": "Local 169. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "cocoa,kids,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "MACA",
+      "floor": "Piso 1",
+      "category": "Por confirmar con el CC",
+      "description": "MACA - local 170 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3222314922",
+      "location_hint": "Local 170. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "maca"
+    },
+    {
+      "name": "Óptica Americana",
       "floor": "Piso 1",
       "category": "Salud y Óptica",
-      "description": "Exámenes visuales gratuitos. Monturas nacionales e importadas, lentes de contacto y gafas de sol de las mejores marcas.",
-      "schedule": "Lun-Sab 9am-8pm | Dom 10am-6pm",
-      "phone": "607 888 2222",
-      "location_hint": "Piso 1, ala norte, junto a la escalera eléctrica",
-      "tags": "optica,gafas,lentes,vision,examen visual,monturas,gafas de sol,contacto"
+      "description": "Óptica Americana - local 171 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3182873221",
+      "location_hint": "Local 171. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "óptica,americana,salud"
     },
     {
-      "name": "Éxito Express",
+      "name": "Wonder",
       "floor": "Piso 1",
-      "category": "Supermercado",
-      "description": "Supermercado con productos de primera necesidad, frutas, verduras, panadería, licores y artículos del hogar.",
-      "schedule": "Lun-Dom 8am-9pm",
-      "phone": "607 999 3333",
-      "location_hint": "Piso 1, extremo sur, acceso también desde el parqueadero",
-      "tags": "exito,supermercado,mercado,comida,frutas,verduras,hogar,panaderia,licores"
+      "category": "Ropa y Calzado",
+      "description": "Wonder - local 172 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3223644980",
+      "location_hint": "Local 172. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "wonder,ropa,calzado"
     },
     {
-      "name": "Bodytech",
-      "floor": "Piso 3",
-      "category": "Gimnasio y Wellness",
-      "description": "Gimnasio de alto rendimiento. Máquinas cardiovasculares, pesas, clases grupales de spinning, yoga y zumba. Planes mensuales y anuales.",
-      "schedule": "Lun-Vie 5am-10pm | Sab 6am-8pm | Dom 7am-4pm",
-      "phone": "607 555 4444",
-      "location_hint": "Piso 3, zona norte, con acceso directo desde el parqueadero nivel 2",
-      "tags": "bodytech,gimnasio,gym,ejercicio,yoga,zumba,spinning,fitness,wellness"
+      "name": "Moviles García",
+      "floor": "Piso 1",
+      "category": "Tecnología y Telefonía",
+      "description": "Moviles García - local 173 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3173382775",
+      "location_hint": "Local 173. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "moviles,garcía,tecnología,telefonía"
     },
     {
-      "name": "Cine Colombia",
-      "floor": "Piso 3",
+      "name": "Drogas del Fonce",
+      "floor": "Piso 1",
+      "category": "Salud y Farmacia",
+      "description": "Drogas del Fonce - local 174 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3127547487",
+      "location_hint": "Local 174. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "drogas,fonce,salud,farmacia"
+    },
+    {
+      "name": "Piel",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Piel - local 175 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3176426305",
+      "location_hint": "Local 175. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "piel,ropa,calzado"
+    },
+    {
+      "name": "Alma",
+      "floor": "Piso 1",
+      "category": "Por confirmar con el CC",
+      "description": "Alma - local 176 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Local 176. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "alma"
+    },
+    {
+      "name": "Sura",
+      "floor": "Piso 1",
+      "category": "Seguros y Servicios Financieros",
+      "description": "Sura - local 177 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Local 177. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "sura,seguros,servicios,financieros"
+    },
+    {
+      "name": "Casa del Libro",
+      "floor": "Piso 1",
+      "category": "Papelería y Libros",
+      "description": "Casa del Libro - local 178 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3174012450",
+      "location_hint": "Local 178. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "casa,libro,papelería,libros"
+    },
+    {
+      "name": "Gino Passcalli",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Gino Passcalli - local 179 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3176549275",
+      "location_hint": "Local 179. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "gino,passcalli,ropa,calzado"
+    },
+    {
+      "name": "Merecido Buffet",
+      "floor": "Piso 1",
+      "category": "Restaurante",
+      "description": "Merecido Buffet - local 180 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3213695560",
+      "location_hint": "Local 180. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "merecido,buffet,restaurante"
+    },
+    {
+      "name": "Spring",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Spring - local 181 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3112204739",
+      "location_hint": "Local 181. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "spring,ropa,calzado"
+    },
+    {
+      "name": "Loma Verde",
+      "floor": "Piso 1",
+      "category": "Ropa y Calzado",
+      "description": "Loma Verde - local 182 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3187081996",
+      "location_hint": "Local 182. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "loma,verde,ropa,calzado"
+    },
+    {
+      "name": "VO5",
+      "floor": "Piso 1",
+      "category": "Belleza y Cuidado Personal",
+      "description": "VO5 - local 183 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3102532874",
+      "location_hint": "Local 183. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "vo,belleza,cuidado,personal"
+    },
+    {
+      "name": "Sanautos Renault",
+      "floor": "Piso 1",
+      "category": "Concesionario de Vehículos",
+      "description": "Sanautos Renault - local 184 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3102848365",
+      "location_hint": "Local 184. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "sanautos,renault,concesionario,vehículos"
+    },
+    {
+      "name": "Nissan",
+      "floor": "Piso 1",
+      "category": "Concesionario de Vehículos",
+      "description": "Nissan - local 185 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3102023127",
+      "location_hint": "Local 185. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "nissan,concesionario,vehículos"
+    },
+    {
+      "name": "Coomuldesa",
+      "floor": "Piso 1",
+      "category": "Servicios Financieros",
+      "description": "Coomuldesa - local 189 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Local 189. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "coomuldesa,servicios,financieros"
+    },
+    {
+      "name": "Voro",
+      "floor": "Piso 1",
+      "category": "Servicios Financieros",
+      "description": "Voro - local 190 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3026192220",
+      "location_hint": "Local 190. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "voro,servicios,financieros"
+    },
+    {
+      "name": "Popsy",
+      "floor": "Piso 1",
+      "category": "Servicios Financieros",
+      "description": "Popsy - local 191 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3114653325",
+      "location_hint": "Local 191. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "popsy,servicios,financieros"
+    },
+    {
+      "name": "La Barra 1516 Pub",
+      "floor": "Piso 1",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "La Barra 1516 Pub - local 192 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3006279829",
+      "location_hint": "Local 192. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "barra,pub,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Juan Valdez",
+      "floor": "Piso 1",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Juan Valdez - local 193 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "No registrado",
+      "location_hint": "Local 193. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "juan,valdez,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Poporra",
+      "floor": "Piso 1",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Poporra - local 196 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3132530120",
+      "location_hint": "Local 196. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "poporra,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Dotos",
+      "floor": "Piso 1",
       "category": "Entretenimiento",
-      "description": "8 salas de cine con tecnología Dolby Atmos y sala VIP. Películas de estreno nacional e internacional. Compra online y en taquilla.",
-      "schedule": "Todos los días 11am-11pm (última función)",
-      "phone": "607 555 6666",
-      "location_hint": "Piso 3, zona sur, con gran cartelera en la entrada",
-      "tags": "cine,pelicula,cine colombia,dolby,vip,entretenimiento,estreno"
+      "description": "Dotos - local 197 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3214248331",
+      "location_hint": "Local 197. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "dotos,entretenimiento"
     },
     {
-      "name": "Claro",
-      "floor": "Piso 1",
-      "category": "Telecomunicaciones",
-      "description": "Tienda oficial Claro. Planes de celular, internet hogar, TV cable, equipos nuevos y servicio técnico.",
-      "schedule": "Lun-Sab 9am-8pm | Dom 10am-6pm",
-      "phone": "607 444 1100",
-      "location_hint": "Piso 1, zona central, frente a Totto",
-      "tags": "claro,celular,internet,planes,tv,telecomunicaciones,equipos"
-    },
-    {
-      "name": "Librería Nacional",
+      "name": "Cinelandia Multiplex",
       "floor": "Piso 2",
-      "category": "Librería y Papelería",
-      "description": "Libros de todas las categorías, papelería, útiles escolares, juguetes educativos y artículos de oficina.",
-      "schedule": "Lun-Sab 10am-8pm | Dom 11am-7pm",
-      "phone": "607 333 5577",
-      "location_hint": "Piso 2, ala norte, junto al ascensor",
-      "tags": "libros,libreria,papeleria,utiles,escolar,oficina,juguetes,educacion"
+      "category": "Cine",
+      "description": "Cinelandia Multiplex - local 201 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3133913532",
+      "location_hint": "Local 201. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "cinelandia,multiplex,cine"
     },
     {
-      "name": "Dropi Farmacia",
-      "floor": "Piso 1",
-      "category": "Farmacia y Salud",
-      "description": "Farmacia con medicamentos, vitaminas, cosméticos, productos de cuidado personal y servicio de inyectología.",
-      "schedule": "Lun-Dom 8am-10pm",
-      "phone": "607 888 9900",
-      "location_hint": "Piso 1, entrada sur, abiertos hasta tarde",
-      "tags": "farmacia,medicamentos,vitaminas,cosmeticos,salud,inyectologia,drogueria"
+      "name": "Megalesa",
+      "floor": "Piso 2",
+      "category": "Entretenimiento",
+      "description": "Megalesa - local 202 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3125003693",
+      "location_hint": "Local 202. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "megalesa,entretenimiento"
+    },
+    {
+      "name": "Gari",
+      "floor": "Piso 2",
+      "category": "Entretenimiento",
+      "description": "Gari - local 204 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3026435036",
+      "location_hint": "Local 204. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "gari,entretenimiento"
+    },
+    {
+      "name": "Amapola",
+      "floor": "Piso 2",
+      "category": "Entretenimiento",
+      "description": "Amapola - local 205 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3135954034",
+      "location_hint": "Local 205. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "amapola,entretenimiento"
+    },
+    {
+      "name": "Casino",
+      "floor": "Piso 2",
+      "category": "Entretenimiento",
+      "description": "Casino - local 206 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3153826430",
+      "location_hint": "Local 206. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "casino,entretenimiento"
+    },
+    {
+      "name": "Hamburgo 1718",
+      "floor": "Piso 2",
+      "category": "Restaurante",
+      "description": "Hamburgo 1718 - local 207 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3138936637",
+      "location_hint": "Local 207. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "hamburgo,restaurante"
+    },
+    {
+      "name": "Happylandia",
+      "floor": "Piso 2",
+      "category": "Entretenimiento Infantil",
+      "description": "Happylandia - local 208 del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3115298740",
+      "location_hint": "Local 208. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "happylandia,entretenimiento,infantil"
+    },
+    {
+      "name": "Menta Hair",
+      "floor": "Zona Burbuja",
+      "category": "Belleza y Peluquería",
+      "description": "Menta Hair - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3203769201",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "menta,hair,belleza,peluquería"
+    },
+    {
+      "name": "Senthia",
+      "floor": "Zona Burbuja",
+      "category": "Belleza y Peluquería",
+      "description": "Senthia - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3229459355",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "senthia,belleza,peluquería"
+    },
+    {
+      "name": "Drops",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Drops - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3227836254",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "drops,comercio,general"
+    },
+    {
+      "name": "Manhattan Accesorios",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Manhattan Accesorios - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3172323044",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "manhattan,accesorios,comercio,general"
+    },
+    {
+      "name": "Enjoy Cheladas",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Enjoy Cheladas - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3222553124",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "enjoy,cheladas,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Badelei",
+      "floor": "Zona Burbuja",
+      "category": "Belleza y Peluquería",
+      "description": "Badelei - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3045409384",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "badelei,belleza,peluquería"
+    },
+    {
+      "name": "Makilla Beauty Store",
+      "floor": "Zona Burbuja",
+      "category": "Belleza y Peluquería",
+      "description": "Makilla Beauty Store - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3212608559",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "makilla,beauty,store,belleza,peluquería"
+    },
+    {
+      "name": "Nampa Drinks",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Nampa Drinks - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3186052994",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "nampa,drinks,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Densa",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Densa - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3015671555",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "densa,comercio,general"
+    },
+    {
+      "name": "Super Kars",
+      "floor": "Zona Burbuja",
+      "category": "Concesionario de Vehículos",
+      "description": "Super Kars - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3176737857",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "super,kars,concesionario,vehículos"
+    },
+    {
+      "name": "Kaizen",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Kaizen - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3105117207",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "kaizen,comercio,general"
+    },
+    {
+      "name": "JottaTravel",
+      "floor": "Zona Burbuja",
+      "category": "Agencia de Viajes",
+      "description": "JottaTravel - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3213127759",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "jottatravel,agencia,viajes"
+    },
+    {
+      "name": "Gitano",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Gitano - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3165792359",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "gitano,comercio,general"
+    },
+    {
+      "name": "Speed Clean Car",
+      "floor": "Zona Burbuja",
+      "category": "Servicios / Lavado de autos",
+      "description": "Speed Clean Car - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3222039528",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "speed,clean,car,servicios,lavado,autos"
+    },
+    {
+      "name": "Pololos",
+      "floor": "Zona Burbuja",
+      "category": "Motos y Accesorios",
+      "description": "Pololos - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3173047272",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "pololos,motos,accesorios"
+    },
+    {
+      "name": "Wafles",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Wafles - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3155139406",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "wafles,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Obleas Floridablanca",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Obleas Floridablanca - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3204654923",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "obleas,floridablanca,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Dulceria Cocoa",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Dulceria Cocoa - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3001793090",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "dulceria,cocoa,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Maracumango Xreme",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Maracumango Xreme - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3016588308",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "maracumango,xreme,comercio,general"
+    },
+    {
+      "name": "Accesorios J&A",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Accesorios J&A - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3202269280",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "accesorios,comercio,general"
+    },
+    {
+      "name": "Milagros",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Milagros - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3218005699",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "milagros,comercio,general"
+    },
+    {
+      "name": "Road trip",
+      "floor": "Zona Burbuja",
+      "category": "Agencia de Viajes",
+      "description": "Road trip - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3155153224",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "road,trip,agencia,viajes"
+    },
+    {
+      "name": "Taroko Bubble Tea",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Taroko Bubble Tea - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3245505333",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "taroko,bubble,tea,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Yugen",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Yugen - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3115648852",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "yugen,comercio,general"
+    },
+    {
+      "name": "Paga Fácil",
+      "floor": "Zona Burbuja",
+      "category": "Servicios Financieros",
+      "description": "Paga Fácil - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "paga,fácil,servicios,financieros"
+    },
+    {
+      "name": "Nativos",
+      "floor": "Zona Burbuja",
+      "category": "Comercio General",
+      "description": "Nativos - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3170571079",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "nativos,comercio,general"
+    },
+    {
+      "name": "Pintemos",
+      "floor": "Zona Burbuja",
+      "category": "Pinturas y Ferretería",
+      "description": "Pintemos - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3115513991",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "pintemos,pinturas,ferretería"
+    },
+    {
+      "name": "King Helmet",
+      "floor": "Zona Burbuja",
+      "category": "Motos y Accesorios",
+      "description": "King Helmet - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3023385468",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "king,helmet,motos,accesorios"
+    },
+    {
+      "name": "Vivero",
+      "floor": "Zona Burbuja",
+      "category": "Hogar y Jardín",
+      "description": "Vivero - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3138737458",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "vivero,hogar,jardín"
+    },
+    {
+      "name": "Mega Store Motos",
+      "floor": "Zona Burbuja",
+      "category": "Motos y Accesorios",
+      "description": "Mega Store Motos - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3246807547",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "mega,store,motos,accesorios"
+    },
+    {
+      "name": "Maxilandia",
+      "floor": "Zona Burbuja",
+      "category": "Entretenimiento Infantil",
+      "description": "Maxilandia - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "maxilandia,entretenimiento,infantil"
+    },
+    {
+      "name": "Xtreme 360",
+      "floor": "Zona Burbuja",
+      "category": "Tecnología y Telefonía",
+      "description": "Xtreme 360 - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "3143045204",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "xtreme,tecnología,telefonía"
+    },
+    {
+      "name": "La Poporra Drinks",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "La Poporra Drinks - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "3102770656",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "poporra,drinks,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "Culto Cervecero",
+      "floor": "Zona Burbuja",
+      "category": "Comidas y Bebidas / Kiosco",
+      "description": "Culto Cervecero - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 11:30am-9pm | Sáb 11:30am-10pm | Dom y Festivos 11:30am-9pm",
+      "phone": "No registrado",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "culto,cervecero,comidas,bebidas,kiosco"
+    },
+    {
+      "name": "La Santa",
+      "floor": "Zona Burbuja",
+      "category": "Por confirmar con el CC",
+      "description": "La Santa - local en la Zona Burbuja del Centro Comercial El Puente.",
+      "schedule": "Lun-Vie 10am-7pm | Sáb 10am-9pm | Dom y Festivos 10am-7pm",
+      "phone": "No registrado",
+      "location_hint": "Zona Burbuja. Ubicación exacta (ala/sector) por confirmar con el Centro Comercial.",
+      "tags": "santa"
     }
   ],
-  "events": [
-    {
-      "name": "Feria de Temporada — Descuentos hasta 50%",
-      "date": "2026-03-10",
-      "time": "Todo el día",
-      "location": "Tiendas participantes",
-      "description": "Más de 30 tiendas con descuentos de temporada. Busca los avisos amarillos en cada local."
-    },
-    {
-      "name": "Noche de Cine Gratis",
-      "date": "2026-03-14",
-      "time": "7:00pm",
-      "location": "Piso 3 — Cine Colombia",
-      "description": "Función gratuita para los primeros 100 asistentes. Reserva tu lugar en el punto de información."
-    },
-    {
-      "name": "Show Infantil — Los Backyardigans en vivo",
-      "date": "2026-03-15",
-      "time": "3:00pm y 5:00pm",
-      "location": "Plazoleta central, Piso 1",
-      "description": "Espectáculo en vivo para niños. Entrada gratuita. Dos funciones disponibles."
-    },
-    {
-      "name": "Feria Gastronómica — Sabores de Colombia",
-      "date": "2026-03-20",
-      "time": "12:00pm - 8:00pm",
-      "location": "Piso 2 — Zona de Comidas",
-      "description": "Platos típicos de distintas regiones colombianas. Chefs invitados y degustaciones gratuitas."
-    }
-  ]
+  "events": []
 }
