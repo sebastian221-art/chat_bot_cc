@@ -7,6 +7,7 @@ FIXES:
   - is_delivery_intent ya no clasifica preguntas de estado como nuevos pedidos
 """
 import logging
+import base64
 from groq import AsyncGroq
 from config import get_settings
 from services.rag import search_stores
@@ -250,3 +251,46 @@ def build_handoff_message(user_name: str = "") -> str:
         f"esta conversación contigo por aquí mismo.\n\n"
         f"Mientras tanto, si hay algo más en lo que te pueda ayudar, dime."
     )
+
+
+# ── Visión (bot que ve fotos) ──────────────────────────────────────
+
+async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
+    """
+    Usa el modelo de visión de Groq para describir en pocas palabras
+    qué producto aparece en una foto que manda el cliente — pensado
+    para buscar algo parecido en el directorio del mall, no para
+    identificar marcas exactas (eso sería inventar datos).
+    """
+    client = _get_groq_client()
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+
+    prompt = (
+        "Un cliente de un centro comercial mandó esta foto de un producto que "
+        "le interesa. Describe en 1-2 líneas QUÉ es (tipo de prenda, calzado, "
+        "accesorio, comida, tecnología, etc.), su categoría general, color "
+        "principal y estilo. Sé breve y concreto, en español. "
+        "No inventes marcas ni asumas cuáles — describe solo lo que se ve."
+    )
+    if caption:
+        prompt += f'\n\nEl cliente escribió junto a la foto: "{caption}"'
+
+    try:
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_VISION_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}},
+                    ],
+                }
+            ],
+            max_tokens=200,
+            temperature=0.4,
+        )
+        return (completion.choices[0].message.content or "").strip()
+    except Exception as e:
+        logger.error(f"Error Groq Vision: {str(e)}")
+        return ""

@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_ID: str = "PENDIENTE"
     VERIFY_TOKEN: str = "mall_puente_2026"
 
-    # Groq — modelo actualizado
+    # Groq — modelo actualizado (agosto 2026: llama-3.3-70b-versatile fue
+    # descontinuado por Groq el 17/06/2026, migrado al reemplazo oficial)
     GROQ_API_KEY: str = "PENDIENTE"
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"  # ← modelo vigente 2026
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_VISION_MODEL: str = "qwen/qwen3.6-27b"  # para el bot que ve fotos
 
     # Base de datos
     DATABASE_URL: str = "sqlite:///./mall_bot_dev.db"

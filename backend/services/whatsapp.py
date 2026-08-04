@@ -44,20 +44,63 @@ def parse_incoming_message(data: dict) -> dict | None:
             return None
 
         message = value["messages"][0]
-
-        # Fase 1: solo texto. Fase 2 se agrega imágenes
-        if message.get("type") != "text":
-            return None
-
         contacts = value.get("contacts", [{}])
         profile  = contacts[0].get("profile", {}) if contacts else {}
 
-        return {
+        base = {
             "phone_number": message["from"],
             "name":         profile.get("name", "Usuario"),
-            "message_text": message["text"]["body"],
             "message_id":   message["id"],
         }
+
+        if message.get("type") == "text":
+            return {
+                **base,
+                "message_type": "text",
+                "message_text": message["text"]["body"],
+            }
+
+        if message.get("type") == "image":
+            image = message.get("image", {})
+            return {
+                **base,
+                "message_type": "image",
+                "media_id":     image.get("id"),
+                "mime_type":    image.get("mime_type", "image/jpeg"),
+                "caption":      image.get("caption", ""),
+            }
+
+        # Otros tipos (audio, documento, ubicación, etc.) — no soportados aún
+        return None
+
     except (KeyError, IndexError) as e:
         logger.warning(f"No se pudo parsear mensaje: {str(e)}")
         return None
+
+
+async def download_media(media_id: str) -> bytes | None:
+    """
+    Descarga una imagen de WhatsApp. Meta requiere 2 pasos:
+    1) Consultar el media_id para obtener una URL temporal firmada
+    2) Descargar el binario de esa URL (también requiere el token)
+    """
+    headers = {"Authorization": f"Bearer {settings.WHATSAPP_TOKEN}"}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            meta_resp = await client.get(f"{WHATSAPP_API_URL}/{media_id}", headers=headers)
+            meta_resp.raise_for_status()
+            media_url = meta_resp.json().get("url")
+            if not media_url:
+                logger.error(f"No se encontró URL de descarga para media_id={media_id}")
+                return None
+
+            file_resp = await client.get(media_url, headers=headers)
+            file_resp.raise_for_status()
+            return file_resp.content
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP descargando media {media_id}: {e.response.text}")
+            return None
+        except Exception as e:
+            logger.error(f"Error inesperado descargando media {media_id}: {str(e)}")
+            return None

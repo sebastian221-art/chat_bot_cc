@@ -26,8 +26,9 @@ from models.database import get_db, SessionLocal
 from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
-from services.whatsapp import send_text_message, parse_incoming_message
+from services.whatsapp import send_text_message, parse_incoming_message, download_media
 from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message
+from services.vision_search import handle_image_message
 from services.store_transfer import (
     find_store_by_message,
     build_transfer_message,
@@ -73,12 +74,7 @@ async def receive_message(
     # pausa del bot no se respetaba). process_message crea su propia
     # sesión nueva, fresca, independiente del ciclo de vida de esta
     # petición HTTP.
-    background_tasks.add_task(
-        process_message,
-        phone_number=msg["phone_number"],
-        user_name=msg["name"],
-        message_text=msg["message_text"],
-    )
+    background_tasks.add_task(process_message, msg=msg)
     return {"status": "ok"}
 
 
@@ -161,58 +157,19 @@ def _flag_if_needs_human(db: Session, phone_number: str, message_text: str) -> b
 
 # ── Procesamiento principal ───────────────────────────────────────
 
-async def process_message(
-    phone_number: str,
-    user_name: str,
-    message_text: str,
-):
+async def process_message(msg: dict):
+    phone_number = msg["phone_number"]
+    user_name    = msg["name"]
+    message_type = msg.get("message_type", "text")
+
     start = time.time()
-    print(f"\n  📨  [{phone_number}] {user_name}: {message_text[:80]}")
 
     db = SessionLocal()
     try:
-        # 1. Guardar mensaje del usuario
-        db.add(Conversation(
-            phone_number=phone_number,
-            user_name=user_name,
-            role="user",
-            message=message_text,
-        ))
-        db.commit()
-
-        # 2. Limpiar historial viejo
-        _trim_history(db, phone_number)
-
-        # 3. Si el mensaje amerita atención humana, responde con el
-        #    mensaje de transferencia directo — SIN pasar por la IA
-        #    (para no arriesgarnos a que improvise datos falsos).
-        escalated = _flag_if_needs_human(db, phone_number, message_text)
-
-        # 4. Si el bot está en pausa para este número (un admin lo está
-        #    atendiendo manualmente), NO respondemos automático.
-        if _is_bot_paused(db, phone_number):
-            print(f"  ⏸️   [{phone_number}] Bot en pausa — un admin lo está atendiendo, no se autoresponde")
-            return
-
-        # 5. Generar respuesta
-        if escalated:
-            response_text = build_handoff_message(user_name)
+        if message_type == "image":
+            await _process_image_message(db, phone_number, user_name, msg, start)
         else:
-            response_text = await _route_message(db, phone_number, user_name, message_text)
-
-        # 6. Guardar respuesta y enviar
-        db.add(Conversation(
-            phone_number=phone_number,
-            user_name=user_name,
-            role="assistant",
-            message=response_text,
-        ))
-        db.commit()
-
-        elapsed = round(time.time() - start, 2)
-        print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
-
-        await send_text_message(to=phone_number, message=response_text)
+            await _process_text_message(db, phone_number, user_name, msg["message_text"], start)
 
     except Exception as e:
         logger.error(f"Error procesando mensaje de {phone_number}: {str(e)}", exc_info=True)
@@ -222,6 +179,109 @@ async def process_message(
         )
     finally:
         db.close()
+
+
+async def _process_text_message(db: Session, phone_number: str, user_name: str, message_text: str, start: float):
+    print(f"\n  📨  [{phone_number}] {user_name}: {message_text[:80]}")
+
+    # 1. Guardar mensaje del usuario
+    db.add(Conversation(
+        phone_number=phone_number,
+        user_name=user_name,
+        role="user",
+        message=message_text,
+    ))
+    db.commit()
+
+    # 2. Limpiar historial viejo
+    _trim_history(db, phone_number)
+
+    # 3. Si el mensaje amerita atención humana, responde con el
+    #    mensaje de transferencia directo — SIN pasar por la IA
+    #    (para no arriesgarnos a que improvise datos falsos).
+    escalated = _flag_if_needs_human(db, phone_number, message_text)
+
+    # 4. Si el bot está en pausa para este número (un admin lo está
+    #    atendiendo manualmente), NO respondemos automático.
+    if _is_bot_paused(db, phone_number):
+        print(f"  ⏸️   [{phone_number}] Bot en pausa — un admin lo está atendiendo, no se autoresponde")
+        return
+
+    # 5. Generar respuesta
+    if escalated:
+        response_text = build_handoff_message(user_name)
+    else:
+        response_text = await _route_message(db, phone_number, user_name, message_text)
+
+    # 6. Guardar respuesta y enviar
+    db.add(Conversation(
+        phone_number=phone_number,
+        user_name=user_name,
+        role="assistant",
+        message=response_text,
+    ))
+    db.commit()
+
+    elapsed = round(time.time() - start, 2)
+    print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
+
+    await send_text_message(to=phone_number, message=response_text)
+
+
+async def _process_image_message(db: Session, phone_number: str, user_name: str, msg: dict, start: float):
+    caption = msg.get("caption", "")
+    print(f"\n  📸  [{phone_number}] {user_name}: [foto]{f' con texto: {caption}' if caption else ''}")
+
+    # 1. Guardar un registro del mensaje (no tenemos el texto, guardamos una nota)
+    placeholder = f"[Foto enviada]{f' — {caption}' if caption else ''}"
+    db.add(Conversation(
+        phone_number=phone_number,
+        user_name=user_name,
+        role="user",
+        message=placeholder,
+    ))
+    db.commit()
+    _trim_history(db, phone_number)
+
+    # 2. Si el bot está pausado (admin atendiendo), no respondemos
+    if _is_bot_paused(db, phone_number):
+        print(f"  ⏸️   [{phone_number}] Bot en pausa — no se autoresponde a la foto")
+        return
+
+    # 3. Descargar la imagen desde Meta
+    image_bytes = await download_media(msg["media_id"])
+    if not image_bytes:
+        response_text = (
+            "No pude descargar tu foto 😅 ¿Puedes intentar mandarla de nuevo? "
+            "Si sigue sin funcionar, cuéntame con palabras qué buscas."
+        )
+    else:
+        records = _get_history(db, phone_number)
+        history = [
+            {"role": "assistant" if r.role == "admin" else r.role, "content": r.message}
+            for r in reversed(records)
+        ]
+        response_text = await handle_image_message(
+            user_name=user_name,
+            image_bytes=image_bytes,
+            mime_type=msg.get("mime_type", "image/jpeg"),
+            caption=caption,
+            conversation_history=history,
+        )
+
+    # 4. Guardar respuesta y enviar
+    db.add(Conversation(
+        phone_number=phone_number,
+        user_name=user_name,
+        role="assistant",
+        message=response_text,
+    ))
+    db.commit()
+
+    elapsed = round(time.time() - start, 2)
+    print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
+
+    await send_text_message(to=phone_number, message=response_text)
 
 
 # ── Helpers ───────────────────────────────────────────────────────
