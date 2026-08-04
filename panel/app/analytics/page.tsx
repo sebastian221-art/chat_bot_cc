@@ -94,7 +94,8 @@ export default function AnalyticsPage() {
                 info:   { border: 'border-indigo-900/50',  bg: 'bg-indigo-950/30',  icon: 'text-indigo-400',  label: 'text-indigo-400' },
               }
               const style = severityStyle[ins.severity] || severityStyle.info
-              const IconComp = { 'trending-up': TrendingUp, 'trending-down': TrendingDown, 'clock': Clock, 'alert-triangle': AlertTriangle, 'star': Star }[ins.icon] || Lightbulb
+              const iconMap: Record<string, any> = { 'trending-up': TrendingUp, 'trending-down': TrendingDown, 'clock': Clock, 'alert-triangle': AlertTriangle, 'star': Star }
+              const IconComp = iconMap[ins.icon] || Lightbulb
 
               return (
                 <div key={i} className={`${style.bg} border ${style.border} rounded-2xl p-5`}>
