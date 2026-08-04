@@ -179,8 +179,10 @@ async def generate_response(
             max_tokens=500,
             temperature=0.7,
             top_p=0.9,
-            reasoning_effort="low",     # gpt-oss-120b razona siempre — lo dejamos en bajo para respuestas rápidas
-            reasoning_format="hidden",  # y ocultamos ese razonamiento del cliente, por si acaso
+            # NOTA: NO usamos reasoning_effort/reasoning_format aquí — la
+            # version de groq instalada (0.11.0) no los reconoce y el
+            # SDK lanza un TypeError antes de llegar a Groq. La limpieza
+            # del <think> se hace después, con _strip_thinking_tags().
         )
         raw = completion.choices[0].message.content or ""
         return _strip_thinking_tags(raw)
@@ -301,7 +303,10 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
             ],
             max_tokens=250,
             temperature=0.4,
-            reasoning_format="hidden",  # oculta el <think>...</think> del modelo — solo queremos la respuesta final
+            # NOTA: NO usamos reasoning_format/reasoning_effort aquí — la
+            # version de groq instalada (0.11.0) no los reconoce y el
+            # SDK lanza un TypeError antes de llegar a Groq. La limpieza
+            # del <think> se hace después, con _strip_thinking_tags().
         )
         raw = (completion.choices[0].message.content or "").strip()
         return _strip_thinking_tags(raw)
