@@ -22,7 +22,7 @@ from fastapi import APIRouter, Request, Response, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from models.database import get_db
+from models.database import get_db, SessionLocal
 from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
@@ -62,18 +62,22 @@ async def verify_webhook(request: Request):
 async def receive_message(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
 ):
     data = await request.json()
     msg  = parse_incoming_message(data)
     if msg is None:
         return {"status": "ok"}
+    # OJO: NO le pasamos la sesión de esta petición web a la tarea en
+    # segundo plano — esa sesión puede quedar cerrada por FastAPI antes
+    # de que la tarea corra, causando lecturas inconsistentes (ej. la
+    # pausa del bot no se respetaba). process_message crea su propia
+    # sesión nueva, fresca, independiente del ciclo de vida de esta
+    # petición HTTP.
     background_tasks.add_task(
         process_message,
         phone_number=msg["phone_number"],
         user_name=msg["name"],
         message_text=msg["message_text"],
-        db=db,
     )
     return {"status": "ok"}
 
@@ -134,7 +138,9 @@ def _is_bot_paused(db: Session, phone_number: str) -> bool:
     paused_until = flag.bot_paused_until
     if paused_until.tzinfo is None:
         paused_until = paused_until.replace(tzinfo=timezone.utc)
-    return now < paused_until
+    result = now < paused_until
+    print(f"  🔎  [{phone_number}] Chequeo de pausa — ahora: {now.isoformat()} | pausado hasta: {paused_until.isoformat()} | ¿pausado?: {result}")
+    return result
 
 
 def _flag_if_needs_human(db: Session, phone_number: str, message_text: str):
@@ -157,11 +163,11 @@ async def process_message(
     phone_number: str,
     user_name: str,
     message_text: str,
-    db: Session,
 ):
     start = time.time()
     print(f"\n  📨  [{phone_number}] {user_name}: {message_text[:80]}")
 
+    db = SessionLocal()
     try:
         # 1. Guardar mensaje del usuario
         db.add(Conversation(
@@ -207,6 +213,8 @@ async def process_message(
             to=phone_number,
             message="Uy, algo salió mal de mi parte 😅 ¿Puedes intentarlo de nuevo?",
         )
+    finally:
+        db.close()
 
 
 # ── Helpers ───────────────────────────────────────────────────────
