@@ -29,6 +29,15 @@ from models.conversation_flag import ConversationFlag
 from services.whatsapp import send_text_message, parse_incoming_message, download_media
 from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message
 from services.vision_search import handle_image_message
+from services.navigation import (
+    parse_zone_code,
+    find_zone,
+    log_zone_scan,
+    get_last_scanned_zone,
+    build_zone_not_found_message,
+    build_zone_confirmation_message,
+    build_navigation_response,
+)
 from services.store_transfer import (
     find_store_by_message,
     build_transfer_message,
@@ -86,15 +95,38 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     Compartido entre el webhook real y el endpoint /test para que
     ambos se comporten exactamente igual.
     """
-    if is_delivery_intent(message_text):
+    # ── Navegación QR indoor ────────────────────────────────────────
+    # Prioridad más alta: si el mensaje trae un código de zona (viene
+    # de un QR físico escaneado), lo atendemos primero que cualquier
+    # otra cosa — es la señal más específica que puede traer un mensaje.
+    zone_code = parse_zone_code(message_text)
+    if zone_code:
+        log_zone_scan(db, phone_number, zone_code)  # se registra SIEMPRE, exista o no la zona
+        zone = find_zone(db, zone_code)
+        if not zone:
+            return build_zone_not_found_message()
+
         store = find_store_by_message(db, message_text)
+        if store:
+            return await build_navigation_response(zone, store, user_name)
+        return build_zone_confirmation_message(zone)
+
+    # Si el mensaje anterior fue "¿a qué tienda quieres llegar?" (después
+    # de escanear un QR), usamos la última zona escaneada por este número
+    # + el nombre de tienda que acaba de mandar ahora.
+    store = find_store_by_message(db, message_text)
+    if store and _last_bot_message_was_zone_ask(db, phone_number):
+        last_zone = get_last_scanned_zone(db, phone_number)
+        if last_zone:
+            return await build_navigation_response(last_zone, store, user_name)
+
+    if is_delivery_intent(message_text):
         if store:
             return build_transfer_message(store)
         return build_ask_which_store_message()
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
-    store = find_store_by_message(db, message_text)
     if store and _last_bot_message_was_ask(db, phone_number):
         return build_transfer_message(store)
 
@@ -124,6 +156,18 @@ def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
     if not last:
         return False
     return "de qué tienda" in last.message.lower() or "qué restaurante" in last.message.lower()
+
+
+def _last_bot_message_was_zone_ask(db: Session, phone_number: str) -> bool:
+    last = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number, Conversation.role.in_(["assistant", "admin"]))
+        .order_by(Conversation.timestamp.desc())
+        .first()
+    )
+    if not last:
+        return False
+    return "a qué tienda o local quieres llegar" in last.message.lower()
 
 
 def _is_bot_paused(db: Session, phone_number: str) -> bool:

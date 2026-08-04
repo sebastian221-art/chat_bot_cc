@@ -28,6 +28,8 @@ from models.store import Store
 from models.event import Event
 from models.knowledge import KnowledgeEntry
 from models.conversation_flag import ConversationFlag
+from models.zone import Zone
+from models.zone_scan import ZoneScan
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
@@ -62,6 +64,11 @@ class ReplyIn(BaseModel):
 class KnowledgeIn(BaseModel):
     title: str
     content: str
+
+class ZoneIn(BaseModel):
+    code: str
+    floor: str
+    description: str
 
 
 def _reindex(db: Session):
@@ -601,3 +608,71 @@ async def import_knowledge(file: UploadFile = File(...), db: Session = Depends(g
     _reindex(db)
     print(f"  📥  Import conocimiento: {created} nuevos, {updated} actualizados, {skipped} saltados")
     return {"ok": True, "created": created, "updated": updated, "skipped": skipped, "errors": errors[:20]}
+
+
+# ══════════════════════════════════════════════════════════════════
+# ZONAS — navegación indoor por QR
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/zones")
+def list_zones(db: Session = Depends(get_db)):
+    from config import get_settings
+    settings = get_settings()
+    zones = db.query(Zone).order_by(Zone.code).all()
+    result = []
+    for z in zones:
+        d = z.to_dict()
+        d["qr_link"] = z.whatsapp_qr_link(settings.WHATSAPP_DISPLAY_NUMBER)
+        result.append(d)
+    return result
+
+
+@router.post("/zones", status_code=201)
+def create_zone(zone: ZoneIn, db: Session = Depends(get_db)):
+    existing = db.query(Zone).filter(Zone.code == zone.code.upper()).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Ya existe una zona con el código {zone.code.upper()}")
+    new_zone = Zone(code=zone.code.upper(), floor=zone.floor, description=zone.description)
+    db.add(new_zone)
+    db.commit()
+    db.refresh(new_zone)
+    print(f"  ✅  Zona agregada: {new_zone.code} (id={new_zone.id})")
+    return {"ok": True, "zone": new_zone.to_dict()}
+
+
+@router.put("/zones/{zone_id}")
+def update_zone(zone_id: int, zone: ZoneIn, db: Session = Depends(get_db)):
+    existing = db.query(Zone).filter(Zone.id == zone_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Zona no encontrada")
+    existing.code = zone.code.upper()
+    existing.floor = zone.floor
+    existing.description = zone.description
+    db.commit()
+    db.refresh(existing)
+    print(f"  ✅  Zona actualizada: {existing.code} (id={existing.id})")
+    return {"ok": True, "zone": existing.to_dict()}
+
+
+@router.delete("/zones/{zone_id}")
+def delete_zone(zone_id: int, db: Session = Depends(get_db)):
+    existing = db.query(Zone).filter(Zone.id == zone_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Zona no encontrada")
+    code = existing.code
+    db.delete(existing)
+    db.commit()
+    print(f"  🗑️   Zona eliminada: {code}")
+    return {"ok": True, "removed": code}
+
+
+@router.get("/zones/stats")
+def zone_scan_stats(db: Session = Depends(get_db)):
+    """Cuántas veces se ha escaneado cada zona — el mapa de calor de tráfico real."""
+    rows = (
+        db.query(ZoneScan.zone_code, func.count(ZoneScan.id).label("scans"))
+        .group_by(ZoneScan.zone_code)
+        .order_by(desc("scans"))
+        .all()
+    )
+    return [{"zone_code": r.zone_code, "scans": r.scans} for r in rows]

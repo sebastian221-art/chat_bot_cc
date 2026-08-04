@@ -117,6 +117,14 @@ export const deleteKnowledge = (id: number)                     => req(`/knowled
 export const exportKnowledge = ()          => downloadFile('/knowledge/export', 'base_de_conocimiento.csv')
 export const importKnowledge = (file: File) => uploadFile('/knowledge/import', file)
 
+// ── Zonas (navegación QR indoor) ────────────────────────────────────
+export interface Zone { id?: number; code: string; floor: string; description: string; qr_link?: string }
+export const getZones      = ()                        => req('/zones')
+export const createZone    = (d: Zone)                  => req('/zones', { method: 'POST', body: JSON.stringify(d) })
+export const updateZone    = (id: number, d: Zone)      => req(`/zones/${id}`, { method: 'PUT', body: JSON.stringify(d) })
+export const deleteZone    = (id: number)               => req(`/zones/${id}`, { method: 'DELETE' })
+export const getZoneStats  = ()                         => req('/zones/stats')
+
 // ── Analytics ────────────────────────────────────────────────────
 export const getAnalyticsSummary  = (days = 7) => req(`/analytics/summary`)
 export const getAnalyticsHeatmap  = (days = 7) => req(`/analytics/heatmap?days=${days}`)
