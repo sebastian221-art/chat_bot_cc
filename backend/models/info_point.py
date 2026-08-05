@@ -12,7 +12,7 @@ class InfoPoint(Base):
 
     id       = Column(Integer, primary_key=True, index=True)
     name     = Column(String(150), nullable=False)
-    floor    = Column(String(50), nullable=True)
+    floor    = Column(String(100), nullable=True)  # antes 50 — mismo margen de seguridad que mall_info.phone
     location = Column(String(300), nullable=True)
 
     def to_dict(self):

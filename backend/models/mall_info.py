@@ -14,7 +14,7 @@ class MallInfo(Base):
     name             = Column(String(150), nullable=False, default="Centro Comercial El Puente")
     address          = Column(String(300), nullable=True)
     general_schedule = Column(Text, nullable=True)
-    phone            = Column(String(50), nullable=True)
+    phone            = Column(String(150), nullable=True)  # antes 50 — muy corto para notas/placeholders largos
     parking          = Column(Text, nullable=True)
     wifi             = Column(Text, nullable=True)
     updated_at       = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
