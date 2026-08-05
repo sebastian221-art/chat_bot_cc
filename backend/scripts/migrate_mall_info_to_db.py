@@ -15,10 +15,11 @@ Cómo correrlo (desde la carpeta backend/, en la consola de Railway):
 import json
 import sys
 from pathlib import Path
+from sqlalchemy import text
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.database import SessionLocal, create_tables
+from models.database import SessionLocal, create_tables, engine
 from models.mall_info import MallInfo
 from models.info_point import InfoPoint
 
@@ -27,6 +28,19 @@ DATA_PATH = Path(__file__).parent.parent / "data" / "tiendas.json"
 
 def main():
     print("🔄  Iniciando migración de info general del mall → base de datos...")
+
+    # IMPORTANTE: si ya intentaste correr esta migración antes (con el
+    # modelo viejo que tenía phone/floor demasiado cortos), la tabla ya
+    # quedó creada en Postgres con esos límites — y create_tables() NO
+    # los actualiza, porque SQLAlchemy nunca modifica tablas que ya
+    # existen. Como confirmamos que quedó vacía (los intentos anteriores
+    # fallaron completos, con ROLLBACK), la borramos primero para que
+    # se vuelva a crear desde cero con el esquema correcto y actual.
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS mall_info"))
+        conn.execute(text("DROP TABLE IF EXISTS info_points"))
+        conn.commit()
+    print("  🗑️   Tablas viejas eliminadas (estaban vacías) — se recrean con el esquema correcto")
 
     create_tables()
 
