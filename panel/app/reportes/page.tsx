@@ -1,8 +1,8 @@
 // 📄 ARCHIVO: panel/app/reportes/page.tsx
 'use client'
 import { useState } from 'react'
-import { getAnalyticsSummary, getTopStores, getTopCategories, getOrderStats, runProfiling } from '@/lib/api'
-import { FileText, Download, Sparkles, BarChart2, ShoppingBag, RefreshCw } from 'lucide-react'
+import { getAnalyticsSummary, getTopStores, getTopCategories, getAnalyticsInsights, getDeliveryTransferStats, runProfiling } from '@/lib/api'
+import { FileText, Download, Sparkles, BarChart2, Send, RefreshCw } from 'lucide-react'
 
 type ReportType = 'semanal' | 'domicilios' | 'perfiles'
 
@@ -11,14 +11,14 @@ const REPORTS = [
     id: 'semanal' as ReportType,
     icon: BarChart2,
     title: 'Reporte semanal',
-    desc: 'Resumen de conversaciones, tiendas más consultadas y métricas del bot',
+    desc: 'Conversaciones, tiendas más consultadas, categorías, y acciones sugeridas',
     color: 'indigo',
   },
   {
     id: 'domicilios' as ReportType,
-    icon: ShoppingBag,
+    icon: Send,
     title: 'Reporte de domicilios',
-    desc: 'Pedidos, ingresos, locales top y calificaciones de la semana',
+    desc: 'Transferencias hacia tiendas — Any ya no gestiona el pedido, solo conecta al cliente con el local',
     color: 'emerald',
   },
   {
@@ -40,16 +40,17 @@ export default function ReportesPage() {
       let content = ''
 
       if (type === 'semanal') {
-        const [summary, stores, cats] = await Promise.all([
+        const [summary, stores, cats, insights] = await Promise.all([
           getAnalyticsSummary(),
           getTopStores(),
           getTopCategories(),
+          getAnalyticsInsights(),
         ])
-        content = buildSemanalText(summary, stores, cats)
+        content = buildSemanalText(summary, stores, cats, insights)
       }
 
       if (type === 'domicilios') {
-        const stats = await getOrderStats()
+        const stats = await getDeliveryTransferStats()
         content = buildDomiciliosText(stats)
       }
 
@@ -82,7 +83,7 @@ export default function ReportesPage() {
     <div className="p-6 space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white">Reportes</h1>
-        <p className="text-zinc-400 text-sm mt-1">Genera reportes del bot y los domicilios</p>
+        <p className="text-zinc-400 text-sm mt-1">Genera reportes del bot y las transferencias de domicilio</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -128,7 +129,7 @@ export default function ReportesPage() {
 
 // ── Helpers para construir el texto del reporte ───────────────────
 
-function buildSemanalText(summary: any, stores: any[], cats: any[]): string {
+function buildSemanalText(summary: any, stores: any[], cats: any[], insights: any[]): string {
   const now = new Date().toLocaleString('es-CO')
   return `REPORTE SEMANAL — CC El Puente
 Generado: ${now}
@@ -147,6 +148,9 @@ ${stores.map((s: any, i: number) => `  ${i + 1}. ${s.store} — ${s.mentions} me
 CATEGORÍAS MÁS CONSULTADAS
 ${cats.slice(0, 5).map((c: any) => `  • ${c.category} — ${c.percentage}%`).join('\n') || '  Sin datos suficientes'}
 
+ACCIONES SUGERIDAS
+${(insights || []).map((ins: any) => `  💡 ${ins.title}\n     ${ins.finding}\n     → ${ins.action}`).join('\n\n') || '  Sin recomendaciones todavía — falta más actividad'}
+
 ${'─'.repeat(40)}
 Generado automáticamente por Puente Bot Panel v2
 `
@@ -154,21 +158,20 @@ Generado automáticamente por Puente Bot Panel v2
 
 function buildDomiciliosText(stats: any): string {
   const now = new Date().toLocaleString('es-CO')
-  return `REPORTE DE DOMICILIOS — CC El Puente
+  return `REPORTE DE TRANSFERENCIAS DE DOMICILIO — CC El Puente
 Generado: ${now}
 ${'─'.repeat(40)}
 
-HOY
-  Pedidos totales: ${stats.total_today}
-  Entregados:      ${stats.delivered_today}
-  Pendientes ahora: ${stats.pending_now}
-  Ingresos:        $${(stats.revenue_today || 0).toLocaleString('es-CO')} COP
+Nota: Any ya no gestiona el pedido completo — transfiere al cliente
+directo al WhatsApp de la tienda. Estas cifras muestran cuántas
+transferencias se generaron, no el estado de cada pedido individual.
 
-TOP LOCALES (última semana)
-${(stats.top_stores || []).map((s: any, i: number) => `  ${i + 1}. ${s.store} — ${s.total} pedidos`).join('\n') || '  Sin datos'}
+RESUMEN
+  Transferencias hoy:        ${stats.total_today}
+  Transferencias (7 días):   ${stats.total_this_week}
 
-CALIFICACIONES PROMEDIO
-${(stats.avg_ratings || []).map((r: any) => `  • ${r.store}: ${'⭐'.repeat(Math.round(r.avg))} (${r.avg}/5)`).join('\n') || '  Sin calificaciones aún'}
+TOP TIENDAS (última semana)
+${(stats.top_stores || []).map((s: any, i: number) => `  ${i + 1}. ${s.store} — ${s.total} transferencias`).join('\n') || '  Sin datos todavía'}
 
 ${'─'.repeat(40)}
 Generado automáticamente por Puente Bot Panel v2

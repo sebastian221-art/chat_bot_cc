@@ -148,7 +148,12 @@ export const getTopCategories     = (days = 7) => req(`/analytics/categories?day
 export const getAnalyticsInsights = ()         => req(`/analytics/insights`)
 
 
-// ── Domicilios / Pedidos ─────────────────────────────────────────
+// ── Transferencias de Domicilio (reemplaza el flujo viejo de pedidos) ──
+export const getDeliveryTransferStats = () => req('/delivery-transfers/stats')
+export const getDeliveryTransfers     = () => req('/delivery-transfers')
+
+// ── Domicilios / Pedidos (código viejo — ya no se usa en el panel,
+//    se deja por si se necesita como referencia histórica) ─────────
 export const getOrders         = ()              => req('/orders')
 export const getActiveOrders   = ()              => req('/orders')
 export const getAllOrders       = (limit = 100)  => req(`/orders/all?limit=${limit}`)

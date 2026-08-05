@@ -32,6 +32,7 @@ from models.zone import Zone
 from models.zone_scan import ZoneScan
 from models.mall_info import MallInfo
 from models.info_point import InfoPoint
+from models.delivery_transfer import DeliveryTransfer
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
@@ -773,3 +774,50 @@ def delete_info_point(point_id: int, db: Session = Depends(get_db)):
     _reindex(db)
     print(f"  🗑️   Punto de interés eliminado: {name}")
     return {"ok": True, "removed": name}
+
+
+# ══════════════════════════════════════════════════════════════════
+# TRANSFERENCIAS DE DOMICILIO
+# ══════════════════════════════════════════════════════════════════
+# Ya no gestionamos el pedido completo — el bot transfiere al cliente
+# directo al WhatsApp de la tienda. Esto reemplaza a /orders/stats
+# como la fuente real de "cuántos domicilios se están generando".
+
+@router.get("/delivery-transfers/stats")
+def delivery_transfer_stats(db: Session = Depends(get_db)):
+    today = datetime.now(timezone.utc).date()
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+
+    total_today = db.query(DeliveryTransfer).filter(
+        func.date(DeliveryTransfer.timestamp) == today
+    ).count()
+
+    total_week = db.query(DeliveryTransfer).filter(
+        DeliveryTransfer.timestamp >= week_ago
+    ).count()
+
+    top_stores = (
+        db.query(DeliveryTransfer.store_name, func.count(DeliveryTransfer.id).label("total"))
+        .filter(DeliveryTransfer.timestamp >= week_ago)
+        .group_by(DeliveryTransfer.store_name)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "total_today": total_today,
+        "total_this_week": total_week,
+        "top_stores": [{"store": s, "total": t} for s, t in top_stores],
+    }
+
+
+@router.get("/delivery-transfers")
+def list_delivery_transfers(db: Session = Depends(get_db)):
+    rows = (
+        db.query(DeliveryTransfer)
+        .order_by(DeliveryTransfer.timestamp.desc())
+        .limit(100)
+        .all()
+    )
+    return [r.to_dict() for r in rows]

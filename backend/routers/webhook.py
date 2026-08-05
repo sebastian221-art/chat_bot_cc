@@ -26,6 +26,7 @@ from models.database import get_db, SessionLocal
 from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
+from models.delivery_transfer import DeliveryTransfer
 from services.whatsapp import send_text_message, parse_incoming_message, download_media
 from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message
 from services.vision_search import handle_image_message
@@ -122,12 +123,14 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
 
     if is_delivery_intent(message_text):
         if store:
+            _log_delivery_transfer(db, phone_number, store.name)
             return build_transfer_message(store)
         return build_ask_which_store_message()
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
     if store and _last_bot_message_was_ask(db, phone_number):
+        _log_delivery_transfer(db, phone_number, store.name)
         return build_transfer_message(store)
 
     records = _get_history(db, phone_number)
@@ -168,6 +171,18 @@ def _last_bot_message_was_zone_ask(db: Session, phone_number: str) -> bool:
     if not last:
         return False
     return "a qué tienda o local quieres llegar" in last.message.lower()
+
+
+def _log_delivery_transfer(db: Session, phone_number: str, store_name: str):
+    """
+    Registra cada vez que transferimos exitosamente a un cliente al
+    WhatsApp de una tienda para su domicilio. Como ya no gestionamos
+    el pedido completo, esto es lo que alimenta el panel de
+    "Domicilios" y los reportes — no sabemos si se concretó la venta,
+    pero sí sabemos que la conexión se hizo.
+    """
+    db.add(DeliveryTransfer(phone_number=phone_number, store_name=store_name))
+    db.commit()
 
 
 def _is_bot_paused(db: Session, phone_number: str) -> bool:
