@@ -30,6 +30,8 @@ from models.knowledge import KnowledgeEntry
 from models.conversation_flag import ConversationFlag
 from models.zone import Zone
 from models.zone_scan import ZoneScan
+from models.mall_info import MallInfo
+from models.info_point import InfoPoint
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
@@ -69,6 +71,19 @@ class ZoneIn(BaseModel):
     code: str
     floor: str
     description: str
+
+class MallInfoIn(BaseModel):
+    name: str
+    address: Optional[str] = ""
+    general_schedule: Optional[str] = ""
+    phone: Optional[str] = ""
+    parking: Optional[str] = ""
+    wifi: Optional[str] = ""
+
+class InfoPointIn(BaseModel):
+    name: str
+    floor: Optional[str] = ""
+    location: Optional[str] = ""
 
 
 def _reindex(db: Session):
@@ -676,3 +691,85 @@ def zone_scan_stats(db: Session = Depends(get_db)):
         .all()
     )
     return [{"zone_code": r.zone_code, "scans": r.scans} for r in rows]
+
+
+# ══════════════════════════════════════════════════════════════════
+# INFO GENERAL DEL MALL — última pieza migrada a la base de datos
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/mall-info")
+def get_mall_info(db: Session = Depends(get_db)):
+    info = db.query(MallInfo).filter(MallInfo.id == 1).first()
+    if not info:
+        # Si todavía no se ha corrido la migración ni creado a mano,
+        # devolvemos un objeto vacío en vez de un error 404 — así el
+        # formulario del panel se puede llenar desde cero sin drama.
+        return {
+            "id": None, "name": "Centro Comercial El Puente",
+            "address": "", "general_schedule": "", "phone": "",
+            "parking": "", "wifi": "",
+        }
+    return info.to_dict()
+
+
+@router.put("/mall-info")
+def update_mall_info(data: MallInfoIn, db: Session = Depends(get_db)):
+    info = db.query(MallInfo).filter(MallInfo.id == 1).first()
+    if not info:
+        info = MallInfo(id=1)
+        db.add(info)
+    info.name = data.name
+    info.address = data.address
+    info.general_schedule = data.general_schedule
+    info.phone = data.phone
+    info.parking = data.parking
+    info.wifi = data.wifi
+    db.commit()
+    db.refresh(info)
+    _reindex(db)
+    print(f"  ✅  Info general del mall actualizada")
+    return {"ok": True, "mall_info": info.to_dict()}
+
+
+@router.get("/info-points")
+def list_info_points(db: Session = Depends(get_db)):
+    points = db.query(InfoPoint).order_by(InfoPoint.name).all()
+    return [p.to_dict() for p in points]
+
+
+@router.post("/info-points", status_code=201)
+def create_info_point(point: InfoPointIn, db: Session = Depends(get_db)):
+    new_point = InfoPoint(**point.model_dump())
+    db.add(new_point)
+    db.commit()
+    db.refresh(new_point)
+    _reindex(db)
+    print(f"  ✅  Punto de interés agregado: {new_point.name}")
+    return {"ok": True, "point": new_point.to_dict()}
+
+
+@router.put("/info-points/{point_id}")
+def update_info_point(point_id: int, point: InfoPointIn, db: Session = Depends(get_db)):
+    existing = db.query(InfoPoint).filter(InfoPoint.id == point_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Punto de interés no encontrado")
+    for field, value in point.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  ✅  Punto de interés actualizado: {existing.name}")
+    return {"ok": True, "point": existing.to_dict()}
+
+
+@router.delete("/info-points/{point_id}")
+def delete_info_point(point_id: int, db: Session = Depends(get_db)):
+    existing = db.query(InfoPoint).filter(InfoPoint.id == point_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Punto de interés no encontrado")
+    name = existing.name
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Punto de interés eliminado: {name}")
+    return {"ok": True, "removed": name}

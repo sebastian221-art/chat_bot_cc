@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 from typing import List
@@ -9,15 +8,12 @@ from sqlalchemy.orm import Session
 from models.store import Store
 from models.event import Event
 from models.knowledge import KnowledgeEntry
+from models.mall_info import MallInfo
+from models.info_point import InfoPoint
 
 logger = logging.getLogger("mall_bot")
 
-# La info GENERAL del mall (dirección, horario general, wifi, puntos de
-# interés) sigue viviendo en este archivo por ahora — cambia poco y no
-# tiene todavía un CRUD propio en el panel. Tiendas y Eventos SÍ ya
-# viven en la base de datos (ver models/store.py y models/event.py).
-MALL_INFO_PATH = Path(__file__).parent.parent / "data" / "tiendas.json"
-CHROMA_PATH    = Path(__file__).parent.parent / "data" / "chroma_db"
+CHROMA_PATH = Path(__file__).parent.parent / "data" / "chroma_db"
 
 _collection = None
 
@@ -38,36 +34,35 @@ def _get_collection():
     return _collection
 
 
-def _load_mall_info() -> dict:
-    try:
-        with open(MALL_INFO_PATH, "r", encoding="utf-8") as f:
-            return json.load(f).get("mall", {})
-    except FileNotFoundError:
-        logger.warning("tiendas.json no encontrado - info general del mall vacía")
-        return {}
+def _get_mall_info(db: Session) -> MallInfo | None:
+    return db.query(MallInfo).filter(MallInfo.id == 1).first()
 
 
-def _build_mall_text(mall_info: dict) -> str:
+def _build_mall_text(mall_info: MallInfo | None) -> str:
+    if not mall_info:
+        return ""
     lines = [
-        f"INFORMACIÓN GENERAL DEL MALL: {mall_info.get('name', 'Centro Comercial El Puente')}",
-        f"DIRECCIÓN: {mall_info.get('address', '')}",
-        f"HORARIO GENERAL DEL MALL: {mall_info.get('general_schedule', '')}",
-        f"TELÉFONO CENTRAL: {mall_info.get('phone', '')}",
-        f"PARQUEADERO: {mall_info.get('parking', '')}",
-        f"WIFI GRATIS: {mall_info.get('wifi', '')}",
+        f"INFORMACIÓN GENERAL DEL MALL: {mall_info.name or 'Centro Comercial El Puente'}",
+        f"DIRECCIÓN: {mall_info.address or ''}",
+        f"HORARIO GENERAL DEL MALL: {mall_info.general_schedule or ''}",
+        f"TELÉFONO CENTRAL: {mall_info.phone or ''}",
+        f"PARQUEADERO: {mall_info.parking or ''}",
+        f"WIFI GRATIS: {mall_info.wifi or ''}",
     ]
     return "\n".join(l for l in lines if l.split(": ", 1)[1])
 
 
 def load_stores_to_rag(db: Session) -> int:
     """
-    Reindexar todo en ChromaDB, leyendo tiendas y eventos desde la
-    base de datos (Postgres/SQLite) en vez del archivo JSON.
+    Reindexar todo en ChromaDB, leyendo TODO desde la base de datos
+    (Postgres/SQLite) — tiendas, eventos, conocimiento, e info general
+    del mall. Ya no depende de ningún archivo JSON.
     Se llama al arrancar el backend y cada vez que se crea/edita/borra
-    una tienda o evento desde el panel.
+    algo desde el panel.
     """
     collection = _get_collection()
-    mall_info = _load_mall_info()
+    mall_info = _get_mall_info(db)
+    info_points = db.query(InfoPoint).all()
 
     stores = db.query(Store).filter(Store.active == True).all()
     events = db.query(Event).all()
@@ -81,20 +76,22 @@ def load_stores_to_rag(db: Session) -> int:
     documents, metadatas, ids = [], [], []
 
     # ── 1. Info general del mall ──────────────────────────────────
-    documents.append(_build_mall_text(mall_info))
-    metadatas.append({"source": "mall_info", "type": "general"})
-    ids.append("mall_general")
+    mall_text = _build_mall_text(mall_info)
+    if mall_text:
+        documents.append(mall_text)
+        metadatas.append({"source": "mall_info", "type": "general"})
+        ids.append("mall_general")
 
     # ── 2. Puntos de interés (baños, cajeros, ascensor, etc.) ──────
-    for idx, point in enumerate(mall_info.get("info_points", [])):
+    for point in info_points:
         text = (
-            f"SERVICIO DEL MALL: {point['name']}\n"
-            f"PISO: {point['floor']}\n"
-            f"UBICACIÓN EXACTA: {point['location']}"
+            f"SERVICIO DEL MALL: {point.name}\n"
+            f"PISO: {point.floor or ''}\n"
+            f"UBICACIÓN EXACTA: {point.location or ''}"
         )
         documents.append(text)
-        metadatas.append({"source": "poi", "type": "service", "name": point['name']})
-        ids.append(f"poi_{idx:03d}")
+        metadatas.append({"source": "poi", "type": "service", "name": point.name})
+        ids.append(f"poi_{point.id:04d}")
 
     # ── 3. Tiendas — desde la base de datos ─────────────────────────
     for store in stores:
@@ -133,7 +130,7 @@ def load_stores_to_rag(db: Session) -> int:
 
     total = len(documents)
     print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + "
-          f"{len(mall_info.get('info_points', []))} servicios + "
+          f"{len(info_points)} servicios + "
           f"{len(knowledge)} entradas de conocimiento = {total} indexadas")
     return len(stores)
 

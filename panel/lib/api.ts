@@ -125,6 +125,20 @@ export const updateZone    = (id: number, d: Zone)      => req(`/zones/${id}`, {
 export const deleteZone    = (id: number)               => req(`/zones/${id}`, { method: 'DELETE' })
 export const getZoneStats  = ()                         => req('/zones/stats')
 
+// ── Info General del Mall ───────────────────────────────────────────
+export interface MallInfo {
+  id?: number | null; name: string; address: string
+  general_schedule: string; phone: string; parking: string; wifi: string
+}
+export const getMallInfo    = ()                 => req('/mall-info')
+export const updateMallInfo = (d: MallInfo)      => req('/mall-info', { method: 'PUT', body: JSON.stringify(d) })
+
+export interface InfoPoint { id?: number; name: string; floor: string; location: string }
+export const getInfoPoints    = ()                            => req('/info-points')
+export const createInfoPoint  = (d: InfoPoint)                 => req('/info-points', { method: 'POST', body: JSON.stringify(d) })
+export const updateInfoPoint  = (id: number, d: InfoPoint)     => req(`/info-points/${id}`, { method: 'PUT', body: JSON.stringify(d) })
+export const deleteInfoPoint  = (id: number)                   => req(`/info-points/${id}`, { method: 'DELETE' })
+
 // ── Analytics ────────────────────────────────────────────────────
 export const getAnalyticsSummary  = (days = 7) => req(`/analytics/summary`)
 export const getAnalyticsHeatmap  = (days = 7) => req(`/analytics/heatmap?days=${days}`)

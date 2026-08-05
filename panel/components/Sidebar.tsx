@@ -20,6 +20,7 @@ const TOP_LINKS = [
   { href: '/tiendas',        label: 'Locales',          icon: Store,           roles: ['admin', 'supervisor'] },
   { href: '/conocimiento',   label: 'Base de Conocimiento', icon: BookOpen,    roles: ['admin', 'supervisor'] },
   { href: '/zonas',          label: 'Navegación QR',       icon: QrCode,       roles: ['admin', 'supervisor'] },
+  { href: '/info-general',   label: 'Info General',        icon: Building2,    roles: ['admin', 'supervisor'] },
   { href: '/analytics',      label: 'Analytics',        icon: BarChart2,       roles: ['admin'] },
   { href: '/reportes',       label: 'Reportes',         icon: FileText,        roles: ['admin'] },
   { href: '/usuarios',       label: 'Usuarios',         icon: Users,           roles: ['admin'] },
