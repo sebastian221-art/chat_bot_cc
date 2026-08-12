@@ -8,7 +8,7 @@ import {
 import Modal from '@/components/Modal'
 import { Plus, Pencil, Trash2, RefreshCw, BookOpen, Download, Upload, Search } from 'lucide-react'
 
-const EMPTY: KnowledgeEntry = { title: '', content: '' }
+const EMPTY: KnowledgeEntry = { title: '', content: '', photo_url: '' }
 
 export default function ConocimientoPage() {
   const [entries, setEntries]   = useState<(KnowledgeEntry & { _idx: number })[]>([])
@@ -223,6 +223,15 @@ export default function ConocimientoPage() {
               placeholder="Escribe aquí toda la información que Any debe saber sobre este tema..."
               {...field('content')}
             />
+          </div>
+          <div>
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Link de la foto <span className="text-zinc-600 font-normal">(opcional)</span>
+            </label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500" placeholder="https://..." {...field('photo_url')} />
+            {form.photo_url && (
+              <img src={form.photo_url} alt="Vista previa" className="mt-2 h-24 rounded-xl object-cover border border-zinc-700" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            )}
           </div>
         </div>
 

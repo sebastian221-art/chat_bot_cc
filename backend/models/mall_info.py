@@ -17,6 +17,8 @@ class MallInfo(Base):
     phone            = Column(String(150), nullable=True)  # antes 50 — muy corto para notas/placeholders largos
     parking          = Column(Text, nullable=True)
     wifi             = Column(Text, nullable=True)
+    latitude         = Column(String(30), nullable=True)   # ej: "6.554824" — para el pin de ubicación de WhatsApp
+    longitude        = Column(String(30), nullable=True)   # ej: "-73.13412"
     updated_at       = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def to_dict(self):
@@ -28,4 +30,6 @@ class MallInfo(Base):
             "phone": self.phone,
             "parking": self.parking,
             "wifi": self.wifi,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
         }

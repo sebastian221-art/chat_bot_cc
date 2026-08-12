@@ -52,16 +52,6 @@ export default function DomiciliosPage() {
         </button>
       </div>
 
-      {/* Aviso de cómo funciona ahora */}
-      <div className="mb-6 p-3 bg-indigo-950/30 border border-indigo-900/40 rounded-xl flex items-start gap-2.5">
-        <Send size={15} className="text-indigo-400 flex-shrink-0 mt-0.5" />
-        <p className="text-zinc-400 text-xs leading-relaxed">
-          Any ya no gestiona el pedido completo — cuando un cliente pide domicilio, lo transfiere directo al
-          WhatsApp de la tienda para que ellos lo atiendan. Esta página muestra cuántas transferencias se están
-          generando y hacia qué tiendas, no el estado de cada pedido (eso ya lo maneja cada local directamente).
-        </p>
-      </div>
-
       {/* Stats */}
       {loading ? (
         <div className="text-center text-zinc-600 py-16 animate-pulse">Cargando...</div>

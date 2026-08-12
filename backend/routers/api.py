@@ -33,6 +33,7 @@ from models.zone_scan import ZoneScan
 from models.mall_info import MallInfo
 from models.info_point import InfoPoint
 from models.delivery_transfer import DeliveryTransfer
+from models.raffle import Raffle
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
@@ -51,6 +52,7 @@ class StoreIn(BaseModel):
     phone: Optional[str] = ""
     location_hint: Optional[str] = ""
     tags: Optional[str] = ""
+    photo_url: Optional[str] = ""
 
 class EventIn(BaseModel):
     name: str
@@ -59,6 +61,7 @@ class EventIn(BaseModel):
     location: str
     description: Optional[str] = ""
     priority: Optional[int] = 3
+    photo_url: Optional[str] = ""
 
 class ReplyIn(BaseModel):
     message: str
@@ -67,11 +70,13 @@ class ReplyIn(BaseModel):
 class KnowledgeIn(BaseModel):
     title: str
     content: str
+    photo_url: Optional[str] = ""
 
 class ZoneIn(BaseModel):
     code: str
     floor: str
     description: str
+    photo_url: Optional[str] = ""
 
 class MallInfoIn(BaseModel):
     name: str
@@ -80,11 +85,23 @@ class MallInfoIn(BaseModel):
     phone: Optional[str] = ""
     parking: Optional[str] = ""
     wifi: Optional[str] = ""
+    latitude: Optional[str] = ""
+    longitude: Optional[str] = ""
 
 class InfoPointIn(BaseModel):
     name: str
     floor: Optional[str] = ""
     location: Optional[str] = ""
+
+class RaffleIn(BaseModel):
+    name: str
+    prize: str
+    requirements: Optional[str] = ""
+    end_date: Optional[str] = ""
+    location: Optional[str] = ""
+    description: Optional[str] = ""
+    priority: Optional[int] = 3
+    photo_url: Optional[str] = ""
 
 
 def _reindex(db: Session):
@@ -122,6 +139,7 @@ FIELD_ALIASES = {
         "phone":         ["phone", "telefono", "celular", "tel"],
         "location_hint": ["location_hint", "ubicacion", "ubicacion_hint", "ubicacion_exacta"],
         "tags":          ["tags", "etiquetas", "palabras_clave"],
+        "photo_url":     ["photo_url", "foto", "foto_url", "imagen", "url_foto"],
     },
     "event": {
         "name":        ["name", "nombre", "evento"],
@@ -395,7 +413,7 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
 @router.get("/stores/export")
 def export_stores(db: Session = Depends(get_db)):
     stores = db.query(Store).order_by(Store.name).all()
-    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags"]
+    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]
     rows = [{k: (getattr(s, k) or "") for k in fieldnames} for s in stores]
     return _csv_response(rows, fieldnames, "locales.csv")
 
@@ -420,7 +438,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
             .first()
         )
         if existing:
-            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags"]:
+            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]:
                 if mapped.get(field):
                     setattr(existing, field, mapped[field])
             updated += 1
@@ -435,6 +453,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
                 phone=mapped.get("phone", ""),
                 location_hint=mapped.get("location_hint", ""),
                 tags=mapped.get("tags", ""),
+                photo_url=mapped.get("photo_url", ""),
                 active=True,
             ))
             created += 1
@@ -554,7 +573,7 @@ def list_knowledge(db: Session = Depends(get_db)):
 
 @router.post("/knowledge", status_code=201)
 def create_knowledge(entry: KnowledgeIn, db: Session = Depends(get_db)):
-    new_entry = KnowledgeEntry(title=entry.title, content=entry.content, active=True)
+    new_entry = KnowledgeEntry(title=entry.title, content=entry.content, photo_url=entry.photo_url, active=True)
     db.add(new_entry)
     db.commit()
     db.refresh(new_entry)
@@ -570,6 +589,7 @@ def update_knowledge(entry_id: int, entry: KnowledgeIn, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Entrada no encontrada")
     existing.title = entry.title
     existing.content = entry.content
+    existing.photo_url = entry.photo_url
     db.commit()
     db.refresh(existing)
     _reindex(db)
@@ -648,7 +668,7 @@ def create_zone(zone: ZoneIn, db: Session = Depends(get_db)):
     existing = db.query(Zone).filter(Zone.code == zone.code.upper()).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Ya existe una zona con el código {zone.code.upper()}")
-    new_zone = Zone(code=zone.code.upper(), floor=zone.floor, description=zone.description)
+    new_zone = Zone(code=zone.code.upper(), floor=zone.floor, description=zone.description, photo_url=zone.photo_url)
     db.add(new_zone)
     db.commit()
     db.refresh(new_zone)
@@ -664,6 +684,7 @@ def update_zone(zone_id: int, zone: ZoneIn, db: Session = Depends(get_db)):
     existing.code = zone.code.upper()
     existing.floor = zone.floor
     existing.description = zone.description
+    existing.photo_url = zone.photo_url
     db.commit()
     db.refresh(existing)
     print(f"  ✅  Zona actualizada: {existing.code} (id={existing.id})")
@@ -725,6 +746,8 @@ def update_mall_info(data: MallInfoIn, db: Session = Depends(get_db)):
     info.phone = data.phone
     info.parking = data.parking
     info.wifi = data.wifi
+    info.latitude = data.latitude
+    info.longitude = data.longitude
     db.commit()
     db.refresh(info)
     _reindex(db)
@@ -821,3 +844,64 @@ def list_delivery_transfers(db: Session = Depends(get_db)):
         .all()
     )
     return [r.to_dict() for r in rows]
+
+
+# ══════════════════════════════════════════════════════════════════
+# SORTEOS Y CAMPAÑAS — distinto de Eventos (tienen premio, requisitos)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/raffles")
+def list_raffles(db: Session = Depends(get_db)):
+    raffles = db.query(Raffle).order_by(Raffle.created_at.desc()).all()
+    return [r.to_dict() for r in raffles]
+
+
+@router.post("/raffles", status_code=201)
+def create_raffle(raffle: RaffleIn, db: Session = Depends(get_db)):
+    new_raffle = Raffle(**raffle.model_dump(), active=True)
+    db.add(new_raffle)
+    db.commit()
+    db.refresh(new_raffle)
+    _reindex(db)
+    print(f"  ✅  Sorteo agregado: {new_raffle.name} (id={new_raffle.id})")
+    return {"ok": True, "raffle": new_raffle.to_dict()}
+
+
+@router.put("/raffles/{raffle_id}")
+def update_raffle(raffle_id: int, raffle: RaffleIn, db: Session = Depends(get_db)):
+    existing = db.query(Raffle).filter(Raffle.id == raffle_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Sorteo no encontrado")
+    for field, value in raffle.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  ✅  Sorteo actualizado: {existing.name} (id={existing.id})")
+    return {"ok": True, "raffle": existing.to_dict()}
+
+
+@router.patch("/raffles/{raffle_id}/toggle")
+def toggle_raffle(raffle_id: int, db: Session = Depends(get_db)):
+    """Activa/desactiva un sorteo sin borrarlo — para 'apagarlo' cuando ya venció."""
+    existing = db.query(Raffle).filter(Raffle.id == raffle_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Sorteo no encontrado")
+    existing.active = not existing.active
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    return {"ok": True, "raffle": existing.to_dict()}
+
+
+@router.delete("/raffles/{raffle_id}")
+def delete_raffle(raffle_id: int, db: Session = Depends(get_db)):
+    existing = db.query(Raffle).filter(Raffle.id == raffle_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Sorteo no encontrado")
+    name = existing.name
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Sorteo eliminado: {name}")
+    return {"ok": True, "removed": name}

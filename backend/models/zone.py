@@ -15,6 +15,7 @@ class Zone(Base):
     code        = Column(String(20), unique=True, nullable=False, index=True)  # ej: "A5"
     floor       = Column(String(20), nullable=False)
     description = Column(String(200), nullable=False)  # ej: "Ala norte, cerca de la fuente"
+    photo_url   = Column(String(500), nullable=True)  # foto de esta zona del mall
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     def to_dict(self):
@@ -23,6 +24,7 @@ class Zone(Base):
             "code": self.code,
             "floor": self.floor,
             "description": self.description,
+            "photo_url": self.photo_url,
         }
 
     def whatsapp_qr_link(self, bot_phone_number: str) -> str:

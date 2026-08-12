@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload, ImageOff, MapPin, Phone, Clock } from 'lucide-react'
 
 const CATEGORIES = [
   'Ropa y Calzado','Ropa y Moda','Ropa Mujer','Ropa y Calzado Deportivo',
@@ -17,7 +17,7 @@ const FLOORS = ['Sótano','Piso 1','Piso 2','Piso 3','Piso 1 y Piso 2']
 
 const EMPTY: StorePayload = {
   name:'', local_number:'', floor:'Piso 1', category:'', description:'',
-  schedule:'', phone:'', location_hint:'', tags:'',
+  schedule:'', phone:'', location_hint:'', tags:'', photo_url:'',
 }
 
 export default function TiendasPage() {
@@ -61,13 +61,14 @@ export default function TiendasPage() {
   const filtered = stores.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     s.category.toLowerCase().includes(search.toLowerCase()) ||
-    s.floor.toLowerCase().includes(search.toLowerCase())
+    s.floor.toLowerCase().includes(search.toLowerCase()) ||
+    (s.local_number || '').toLowerCase().includes(search.toLowerCase())
   )
 
   const openNew = () => { setForm(EMPTY); setEditing(null); setModal(true) }
   const openEdit = (s: StorePayload & { _idx: number }) => {
     const { _idx, ...rest } = s
-    setForm(rest); setEditing(_idx); setModal(true)
+    setForm({ ...EMPTY, ...rest }); setEditing(_idx); setModal(true)
   }
   const closeModal = () => setModal(false)
 
@@ -137,83 +138,112 @@ export default function TiendasPage() {
             onClick={openNew}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all"
           >
-            <Plus size={14} /> Nueva tienda
+            <Plus size={14} /> Nuevo local
           </button>
         </div>
       </div>
 
       {/* Search */}
-      <div className="relative mb-5">
+      <div className="relative mb-6">
         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
         <input
           className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
-          placeholder="Buscar por nombre, categoría o piso..."
+          placeholder="Buscar por nombre, local, categoría o piso..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
-      {/* Table */}
+      {/* Grid de tarjetas */}
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-14 bg-zinc-900 border border-zinc-800 rounded-xl animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="h-64 bg-zinc-900 border border-zinc-800 rounded-2xl animate-pulse" />
           ))}
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-20 text-center bg-zinc-900 border border-zinc-800 rounded-2xl">
+          <Store size={32} className="text-zinc-700 mx-auto mb-3" />
+          <p className="text-zinc-500 text-sm">{search ? 'Sin resultados para esa búsqueda' : '¡Agrega el primer local!'}</p>
+        </div>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-          {/* Header */}
-          <div className="grid gap-4 px-5 py-3 border-b border-zinc-800 bg-zinc-950" style={{ gridTemplateColumns: '0.6fr 2fr 1fr 1.2fr 1fr auto' }}>
-            {['Local #','Nombre','Piso','Categoría','Horario',''].map(h => (
-              <p key={h} className="text-xs text-zinc-600 font-semibold uppercase tracking-wider">{h}</p>
-            ))}
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="py-16 text-center">
-              <Store size={32} className="text-zinc-700 mx-auto mb-3" />
-              <p className="text-zinc-500 text-sm">{search ? 'Sin resultados' : '¡Agrega la primera tienda!'}</p>
-            </div>
-          ) : (
-            filtered.map((s, i) => (
-              <div
-                key={s._idx}
-                className="grid gap-4 px-5 py-3.5 hover:bg-zinc-800/50 transition-colors items-center border-b border-zinc-800/60 last:border-0"
-                style={{ gridTemplateColumns: '0.6fr 2fr 1fr 1.2fr 1fr auto' }}
-              >
-                <span className="text-xs text-zinc-400 font-mono">{s.local_number || 'S/N'}</span>
-                <div>
-                  <p className="font-semibold text-white text-sm">{s.name}</p>
-                  {s.phone && <p className="text-zinc-500 text-xs mt-0.5">{s.phone}</p>}
-                </div>
-                <span className="text-xs text-indigo-400 bg-indigo-400/10 px-2 py-1 rounded-lg w-fit">{s.floor}</span>
-                <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded-lg w-fit truncate">{s.category}</span>
-                <p className="text-xs text-zinc-500 truncate">{s.schedule || '—'}</p>
-                <div className="flex gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map(s => (
+            <div
+              key={s._idx}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all flex flex-col"
+            >
+              {/* Foto o placeholder */}
+              <div className="h-36 bg-zinc-950 relative flex-shrink-0">
+                {s.photo_url ? (
+                  <img
+                    src={s.photo_url}
+                    alt={s.name}
+                    className="w-full h-full object-cover"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageOff size={22} className="text-zinc-700" />
+                  </div>
+                )}
+                <span className="absolute top-2 left-2 text-[10px] font-mono font-bold bg-black/70 text-white px-2 py-1 rounded-lg backdrop-blur-sm">
+                  {s.local_number || 'S/N'}
+                </span>
+                <div className="absolute top-2 right-2 flex gap-1.5">
                   <button
                     onClick={() => openEdit(s)}
-                    className="p-1.5 text-zinc-500 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-all"
+                    className="p-1.5 bg-black/70 hover:bg-black text-zinc-300 hover:text-white rounded-lg backdrop-blur-sm transition-all"
                   >
-                    <Pencil size={13} />
+                    <Pencil size={12} />
                   </button>
                   <button
                     onClick={() => handleDelete(s._idx, s.name)}
                     disabled={deleting === s._idx}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 bg-zinc-800 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-40"
+                    className="p-1.5 bg-black/70 hover:bg-red-900 text-zinc-300 hover:text-red-300 rounded-lg backdrop-blur-sm transition-all disabled:opacity-40"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={12} />
                   </button>
                 </div>
               </div>
-            ))
-          )}
+
+              {/* Info */}
+              <div className="p-4 flex-1 flex flex-col">
+                <h3 className="text-white font-semibold text-sm leading-tight mb-1.5">{s.name}</h3>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  <span className="text-[10px] text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded-full">{s.floor}</span>
+                  <span className="text-[10px] text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full truncate max-w-[140px]">{s.category}</span>
+                </div>
+                {s.description && (
+                  <p className="text-zinc-500 text-xs leading-relaxed line-clamp-2 mb-2.5">{s.description}</p>
+                )}
+                <div className="mt-auto pt-2 border-t border-zinc-800/60 space-y-1">
+                  {s.schedule && (
+                    <p className="text-zinc-600 text-[11px] flex items-center gap-1.5 truncate">
+                      <Clock size={10} className="flex-shrink-0" /> {s.schedule}
+                    </p>
+                  )}
+                  {s.phone && (
+                    <p className="text-zinc-600 text-[11px] flex items-center gap-1.5">
+                      <Phone size={10} className="flex-shrink-0" /> {s.phone}
+                    </p>
+                  )}
+                  {s.location_hint && (
+                    <p className="text-zinc-600 text-[11px] flex items-center gap-1.5 truncate">
+                      <MapPin size={10} className="flex-shrink-0" /> {s.location_hint}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Modal — open se pasa directamente, sin {modal && ...} */}
+      {/* Modal */}
       <Modal
         open={modal}
-        title={editing !== null ? 'Editar tienda' : 'Nueva tienda'}
+        title={editing !== null ? 'Editar local' : 'Nuevo local'}
         onClose={closeModal}
         size="lg"
       >
@@ -222,6 +252,21 @@ export default function TiendasPage() {
           <div className="col-span-2">
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Nombre *</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="ej: Nike Store" {...field('name')} />
+          </div>
+
+          <div className="col-span-2">
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Link de la foto <span className="text-zinc-600 font-normal">(pega un link público de una imagen)</span>
+            </label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="https://..." {...field('photo_url')} />
+            {form.photo_url && (
+              <img
+                src={form.photo_url}
+                alt="Vista previa"
+                className="mt-2 h-24 rounded-xl object-cover border border-zinc-700"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            )}
           </div>
 
           <div>
@@ -276,7 +321,7 @@ export default function TiendasPage() {
             Cancelar
           </button>
           <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm text-white font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl transition-all">
-            {saving ? 'Guardando...' : editing !== null ? 'Guardar cambios' : 'Crear tienda'}
+            {saving ? 'Guardando...' : editing !== null ? 'Guardar cambios' : 'Crear local'}
           </button>
         </div>
       </Modal>

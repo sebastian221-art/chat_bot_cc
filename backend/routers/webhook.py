@@ -27,9 +27,11 @@ from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
 from models.delivery_transfer import DeliveryTransfer
-from services.whatsapp import send_text_message, parse_incoming_message, download_media
-from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message
+from models.mall_info import MallInfo
+from services.whatsapp import send_text_message, send_image_message, send_location_message, parse_incoming_message, download_media
+from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message, classify_intent
 from services.vision_search import handle_image_message
+from services.content_matching import find_event_by_message, find_raffle_by_message
 from services.navigation import (
     parse_zone_code,
     find_zone,
@@ -90,11 +92,16 @@ async def receive_message(
 
 # ── Núcleo compartido: decide qué responder ────────────────────────
 
-async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> str:
+async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> dict:
     """
     Decide y genera la respuesta del bot para un mensaje entrante.
     Compartido entre el webhook real y el endpoint /test para que
     ambos se comporten exactamente igual.
+
+    Devuelve {"text": ..., "image_url": ..., "location": ...} — según
+    el caso, además del texto puede venir una foto (tienda/zona/evento/
+    sorteo con foto cargada) o un pin de ubicación real (cuando
+    preguntan dónde queda el mall en sí, no una tienda puntual).
     """
     # ── Navegación QR indoor ────────────────────────────────────────
     # Prioridad más alta: si el mensaje trae un código de zona (viene
@@ -105,12 +112,13 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         log_zone_scan(db, phone_number, zone_code)  # se registra SIEMPRE, exista o no la zona
         zone = find_zone(db, zone_code)
         if not zone:
-            return build_zone_not_found_message()
+            return {"text": build_zone_not_found_message(), "image_url": None, "location": None}
 
         store = find_store_by_message(db, message_text)
         if store:
-            return await build_navigation_response(zone, store, user_name)
-        return build_zone_confirmation_message(zone)
+            text = await build_navigation_response(zone, store, user_name)
+            return {"text": text, "image_url": store.photo_url or zone.photo_url, "location": None}
+        return {"text": build_zone_confirmation_message(zone), "image_url": zone.photo_url, "location": None}
 
     # Si el mensaje anterior fue "¿a qué tienda quieres llegar?" (después
     # de escanear un QR), usamos la última zona escaneada por este número
@@ -119,19 +127,37 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     if store and _last_bot_message_was_zone_ask(db, phone_number):
         last_zone = get_last_scanned_zone(db, phone_number)
         if last_zone:
-            return await build_navigation_response(last_zone, store, user_name)
+            text = await build_navigation_response(last_zone, store, user_name)
+            return {"text": text, "image_url": store.photo_url or last_zone.photo_url, "location": None}
 
     if is_delivery_intent(message_text):
         if store:
             _log_delivery_transfer(db, phone_number, store.name)
-            return build_transfer_message(store)
-        return build_ask_which_store_message()
+            return {"text": build_transfer_message(store), "image_url": store.photo_url, "location": None}
+        return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
     if store and _last_bot_message_was_ask(db, phone_number):
         _log_delivery_transfer(db, phone_number, store.name)
-        return build_transfer_message(store)
+        return {"text": build_transfer_message(store), "image_url": store.photo_url, "location": None}
+
+    # ── Ubicación del mall en sí (no de una tienda puntual) ──────────
+    # Si preguntan "dónde queda" sin mencionar una tienda específica,
+    # asumimos que preguntan por el mall — mandamos texto + pin real.
+    location_data = None
+    if classify_intent(message_text) == "ubicacion" and not store:
+        mall_info = db.query(MallInfo).filter(MallInfo.id == 1).first()
+        if mall_info and mall_info.latitude and mall_info.longitude:
+            try:
+                location_data = {
+                    "latitude": float(mall_info.latitude),
+                    "longitude": float(mall_info.longitude),
+                    "name": mall_info.name,
+                    "address": mall_info.address or "",
+                }
+            except ValueError:
+                location_data = None
 
     records = _get_history(db, phone_number)
     history = [
@@ -141,12 +167,28 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     profile = db.query(UserProfile).filter(UserProfile.phone_number == phone_number).first()
     profile_text = profile.to_context_string() if profile else ""
 
-    return await generate_response(
+    text = await generate_response(
         user_message=message_text,
         user_name=user_name,
         conversation_history=history,
         user_profile=profile_text,
     )
+
+    # Si el cliente mencionó una tienda, evento o sorteo específico y
+    # tiene foto cargada en el panel, la mandamos junto con la respuesta.
+    image_url = None
+    if store and store.photo_url:
+        image_url = store.photo_url
+    else:
+        event = find_event_by_message(db, message_text)
+        if event and event.photo_url:
+            image_url = event.photo_url
+        else:
+            raffle = find_raffle_by_message(db, message_text)
+            if raffle and raffle.photo_url:
+                image_url = raffle.photo_url
+
+    return {"text": text, "image_url": image_url, "location": location_data}
 
 
 def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
@@ -267,10 +309,15 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
         return
 
     # 5. Generar respuesta
+    image_url = None
+    location_data = None
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
-        response_text = await _route_message(db, phone_number, user_name, message_text)
+        result = await _route_message(db, phone_number, user_name, message_text)
+        response_text = result["text"]
+        image_url = result["image_url"]
+        location_data = result["location"]
 
     # 6. Guardar respuesta y enviar
     db.add(Conversation(
@@ -285,6 +332,12 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
 
     await send_text_message(to=phone_number, message=response_text)
+    if image_url:
+        await send_image_message(to=phone_number, image_url=image_url)
+        print(f"  🖼️   Foto enviada: {image_url}")
+    if location_data:
+        await send_location_message(to=phone_number, **location_data)
+        print(f"  📍  Ubicación enviada: {location_data['name']}")
 
 
 async def _process_image_message(db: Session, phone_number: str, user_name: str, msg: dict, start: float):
@@ -411,10 +464,15 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             "time_seconds": round(time.time() - start, 2),
         }
 
+    image_url = None
+    location_data = None
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
-        response_text = await _route_message(db, phone_number, user_name, message_text)
+        result = await _route_message(db, phone_number, user_name, message_text)
+        response_text = result["text"]
+        image_url = result["image_url"]
+        location_data = result["location"]
 
     db.add(Conversation(
         phone_number=phone_number,
@@ -430,6 +488,8 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     return {
         "user":         message_text,
         "bot":          response_text,
+        "image_url":    image_url,
+        "location":     location_data,
         "phone":        phone_number,
         "time_seconds": elapsed,
     }

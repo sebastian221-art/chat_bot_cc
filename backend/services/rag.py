@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from models.store import Store
 from models.event import Event
+from models.raffle import Raffle
 from models.knowledge import KnowledgeEntry
 from models.mall_info import MallInfo
 from models.info_point import InfoPoint
@@ -66,6 +67,7 @@ def load_stores_to_rag(db: Session) -> int:
 
     stores = db.query(Store).filter(Store.active == True).all()
     events = db.query(Event).all()
+    raffles = db.query(Raffle).filter(Raffle.active == True).all()
     knowledge = db.query(KnowledgeEntry).filter(KnowledgeEntry.active == True).all()
 
     # Limpiar colección antes de reindexar
@@ -116,6 +118,17 @@ def load_stores_to_rag(db: Session) -> int:
         })
         ids.append(f"event_{event.id:04d}")
 
+    # ── 4b. Sorteos y campañas — distintos de eventos ────────────────
+    for raffle in raffles:
+        documents.append(raffle.to_rag_text())
+        metadatas.append({
+            "source": "raffle",
+            "type": "raffle",
+            "name": raffle.name,
+            "priority": raffle.priority,
+        })
+        ids.append(f"raffle_{raffle.id:04d}")
+
     # ── 5. Base de Conocimiento libre — desde la base de datos ──────
     for entry in knowledge:
         documents.append(entry.to_rag_text())
@@ -129,7 +142,7 @@ def load_stores_to_rag(db: Session) -> int:
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
 
     total = len(documents)
-    print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + "
+    print(f"  ✅  RAG: {len(stores)} tiendas + {len(events)} eventos + {len(raffles)} sorteos + "
           f"{len(info_points)} servicios + "
           f"{len(knowledge)} entradas de conocimiento = {total} indexadas")
     return len(stores)

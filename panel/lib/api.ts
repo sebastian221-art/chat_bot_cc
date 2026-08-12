@@ -109,7 +109,7 @@ export const exportEvents = ()          => downloadFile('/events/export', 'event
 export const importEvents = (file: File) => uploadFile('/events/import', file)
 
 // ── Base de Conocimiento ────────────────────────────────────────────
-export interface KnowledgeEntry { id?: number; title: string; content: string; active?: boolean }
+export interface KnowledgeEntry { id?: number; title: string; content: string; photo_url?: string; active?: boolean }
 export const getKnowledge    = ()                              => req('/knowledge')
 export const createKnowledge = (d: KnowledgeEntry)              => req('/knowledge', { method: 'POST', body: JSON.stringify(d) })
 export const updateKnowledge = (id: number, d: KnowledgeEntry)  => req(`/knowledge/${id}`, { method: 'PUT', body: JSON.stringify(d) })
@@ -118,7 +118,7 @@ export const exportKnowledge = ()          => downloadFile('/knowledge/export', 
 export const importKnowledge = (file: File) => uploadFile('/knowledge/import', file)
 
 // ── Zonas (navegación QR indoor) ────────────────────────────────────
-export interface Zone { id?: number; code: string; floor: string; description: string; qr_link?: string }
+export interface Zone { id?: number; code: string; floor: string; description: string; photo_url?: string; qr_link?: string }
 export const getZones      = ()                        => req('/zones')
 export const createZone    = (d: Zone)                  => req('/zones', { method: 'POST', body: JSON.stringify(d) })
 export const updateZone    = (id: number, d: Zone)      => req(`/zones/${id}`, { method: 'PUT', body: JSON.stringify(d) })
@@ -129,6 +129,7 @@ export const getZoneStats  = ()                         => req('/zones/stats')
 export interface MallInfo {
   id?: number | null; name: string; address: string
   general_schedule: string; phone: string; parking: string; wifi: string
+  latitude?: string; longitude?: string
 }
 export const getMallInfo    = ()                 => req('/mall-info')
 export const updateMallInfo = (d: MallInfo)      => req('/mall-info', { method: 'PUT', body: JSON.stringify(d) })
@@ -151,6 +152,18 @@ export const getAnalyticsInsights = ()         => req(`/analytics/insights`)
 // ── Transferencias de Domicilio (reemplaza el flujo viejo de pedidos) ──
 export const getDeliveryTransferStats = () => req('/delivery-transfers/stats')
 export const getDeliveryTransfers     = () => req('/delivery-transfers')
+
+// ── Sorteos y Campañas (distinto de Eventos) ────────────────────────
+export interface Raffle {
+  id?: number; name: string; prize: string; requirements: string
+  end_date: string; location: string; description: string
+  priority: number; photo_url?: string; active?: boolean
+}
+export const getRaffles      = ()                    => req('/raffles')
+export const createRaffle    = (d: Raffle)            => req('/raffles', { method: 'POST', body: JSON.stringify(d) })
+export const updateRaffle    = (id: number, d: Raffle) => req(`/raffles/${id}`, { method: 'PUT', body: JSON.stringify(d) })
+export const toggleRaffle    = (id: number)           => req(`/raffles/${id}/toggle`, { method: 'PATCH' })
+export const deleteRaffle    = (id: number)           => req(`/raffles/${id}`, { method: 'DELETE' })
 
 // ── Domicilios / Pedidos (código viejo — ya no se usa en el panel,
 //    se deja por si se necesita como referencia histórica) ─────────
@@ -202,11 +215,11 @@ export interface UserIn {
 export interface StorePayload {
   id?: number; name: string; local_number: string; floor: string; category: string
   description: string; schedule: string
-  phone: string; location_hint: string; tags: string
+  phone: string; location_hint: string; tags: string; photo_url: string
 }
 export interface EventPayload {
   id?: number; name: string; date: string; time: string
-  location: string; description: string; priority: number
+  location: string; description: string; priority: number; photo_url?: string
 }
 export interface ProductPayload {
   store_name: string; name: string; description: string

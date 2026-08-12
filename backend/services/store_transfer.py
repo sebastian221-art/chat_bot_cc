@@ -9,21 +9,53 @@ pedido entre ellos.
 No usa IA generativa — es más rápido y no hay riesgo de que invente
 un número de contacto que no existe.
 """
+import re
 from sqlalchemy.orm import Session
 from models.store import Store
+
+STOPWORDS_ES = {"la", "el", "los", "las", "de", "del", "y", "un", "una", "en", "por", "para"}
+
+
+def _significant_words(name: str) -> list[str]:
+    """Palabras 'distintivas' de un nombre — sin artículos ni palabras muy cortas."""
+    words = re.findall(r"[a-záéíóúñü']+", name.lower())
+    return [w for w in words if len(w) > 2 and w not in STOPWORDS_ES]
+
+
+def _contains_word(message: str, word: str) -> bool:
+    """True si `word` aparece como palabra completa en el mensaje (no como parte de otra palabra)."""
+    return re.search(rf"\b{re.escape(word)}\b", message) is not None
 
 
 def find_store_by_message(db: Session, message: str) -> Store | None:
     """
-    Busca si el cliente mencionó el nombre de una tienda/restaurante
-    específico en su mensaje. Si encuentra exactamente una coincidencia,
-    la devuelve. Si hay 0 o varias, devuelve None (hay que preguntar).
+    Busca si el cliente mencionó el nombre de una tienda/restaurante en
+    su mensaje. Reconoce tanto el nombre completo ("Hamburgo 1718") como
+    solo la parte distintiva ("Hamburgo", "zirus") — así funciona con
+    cómo la gente realmente escribe, no solo con el nombre exacto.
+    Si encuentra exactamente una coincidencia, la devuelve. Si hay 0 o
+    varias (ambiguo), devuelve None — mejor preguntar que adivinar mal.
     """
     msg = message.lower()
     stores = db.query(Store).filter(Store.active == True).all()
-    matches = [s for s in stores if s.name.lower() in msg]
-    if len(matches) == 1:
-        return matches[0]
+
+    # 1) Coincidencia por nombre completo — la más confiable, se revisa primero
+    exact_matches = [s for s in stores if s.name.lower() in msg]
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    if len(exact_matches) > 1:
+        return None
+
+    # 2) Respaldo: coincidencia por una palabra distintiva del nombre
+    #    (ej. "Hamburgo" encuentra "Hamburgo 1718", "zirus" encuentra "Zirus Pizza")
+    word_matches = []
+    for s in stores:
+        sig_words = _significant_words(s.name)
+        if any(_contains_word(msg, w) for w in sig_words):
+            word_matches.append(s)
+
+    if len(word_matches) == 1:
+        return word_matches[0]
     return None
 
 

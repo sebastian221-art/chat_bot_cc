@@ -14,6 +14,7 @@ class KnowledgeEntry(Base):
     id         = Column(Integer, primary_key=True, index=True)
     title      = Column(String(150), nullable=False)
     content    = Column(Text, nullable=False)
+    photo_url  = Column(String(500), nullable=True)  # foto opcional relacionada con esta entrada
     active     = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -23,6 +24,7 @@ class KnowledgeEntry(Base):
             "id": self.id,
             "title": self.title,
             "content": self.content,
+            "photo_url": self.photo_url,
             "active": self.active,
         }
 

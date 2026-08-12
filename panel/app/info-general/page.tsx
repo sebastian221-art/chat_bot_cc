@@ -8,7 +8,7 @@ import {
 import Modal from '@/components/Modal'
 import { Building2, Plus, Pencil, Trash2, RefreshCw, MapPinned, Save } from 'lucide-react'
 
-const EMPTY_MALL: MallInfo = { name: '', address: '', general_schedule: '', phone: '', parking: '', wifi: '' }
+const EMPTY_MALL: MallInfo = { name: '', address: '', general_schedule: '', phone: '', parking: '', wifi: '', latitude: '', longitude: '' }
 const EMPTY_POINT: InfoPoint = { name: '', floor: '', location: '' }
 
 export default function InfoGeneralPage() {
@@ -153,6 +153,19 @@ export default function InfoGeneralPage() {
           <div>
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">WiFi</label>
             <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 resize-none h-16" placeholder="ej: Red 'CC_ElPuente_Free', sin contraseña" {...mallField('wifi')} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Coordenadas GPS <span className="text-zinc-600 font-normal">— para que Any mande un pin de ubicación real y tocable por WhatsApp</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Latitud, ej: 6.554824" {...mallField('latitude')} />
+              <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Longitud, ej: -73.13412" {...mallField('longitude')} />
+            </div>
+            <p className="text-zinc-600 text-[11px] mt-1.5 leading-relaxed">
+              Cómo conseguirlas: abre Google Maps → busca el mall → mantén presionado el pin exacto → arriba aparecen los números (lat, long) → cópialos aquí.
+            </p>
           </div>
         </div>
 

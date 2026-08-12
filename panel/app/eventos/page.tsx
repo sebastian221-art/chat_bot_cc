@@ -5,7 +5,7 @@ import { getEvents, createEvent, updateEvent, deleteEvent, exportEvents, importE
 import Modal from '@/components/Modal'
 import { Plus, Pencil, Trash2, RefreshCw, Calendar, Download, Upload } from 'lucide-react'
 
-const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3 }
+const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3, photo_url: '' }
 
 const PRIORITY_LABELS: Record<number, string> = {
   1: 'Baja', 2: 'Baja', 3: 'Normal', 4: 'Alta', 5: 'Máxima',
@@ -277,6 +277,16 @@ export default function EventosPage() {
               placeholder="Detalles del evento para informar a los visitantes..."
               {...f('description')}
             />
+          </div>
+
+          <div>
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Link de la foto <span className="text-zinc-600 font-normal">(opcional — afiche o imagen del evento)</span>
+            </label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="https://..." {...f('photo_url')} />
+            {form.photo_url && (
+              <img src={form.photo_url} alt="Vista previa" className="mt-2 h-24 rounded-xl object-cover border border-zinc-700" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            )}
           </div>
 
           <div>

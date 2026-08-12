@@ -35,6 +35,75 @@ async def send_text_message(to: str, message: str) -> bool:
             return False
 
 
+async def send_image_message(to: str, image_url: str, caption: str = "") -> bool:
+    """
+    Manda una imagen por WhatsApp usando un link público (no un archivo
+    subido) — así funciona directo con el `photo_url` que el admin pega
+    en el panel, sin necesitar guardar archivos en el servidor.
+    """
+    url = f"{WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "image",
+        "image": {"link": image_url, "caption": caption[:1024] if caption else ""},
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            logger.info(f"Imagen enviada a {to}")
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP enviando imagen a {to}: {e.response.text}")
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado enviando imagen a {to}: {str(e)}")
+            return False
+
+
+async def send_location_message(to: str, latitude: float, longitude: float, name: str = "", address: str = "") -> bool:
+    """
+    Manda una ubicación real de WhatsApp — aparece como un pin de mapa
+    que el cliente puede tocar para abrir Google Maps/Waze directo con
+    la ruta ya armada. Se usa cuando preguntan dónde queda el mall.
+    """
+    url = f"{WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "location",
+        "location": {
+            "latitude": latitude,
+            "longitude": longitude,
+            "name": name,
+            "address": address,
+        },
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            logger.info(f"Ubicación enviada a {to}")
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP enviando ubicación a {to}: {e.response.text}")
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado enviando ubicación a {to}: {str(e)}")
+            return False
+
+
 def parse_incoming_message(data: dict) -> dict | None:
     try:
         entry   = data["entry"][0]

@@ -6,7 +6,7 @@ import Modal from '@/components/Modal'
 import { Plus, Pencil, Trash2, RefreshCw, MapPin, Copy, Check, QrCode, Flame } from 'lucide-react'
 
 const FLOORS = ['Piso 1', 'Piso 2', 'Zona Burbuja']
-const EMPTY: Zone = { code: '', floor: 'Piso 1', description: '' }
+const EMPTY: Zone = { code: '', floor: 'Piso 1', description: '', photo_url: '' }
 
 export default function ZonasPage() {
   const [zones, setZones]       = useState<(Zone & { _idx: number })[]>([])
@@ -221,6 +221,16 @@ export default function ZonasPage() {
               placeholder="ej: Ala norte, cerca de la fuente, frente a la entrada principal"
               {...field('description')}
             />
+          </div>
+
+          <div>
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
+              Link de la foto <span className="text-zinc-600 font-normal">(opcional — pega un link público de una imagen)</span>
+            </label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500" placeholder="https://..." {...field('photo_url')} />
+            {form.photo_url && (
+              <img src={form.photo_url} alt="Vista previa" className="mt-2 h-24 rounded-xl object-cover border border-zinc-700" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            )}
           </div>
         </div>
 

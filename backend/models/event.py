@@ -14,6 +14,7 @@ class Event(Base):
     # 1 = baja, 3 = normal, 5 = máxima. El bot lo usa para decidir
     # qué tanto promociona el evento proactivamente en conversaciones.
     priority    = Column(Integer, nullable=False, default=3)
+    photo_url   = Column(String(500), nullable=True)  # foto/afiche del evento
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -26,6 +27,7 @@ class Event(Base):
             "location": self.location,
             "description": self.description,
             "priority": self.priority,
+            "photo_url": self.photo_url,
         }
 
     def to_rag_text(self) -> str:
