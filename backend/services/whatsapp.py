@@ -170,6 +170,7 @@ async def download_media(media_id: str) -> bytes | None:
         except httpx.HTTPStatusError as e:
             logger.error(f"Error HTTP descargando media {media_id}: {e.response.text}")
             return None
+        
         except Exception as e:
             logger.error(f"Error inesperado descargando media {media_id}: {str(e)}")
             return None
