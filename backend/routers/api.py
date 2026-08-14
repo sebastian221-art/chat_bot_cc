@@ -457,8 +457,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
     # consultar la base de datos una vez por cada fila del CSV — con
     # archivos grandes (ej. 138 locales), 138 idas y vueltas separadas
     # a la base de datos era otra causa real de que la importación
-    # tardara tanto que Railway cortaba la conexión (el mismo síntoma
-    # de "Failed to fetch" / error de CORS, pero por esta razón extra).
+    # tardara tanto que Railway cortaba la conexión.
     existing_stores = {
         (s.name, s.local_number): s
         for s in db.query(Store).all()
@@ -494,7 +493,24 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
             ))
             created += 1
 
-    db.commit()
+    # Envolvemos el commit en un try/except explícito: si algún dato del
+    # CSV viola una restricción de la base de datos (ej. un texto más
+    # largo de lo que acepta una columna — exactamente lo que pasó acá
+    # con un local_number de 25 caracteres en una columna de 20), esto
+    # se convierte en un error CLARO con el mensaje real, en vez de un
+    # 500 sin manejar. Un 500 sin manejar no lleva los encabezados de
+    # CORS, y el navegador lo reporta como "bloqueado por CORS" — un
+    # síntoma engañoso que no tiene nada que ver con CORS de verdad.
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al importar locales: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo guardar en la base de datos — probablemente algún dato del CSV es demasiado largo o inválido. Detalle técnico: {str(e)[:300]}",
+        )
+
     _reindex(db)
     print(f"  📥  Import locales: {created} nuevos, {updated} actualizados, {skipped} saltados")
     return {"ok": True, "created": created, "updated": updated, "skipped": skipped, "errors": errors[:20]}

@@ -7,7 +7,7 @@ class Store(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     name          = Column(String(150), nullable=False, index=True)
-    local_number  = Column(String(20), nullable=True)   # ej: "104", "S/N"
+    local_number  = Column(String(60), nullable=True)   # ej: "104", "S/N" — ampliado de 20 a 60 (lección aprendida: un valor de 25 caracteres causó un error 500 real en una importación)
     floor         = Column(String(20), nullable=False)
     category      = Column(String(80), nullable=False)
     description   = Column(Text, nullable=True)
