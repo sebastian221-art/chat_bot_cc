@@ -33,10 +33,26 @@ class Store(Base):
             "phone": self.phone,
             "location_hint": self.location_hint,
             "tags": self.tags,
-            "photo_url": self.photo_url,
+            "photo_url": self.photo_url,  # respaldo — se mantiene por compatibilidad con fotos cargadas antes de la galería
             "extra_info": self.extra_info,
             "active": self.active,
+            "photos": [p.to_dict() for p in sorted(self.photos, key=lambda p: p.created_at)] if self.photos else [],
         }
+
+    def get_photo_by_label(self, label: str) -> str | None:
+        """
+        Busca la foto con esa etiqueta específica en la galería (ej.
+        "carta" cuando preguntan por el menú). Si no hay ninguna con esa
+        etiqueta mas sí existe una "portada", la usa como respaldo. Si
+        la galería está vacía por completo, cae al campo viejo photo_url.
+        """
+        for p in self.photos:
+            if p.label == label:
+                return p.photo_url
+        for p in self.photos:
+            if p.label == "portada":
+                return p.photo_url
+        return self.photo_url
 
     def whatsapp_link(self) -> str | None:
         """Genera el link wa.me a partir del teléfono, para transferencias de domicilio."""

@@ -35,6 +35,8 @@ from models.info_point import InfoPoint
 from models.delivery_transfer import DeliveryTransfer
 from models.delivery_management import DeliveryManagement
 from models.raffle import Raffle
+from models.store_photo import StorePhoto, VALID_LABELS as STORE_PHOTO_LABELS
+from models.entity_photo import EntityPhoto, VALID_ENTITY_TYPES, ENTITY_LABELS, get_entity_photo
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
@@ -105,6 +107,14 @@ class RaffleIn(BaseModel):
     priority: Optional[int] = 3
     photo_url: Optional[str] = ""
 
+class StorePhotoIn(BaseModel):
+    photo_url: str
+    label: str = "portada"
+
+class EntityPhotoIn(BaseModel):
+    photo_url: str
+    label: str
+
 
 def _reindex(db: Session):
     """
@@ -136,6 +146,32 @@ def _reindex(db: Session):
             bg_db.close()
 
     threading.Thread(target=_run_in_background, daemon=True).start()
+
+
+def _attach_photos(db: Session, entity_type: str, items: list, id_field: str = "id") -> list:
+    """
+    Agrega el arreglo "photos" a cada item de una lista (eventos,
+    sorteos, conocimiento, zonas) — con UNA sola consulta a la base de
+    datos para todos, en vez de una consulta por cada item.
+    """
+    if not items:
+        return []
+    ids = [getattr(i, id_field) for i in items]
+    photos = (
+        db.query(EntityPhoto)
+        .filter(EntityPhoto.entity_type == entity_type, EntityPhoto.entity_id.in_(ids))
+        .all()
+    )
+    by_id = {}
+    for p in photos:
+        by_id.setdefault(p.entity_id, []).append(p.to_dict())
+
+    result = []
+    for item in items:
+        d = item.to_dict()
+        d["photos"] = by_id.get(getattr(item, id_field), [])
+        result.append(d)
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -523,7 +559,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
 @router.get("/events")
 def list_events(db: Session = Depends(get_db)):
     events = db.query(Event).order_by(Event.date).all()
-    return [e.to_dict() for e in events]
+    return _attach_photos(db, "event", events)
 
 
 @router.post("/events", status_code=201)
@@ -621,7 +657,7 @@ async def import_events(file: UploadFile = File(...), db: Session = Depends(get_
 @router.get("/knowledge")
 def list_knowledge(db: Session = Depends(get_db)):
     entries = db.query(KnowledgeEntry).order_by(KnowledgeEntry.title).all()
-    return [e.to_dict() for e in entries]
+    return _attach_photos(db, "knowledge", entries)
 
 
 @router.post("/knowledge", status_code=201)
@@ -709,9 +745,9 @@ def list_zones(db: Session = Depends(get_db)):
     from config import get_settings
     settings = get_settings()
     zones = db.query(Zone).order_by(Zone.code).all()
+    photos = _attach_photos(db, "zone", zones)
     result = []
-    for z in zones:
-        d = z.to_dict()
+    for z, d in zip(zones, photos):
         d["qr_link"] = z.whatsapp_qr_link(settings.WHATSAPP_DISPLAY_NUMBER)
         result.append(d)
     return result
@@ -907,7 +943,7 @@ def list_delivery_transfers(db: Session = Depends(get_db)):
 @router.get("/raffles")
 def list_raffles(db: Session = Depends(get_db)):
     raffles = db.query(Raffle).order_by(Raffle.created_at.desc()).all()
-    return [r.to_dict() for r in raffles]
+    return _attach_photos(db, "raffle", raffles)
 
 
 @router.post("/raffles", status_code=201)
@@ -1008,3 +1044,97 @@ def list_delivery_managements(db: Session = Depends(get_db)):
         .all()
     )
     return [r.to_dict() for r in rows]
+
+
+# ══════════════════════════════════════════════════════════════════
+# GALERÍA DE FOTOS — TIENDAS (tabla dedicada, portada/carta/otra)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/stores/{store_id}/photos")
+def list_store_photos(store_id: int, db: Session = Depends(get_db)):
+    photos = (
+        db.query(StorePhoto)
+        .filter(StorePhoto.store_id == store_id)
+        .order_by(StorePhoto.created_at.asc())
+        .all()
+    )
+    return [p.to_dict() for p in photos]
+
+
+@router.post("/stores/{store_id}/photos", status_code=201)
+def add_store_photo(store_id: int, photo: StorePhotoIn, db: Session = Depends(get_db)):
+    store = db.query(Store).filter(Store.id == store_id).first()
+    if not store:
+        raise HTTPException(status_code=404, detail="Tienda no encontrada")
+    if photo.label not in STORE_PHOTO_LABELS:
+        raise HTTPException(status_code=400, detail=f"Etiqueta inválida — debe ser una de: {STORE_PHOTO_LABELS}")
+
+    new_photo = StorePhoto(store_id=store_id, photo_url=photo.photo_url, label=photo.label)
+    db.add(new_photo)
+    db.commit()
+    db.refresh(new_photo)
+    _reindex(db)
+    print(f"  ✅  Foto agregada a {store.name} ({photo.label})")
+    return {"ok": True, "photo": new_photo.to_dict()}
+
+
+@router.delete("/stores/{store_id}/photos/{photo_id}")
+def delete_store_photo(store_id: int, photo_id: int, db: Session = Depends(get_db)):
+    photo = db.query(StorePhoto).filter(StorePhoto.id == photo_id, StorePhoto.store_id == store_id).first()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    db.delete(photo)
+    db.commit()
+    _reindex(db)
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════
+# GALERÍA DE FOTOS GENÉRICA — Eventos, Sorteos, Conocimiento, Zonas
+# Una sola tabla y 3 endpoints sirven para los 4 tipos de contenido,
+# en vez de repetir la misma tabla y lógica 4 veces.
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/photos/{entity_type}/{entity_id}")
+def list_entity_photos(entity_type: str, entity_id: int, db: Session = Depends(get_db)):
+    if entity_type not in VALID_ENTITY_TYPES:
+        raise HTTPException(status_code=400, detail=f"Tipo inválido — debe ser uno de: {VALID_ENTITY_TYPES}")
+    photos = (
+        db.query(EntityPhoto)
+        .filter(EntityPhoto.entity_type == entity_type, EntityPhoto.entity_id == entity_id)
+        .order_by(EntityPhoto.created_at.asc())
+        .all()
+    )
+    return [p.to_dict() for p in photos]
+
+
+@router.post("/photos/{entity_type}/{entity_id}", status_code=201)
+def add_entity_photo(entity_type: str, entity_id: int, photo: EntityPhotoIn, db: Session = Depends(get_db)):
+    if entity_type not in VALID_ENTITY_TYPES:
+        raise HTTPException(status_code=400, detail=f"Tipo inválido — debe ser uno de: {VALID_ENTITY_TYPES}")
+    valid_labels = ENTITY_LABELS.get(entity_type, [])
+    if photo.label not in valid_labels:
+        raise HTTPException(status_code=400, detail=f"Etiqueta inválida para {entity_type} — debe ser una de: {valid_labels}")
+
+    new_photo = EntityPhoto(entity_type=entity_type, entity_id=entity_id, photo_url=photo.photo_url, label=photo.label)
+    db.add(new_photo)
+    db.commit()
+    db.refresh(new_photo)
+    _reindex(db)
+    print(f"  ✅  Foto agregada a {entity_type} #{entity_id} ({photo.label})")
+    return {"ok": True, "photo": new_photo.to_dict()}
+
+
+@router.delete("/photos/{entity_type}/{entity_id}/{photo_id}")
+def delete_entity_photo(entity_type: str, entity_id: int, photo_id: int, db: Session = Depends(get_db)):
+    photo = (
+        db.query(EntityPhoto)
+        .filter(EntityPhoto.id == photo_id, EntityPhoto.entity_type == entity_type, EntityPhoto.entity_id == entity_id)
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    db.delete(photo)
+    db.commit()
+    _reindex(db)
+    return {"ok": True}

@@ -109,7 +109,7 @@ export const exportEvents = ()          => downloadFile('/events/export', 'event
 export const importEvents = (file: File) => uploadFile('/events/import', file)
 
 // ── Base de Conocimiento ────────────────────────────────────────────
-export interface KnowledgeEntry { id?: number; title: string; content: string; photo_url?: string; active?: boolean }
+export interface KnowledgeEntry { id?: number; title: string; content: string; photo_url?: string; active?: boolean; photos?: EntityPhoto[] }
 export const getKnowledge    = ()                              => req('/knowledge')
 export const createKnowledge = (d: KnowledgeEntry)              => req('/knowledge', { method: 'POST', body: JSON.stringify(d) })
 export const updateKnowledge = (id: number, d: KnowledgeEntry)  => req(`/knowledge/${id}`, { method: 'PUT', body: JSON.stringify(d) })
@@ -118,7 +118,7 @@ export const exportKnowledge = ()          => downloadFile('/knowledge/export', 
 export const importKnowledge = (file: File) => uploadFile('/knowledge/import', file)
 
 // ── Zonas (navegación QR indoor) ────────────────────────────────────
-export interface Zone { id?: number; code: string; floor: string; description: string; photo_url?: string; qr_link?: string }
+export interface Zone { id?: number; code: string; floor: string; description: string; photo_url?: string; qr_link?: string; photos?: EntityPhoto[] }
 export const getZones      = ()                        => req('/zones')
 export const createZone    = (d: Zone)                  => req('/zones', { method: 'POST', body: JSON.stringify(d) })
 export const updateZone    = (id: number, d: Zone)      => req(`/zones/${id}`, { method: 'PUT', body: JSON.stringify(d) })
@@ -159,6 +159,18 @@ export const uploadImage = async (file: File): Promise<string> => {
   return result.url
 }
 
+// ── Galería de fotos — Tiendas (tabla dedicada: portada / carta / otra) ──
+export interface StorePhoto { id?: number; store_id?: number; photo_url: string; label: string; label_display?: string }
+export const getStorePhotos   = (storeId: number)                  => req(`/stores/${storeId}/photos`)
+export const addStorePhoto    = (storeId: number, d: StorePhoto)   => req(`/stores/${storeId}/photos`, { method: 'POST', body: JSON.stringify(d) })
+export const deleteStorePhoto = (storeId: number, photoId: number) => req(`/stores/${storeId}/photos/${photoId}`, { method: 'DELETE' })
+
+// ── Galería de fotos genérica — Eventos, Sorteos, Conocimiento, Zonas ────
+export interface EntityPhoto { id?: number; entity_type?: string; entity_id?: number; photo_url: string; label: string; label_display?: string }
+export const getEntityPhotos   = (entityType: string, entityId: number)                  => req(`/photos/${entityType}/${entityId}`)
+export const addEntityPhoto    = (entityType: string, entityId: number, d: EntityPhoto)  => req(`/photos/${entityType}/${entityId}`, { method: 'POST', body: JSON.stringify(d) })
+export const deleteEntityPhoto = (entityType: string, entityId: number, photoId: number) => req(`/photos/${entityType}/${entityId}/${photoId}`, { method: 'DELETE' })
+
 // ── Gestiones completas de domicilio (carta + datos + link personalizado) ──
 export const getDeliveryManagementStats = () => req('/delivery-managements/stats')
 export const getDeliveryManagements     = () => req('/delivery-managements')
@@ -167,7 +179,7 @@ export const getDeliveryManagements     = () => req('/delivery-managements')
 export interface Raffle {
   id?: number; name: string; prize: string; requirements: string
   end_date: string; location: string; description: string
-  priority: number; photo_url?: string; active?: boolean
+  priority: number; photo_url?: string; active?: boolean; photos?: EntityPhoto[]
 }
 export const getRaffles      = ()                    => req('/raffles')
 export const createRaffle    = (d: Raffle)            => req('/raffles', { method: 'POST', body: JSON.stringify(d) })
@@ -229,7 +241,7 @@ export interface StorePayload {
 }
 export interface EventPayload {
   id?: number; name: string; date: string; time: string
-  location: string; description: string; priority: number; photo_url?: string
+  location: string; description: string; priority: number; photo_url?: string; photos?: EntityPhoto[]
 }
 export interface ProductPayload {
   store_name: string; name: string; description: string

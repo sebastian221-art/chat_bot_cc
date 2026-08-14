@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getZones, createZone, updateZone, deleteZone, getZoneStats, Zone } from '@/lib/api'
 import Modal from '@/components/Modal'
-import ImageUpload from '@/components/ImageUpload'
+import EntityPhotoGallery from '@/components/EntityPhotoGallery'
 import { Plus, Pencil, Trash2, RefreshCw, MapPin, Copy, Check, QrCode, Flame } from 'lucide-react'
 
 const FLOORS = ['Piso 1', 'Piso 2', 'Zona Burbuja']
@@ -225,12 +225,7 @@ export default function ZonasPage() {
           </div>
 
           <div>
-            <ImageUpload
-              value={form.photo_url || ''}
-              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
-              label="Foto de la zona"
-              accent="cyan"
-            />
+            <EntityPhotoGallery entityType="zone" entityId={editing} accent="cyan" />
           </div>
         </div>
 

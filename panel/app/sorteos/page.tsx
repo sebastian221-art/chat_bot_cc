@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getRaffles, createRaffle, updateRaffle, toggleRaffle, deleteRaffle, Raffle } from '@/lib/api'
 import Modal from '@/components/Modal'
-import ImageUpload from '@/components/ImageUpload'
+import EntityPhotoGallery from '@/components/EntityPhotoGallery'
 import { Gift, Plus, Pencil, Trash2, RefreshCw, Power, Calendar, MapPin } from 'lucide-react'
 
 const EMPTY: Raffle = { name: '', prize: '', requirements: '', end_date: '', location: '', description: '', priority: 3, photo_url: '' }
@@ -196,12 +196,7 @@ export default function SorteosPage() {
             <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 resize-none h-16" {...field('description')} />
           </div>
           <div>
-            <ImageUpload
-              value={form.photo_url || ''}
-              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
-              label="Foto / afiche del sorteo"
-              accent="amber"
-            />
+            <EntityPhotoGallery entityType="raffle" entityId={editing} accent="amber" />
           </div>
           <div>
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">

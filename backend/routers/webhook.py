@@ -94,6 +94,30 @@ async def receive_message(
 
 # ── Núcleo compartido: decide qué responder ────────────────────────
 
+CARTA_KEYWORDS = ["carta", "menú", "menu", "qué tienen", "que tienen", "qué venden", "que venden"]
+PREMIO_KEYWORDS = ["premio", "qué me gano", "que me gano", "qué es el premio", "que es el premio"]
+
+
+def _pick_store_photo(store, message_text: str) -> str | None:
+    """Decide cuál foto de la galería de una tienda mandar: carta si preguntan por el menú, portada en cualquier otro caso."""
+    if not store:
+        return None
+    msg = message_text.lower()
+    if any(k in msg for k in CARTA_KEYWORDS):
+        return store.get_photo_by_label("carta")
+    return store.get_photo_by_label("portada")
+
+
+def _pick_entity_photo(db, entity_type: str, entity_id: int, message_text: str) -> str | None:
+    """Igual que _pick_store_photo, pero para eventos/sorteos/zonas usando la tabla genérica."""
+    from models.entity_photo import get_entity_photo
+    msg = message_text.lower()
+    if entity_type == "raffle" and any(k in msg for k in PREMIO_KEYWORDS):
+        return get_entity_photo(db, "raffle", entity_id, "premio")
+    default_label = "afiche" if entity_type in ("event", "raffle") else "principal"
+    return get_entity_photo(db, entity_type, entity_id, default_label)
+
+
 async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> dict:
     """
     Decide y genera la respuesta del bot para un mensaje entrante.
@@ -117,10 +141,11 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             return {"text": build_zone_not_found_message(), "image_url": None, "location": None}
 
         store = find_store_by_message(db, message_text)
+        zone_photo = _pick_entity_photo(db, "zone", zone.id, message_text)
         if store:
             text = await build_navigation_response(zone, store, user_name)
-            return {"text": text, "image_url": store.photo_url or zone.photo_url, "location": None}
-        return {"text": build_zone_confirmation_message(zone), "image_url": zone.photo_url, "location": None}
+            return {"text": text, "image_url": _pick_store_photo(store, message_text) or zone_photo, "location": None}
+        return {"text": build_zone_confirmation_message(zone), "image_url": zone_photo, "location": None}
 
     # Si el mensaje anterior fue "¿a qué tienda quieres llegar?" (después
     # de escanear un QR), usamos la última zona escaneada por este número
@@ -130,7 +155,8 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         last_zone = get_last_scanned_zone(db, phone_number)
         if last_zone:
             text = await build_navigation_response(last_zone, store, user_name)
-            return {"text": text, "image_url": store.photo_url or last_zone.photo_url, "location": None}
+            zone_photo = _pick_entity_photo(db, "zone", last_zone.id, message_text)
+            return {"text": text, "image_url": _pick_store_photo(store, message_text) or zone_photo, "location": None}
 
     # ── Gestión completa de domicilio ────────────────────────────────
     # Prioridad alta: si ya hay una gestión en curso para este número,
@@ -139,7 +165,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     active_session = get_active_session(db, phone_number)
     if active_session:
         text = await continue_management(db, active_session, message_text, store, user_name)
-        img = store.photo_url if store else None
+        img = _pick_store_photo(store, message_text)
         return {"text": text, "image_url": img, "location": None}
 
     # Si no hay sesión activa pero el cliente pide EXPLÍCITAMENTE que se
@@ -148,20 +174,23 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     if is_delivery_management_intent(message_text):
         if store:
             text = await start_management(db, phone_number, store)
-            return {"text": text, "image_url": store.photo_url, "location": None}
+            # Aquí forzamos la etiqueta "carta" — es exactamente el
+            # momento en que se le muestra el menú al cliente.
+            photo = store.get_photo_by_label("carta")
+            return {"text": text, "image_url": photo, "location": None}
         return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
 
     if is_delivery_intent(message_text):
         if store:
             _log_delivery_transfer(db, phone_number, store.name)
-            return {"text": build_transfer_message(store), "image_url": store.photo_url, "location": None}
+            return {"text": build_transfer_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
         return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
     if store and _last_bot_message_was_ask(db, phone_number):
         _log_delivery_transfer(db, phone_number, store.name)
-        return {"text": build_transfer_message(store), "image_url": store.photo_url, "location": None}
+        return {"text": build_transfer_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
 
     # ── Ubicación del mall en sí (no de una tienda puntual) ──────────
     # Si preguntan "dónde queda" sin mencionar una tienda específica,
@@ -197,18 +226,20 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     )
 
     # Si el cliente mencionó una tienda, evento o sorteo específico y
-    # tiene foto cargada en el panel, la mandamos junto con la respuesta.
+    # tiene foto cargada en el panel, la mandamos junto con la respuesta
+    # — usando la etiqueta correcta según lo que haya preguntado
+    # (ej. "premio" si pregunta qué se gana en un sorteo).
     image_url = None
-    if store and store.photo_url:
-        image_url = store.photo_url
-    else:
+    if store:
+        image_url = _pick_store_photo(store, message_text)
+    if not image_url:
         event = find_event_by_message(db, message_text)
-        if event and event.photo_url:
-            image_url = event.photo_url
+        if event:
+            image_url = _pick_entity_photo(db, "event", event.id, message_text)
         else:
             raffle = find_raffle_by_message(db, message_text)
-            if raffle and raffle.photo_url:
-                image_url = raffle.photo_url
+            if raffle:
+                image_url = _pick_entity_photo(db, "raffle", raffle.id, message_text)
 
     return {"text": text, "image_url": image_url, "location": location_data}
 

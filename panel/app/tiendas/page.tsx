@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
-import ImageUpload from '@/components/ImageUpload'
+import StorePhotoGallery from '@/components/StorePhotoGallery'
 import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload, ImageOff, MapPin, Phone, Clock } from 'lucide-react'
 
 const CATEGORIES = [
@@ -176,9 +176,9 @@ export default function TiendasPage() {
             >
               {/* Foto o placeholder */}
               <div className="h-36 bg-zinc-950 relative flex-shrink-0">
-                {s.photo_url ? (
+                {(s.photos?.find(p => p.label === 'portada')?.photo_url || s.photo_url) ? (
                   <img
-                    src={s.photo_url}
+                    src={s.photos?.find(p => p.label === 'portada')?.photo_url || s.photo_url}
                     alt={s.name}
                     className="w-full h-full object-cover"
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -256,12 +256,7 @@ export default function TiendasPage() {
           </div>
 
           <div className="col-span-2">
-            <ImageUpload
-              value={form.photo_url}
-              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
-              label="Foto del local"
-              accent="indigo"
-            />
+            <StorePhotoGallery storeId={editing} />
           </div>
 
           <div className="col-span-2">

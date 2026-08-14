@@ -6,7 +6,7 @@ import {
   exportKnowledge, importKnowledge, KnowledgeEntry,
 } from '@/lib/api'
 import Modal from '@/components/Modal'
-import ImageUpload from '@/components/ImageUpload'
+import EntityPhotoGallery from '@/components/EntityPhotoGallery'
 import { Plus, Pencil, Trash2, RefreshCw, BookOpen, Download, Upload, Search } from 'lucide-react'
 
 const EMPTY: KnowledgeEntry = { title: '', content: '', photo_url: '' }
@@ -226,12 +226,7 @@ export default function ConocimientoPage() {
             />
           </div>
           <div>
-            <ImageUpload
-              value={form.photo_url || ''}
-              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
-              label="Foto"
-              accent="violet"
-            />
+            <EntityPhotoGallery entityType="knowledge" entityId={editing} accent="violet" />
           </div>
         </div>
 
