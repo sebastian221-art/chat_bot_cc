@@ -238,6 +238,7 @@ export interface StorePayload {
   id?: number; name: string; local_number: string; floor: string; category: string
   description: string; schedule: string
   phone: string; location_hint: string; tags: string; photo_url: string; extra_info: string
+  photos?: StorePhoto[]
 }
 export interface EventPayload {
   id?: number; name: string; date: string; time: string
