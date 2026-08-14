@@ -100,11 +100,16 @@ async def start_management(db: Session, phone_number: str, store: Store) -> str:
     return f"{carta}\n\n{pedido_datos}"
 
 
-async def continue_management(db: Session, session: DeliveryManagement, message: str, store: Store | None) -> str:
+async def continue_management(db: Session, session: DeliveryManagement, message: str, store: Store | None, user_name: str = "") -> str:
     """
-    El cliente ya tenía una gestión en curso — este mensaje trae (parte
-    de) los datos que faltaban. Extrae, actualiza, y si ya está
-    completo arma el link final.
+    El cliente ya tenía una gestión en curso. Este mensaje puede ser:
+    1) Datos (parte o todos) del pedido → los extrae y actualiza
+    2) Una cancelación explícita ("ya no quiero") → cierra la gestión
+       limpiamente, sin dejar al cliente atrapado
+    3) Algo totalmente distinto (ej. "¿se permiten mascotas?") → responde
+       la pregunta real usando el motor normal de IA, y recuerda que el
+       pedido sigue en curso — así el cliente nunca siente que el bot
+       "no entiende" o lo ignora solo porque está a mitad de un domicilio
     """
     existing = {
         "nombre": session.customer_name,
@@ -115,6 +120,32 @@ async def continue_management(db: Session, session: DeliveryManagement, message:
     }
     extracted = await extract_order_data(message, existing)
 
+    # 1) Cancelación explícita — cerramos la gestión, sin dejar al
+    #    cliente atrapado pidiéndole datos que ya no quiere dar.
+    if extracted.get("cancela"):
+        session.status = "cancelled"
+        db.commit()
+        return "Listo, cancelé la gestión de ese domicilio 👍 ¿En qué más te ayudo?"
+
+    # 2) Mensaje sin relación con el pedido — respondemos la pregunta
+    #    real (con el motor normal de IA, con acceso a todo el contexto
+    #    del mall) y recordamos que el pedido sigue pendiente, en vez de
+    #    ignorar la pregunta o insistir con los datos que faltan.
+    if not extracted.get("relacionado", True):
+        from services.ai import generate_response
+        respuesta_real = await generate_response(
+            user_message=message,
+            user_name=user_name,
+            conversation_history=[],
+            db=db,
+        )
+        recordatorio = (
+            f"\n\n_Por cierto, tu pedido a **{session.store_name}** sigue en curso — "
+            f"cuando quieras seguir, mándame los datos que falten 😊_"
+        )
+        return respuesta_real + recordatorio
+
+    # 3) Es sobre el pedido — actualizamos con lo nuevo que haya llegado
     session.customer_name = extracted["customer_name"]
     session.customer_phone = extracted["customer_phone"]
     session.address = extracted["address"]

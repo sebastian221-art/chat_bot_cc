@@ -138,7 +138,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     # como continuación, sin importar qué otra cosa parezca el mensaje.
     active_session = get_active_session(db, phone_number)
     if active_session:
-        text = await continue_management(db, active_session, message_text, store)
+        text = await continue_management(db, active_session, message_text, store, user_name)
         img = store.photo_url if store else None
         return {"text": text, "image_url": img, "location": None}
 

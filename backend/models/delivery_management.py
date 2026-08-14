@@ -16,7 +16,7 @@ class DeliveryManagement(Base):
     phone_number    = Column(String(20), nullable=False, index=True)
     store_name      = Column(String(150), nullable=False)
 
-    # collecting = recolectando datos | completed = link ya entregado | closed = local cerrado, no se inició
+    # collecting = recolectando datos | completed = link ya entregado | closed = local cerrado, no se inició | cancelled = el cliente canceló a mitad de camino
     status          = Column(String(20), nullable=False, default="collecting", index=True)
 
     customer_name   = Column(String(150), nullable=True)

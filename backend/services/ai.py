@@ -386,29 +386,46 @@ async def extract_order_data(message: str, existing: dict) -> dict:
     Usa la IA para extraer nombre, celular, dirección, pedido y forma de
     pago del mensaje del cliente, combinando con lo que ya se había
     recolectado antes (para no perder datos entre mensajes).
+
+    Además, en la MISMA llamada (sin gastar una llamada extra a la IA),
+    detecta 2 cosas clave para que el bot no se quede "atrapado" pidiendo
+    datos sin parar:
+    - cancela: el cliente ya no quiere seguir con el domicilio
+    - relacionado: si el mensaje tiene algo que ver con el pedido, o es
+      una pregunta/comentario totalmente distinto (ej. "¿se permiten
+      mascotas?") que hay que responder de verdad, no ignorar
     """
     client = _get_groq_client()
-    prompt = f"""Extrae datos de un pedido a domicilio de este mensaje de un cliente.
+    prompt = f"""Estás ayudando a un cliente a completar los datos de un pedido a domicilio, mensaje por mensaje.
 
 Datos ya recolectados en mensajes anteriores (puede haber campos vacíos):
 {json.dumps(existing, ensure_ascii=False)}
 
 Mensaje nuevo del cliente: "{message}"
 
-Devuelve SOLO un objeto JSON con estas claves exactas: nombre, celular, direccion, pedido, forma_pago.
-Reglas:
+Devuelve SOLO un objeto JSON con estas claves exactas: nombre, celular, direccion, pedido, forma_pago, cancela, relacionado.
+Reglas para los datos del pedido:
 - Si un dato aparece en el mensaje nuevo, úsalo (actualiza el campo).
 - Si no aparece en el mensaje nuevo pero ya estaba recolectado antes, mantén el valor anterior.
 - Si nunca ha aparecido en ningún mensaje, pon null.
 - forma_pago debe ser "efectivo" o "transferencia" si se puede inferir con claridad, si no null.
 - No inventes ningún dato que no esté explícito.
+
+Reglas para "cancela" (true/false):
+- true SOLO si el cliente dice explícitamente que ya no quiere seguir con el pedido/domicilio (ej. "ya no quiero", "olvídalo", "cancela", "déjalo así", "no gracias")
+- false en cualquier otro caso, incluyendo cuando solo está dando datos
+
+Reglas para "relacionado" (true/false):
+- true si el mensaje tiene que ver con dar algún dato del pedido (nombre, celular, dirección, qué quiere pedir, forma de pago), aunque sea parcial o esté mezclado con otra cosa
+- false si el mensaje es una pregunta o comentario que NO tiene nada que ver con completar el pedido (ej. "¿se permiten mascotas?", "¿cuál es el horario?") — en ese caso el cliente simplemente se desvió a preguntar otra cosa, no está cancelando ni dando datos
+
 No agregues texto antes ni después del JSON."""
 
     try:
         completion = await client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
+            max_tokens=350,
             temperature=0.1,
         )
         raw = completion.choices[0].message.content or ""
@@ -421,6 +438,8 @@ No agregues texto antes ni después del JSON."""
                 "address": parsed.get("direccion") or existing.get("direccion"),
                 "order_details": parsed.get("pedido") or existing.get("pedido"),
                 "payment_method": parsed.get("forma_pago") or existing.get("forma_pago"),
+                "cancela": bool(parsed.get("cancela", False)),
+                "relacionado": bool(parsed.get("relacionado", True)),
             }
     except Exception as e:
         logger.error(f"Error extrayendo datos de pedido: {str(e)}")
@@ -431,6 +450,8 @@ No agregues texto antes ni después del JSON."""
         "address": existing.get("direccion"),
         "order_details": existing.get("pedido"),
         "payment_method": existing.get("forma_pago"),
+        "cancela": False,
+        "relacionado": True,
     }
 
 
