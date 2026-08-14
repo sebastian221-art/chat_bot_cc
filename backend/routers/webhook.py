@@ -27,11 +27,13 @@ from models.conversation import Conversation
 from models.user_profile import UserProfile
 from models.conversation_flag import ConversationFlag
 from models.delivery_transfer import DeliveryTransfer
+from models.delivery_management import DeliveryManagement
 from models.mall_info import MallInfo
 from services.whatsapp import send_text_message, send_image_message, send_location_message, parse_incoming_message, download_media
-from services.ai import generate_response, is_delivery_intent, needs_human_attention, build_handoff_message, classify_intent
+from services.ai import generate_response, is_delivery_intent, is_delivery_management_intent, needs_human_attention, build_handoff_message, classify_intent
 from services.vision_search import handle_image_message
 from services.content_matching import find_event_by_message, find_raffle_by_message
+from services.delivery_management import get_active_session, start_management, continue_management
 from services.navigation import (
     parse_zone_code,
     find_zone,
@@ -129,6 +131,25 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         if last_zone:
             text = await build_navigation_response(last_zone, store, user_name)
             return {"text": text, "image_url": store.photo_url or last_zone.photo_url, "location": None}
+
+    # ── Gestión completa de domicilio ────────────────────────────────
+    # Prioridad alta: si ya hay una gestión en curso para este número,
+    # este mensaje trae (parte de) los datos que faltaban — se procesa
+    # como continuación, sin importar qué otra cosa parezca el mensaje.
+    active_session = get_active_session(db, phone_number)
+    if active_session:
+        text = await continue_management(db, active_session, message_text, store)
+        img = store.photo_url if store else None
+        return {"text": text, "image_url": img, "location": None}
+
+    # Si no hay sesión activa pero el cliente pide EXPLÍCITAMENTE que se
+    # le ayude a gestionar el pedido (no solo lo menciona de pasada),
+    # arrancamos el flujo completo — carta + validación de horario + datos.
+    if is_delivery_management_intent(message_text):
+        if store:
+            text = await start_management(db, phone_number, store)
+            return {"text": text, "image_url": store.photo_url, "location": None}
+        return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
 
     if is_delivery_intent(message_text):
         if store:

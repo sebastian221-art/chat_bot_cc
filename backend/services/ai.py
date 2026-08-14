@@ -8,6 +8,10 @@ FIXES:
 """
 import logging
 import base64
+import json
+import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from groq import AsyncGroq
 from config import get_settings
 from services.rag import search_stores
@@ -40,9 +44,10 @@ INTENT_RULES = {
         "estado del pedido", "cómo va mi pedido", "como va mi pedido",
     ],
     "domicilio": [
-        "domicilio", "delivery", "a casa", "pedir", "quiero pedir",
+        "domicilio", "delivery", "pedir a domicilio", "quiero pedir",
         "hacer un pedido", "ordenar", "quiero ordenar", "hacer pedido",
-        "llevar a", "enviar a", "mandar a domicilio",
+        "enviar a mi casa", "mandar a domicilio", "que me lo traigan",
+        "que me lo lleven",
     ],
     "categoria": ["restaurantes", "comida", "ropa", "tecnología", "cine", "gym", "farmacias", "cafeterías"],
 }
@@ -124,7 +129,7 @@ TIPO DE RESPUESTA: Domicilio (prompt sin uso actualmente)
 
 TIPO DE RESPUESTA: Lista de opciones por categoría
 - NUNCA listes todas las opciones que existan de una — máximo 2-3 por respuesta, aunque haya más en los datos
-- Si la pregunta es amplia o ambigua (ej. "zapatos deportivos" puede ser de vestir o para practicar deporte), primero haz UNA pregunta corta para entender mejor qué busca, antes de dar nombres de tiendas
+- OBLIGATORIO: si la categoría que preguntan puede referirse a más de un tipo de producto (ej. "zapatos deportivos" → ¿de vestir o para practicar deporte?, "ropa" → ¿de hombre, mujer o niño?, "restaurantes" → ¿comida rápida o algo más específico?), SIEMPRE pregunta primero para aclarar — nunca des nombres de tiendas directamente en esos casos, sin excepción
 - Cuando ya des opciones, formato simple por línea: "📍 Nombre — Piso X — qué vende, en pocas palabras"
 - Cierra invitando a seguir preguntando, sin sonar repetitivo de un mensaje a otro
 - Si el cliente pide explícitamente "todas" o "todos los que haya", ahí sí puedes dar la lista completa
@@ -142,6 +147,36 @@ TIPO DE RESPUESTA: Consulta general sobre una tienda o servicio
 
 
 # ── Función principal ─────────────────────────────────────────────
+
+def _build_mall_info_block(db) -> str:
+    """
+    Trae dirección, horario general, teléfono y parqueadero directo de
+    la tabla mall_info — sin pasar por el buscador semántico, que con
+    muchas tiendas cargadas puede no priorizar esta info general.
+    """
+    from models.mall_info import MallInfo
+    try:
+        info = db.query(MallInfo).filter(MallInfo.id == 1).first()
+        if not info:
+            return ""
+        lines = []
+        if info.address:
+            lines.append(f"Dirección del mall: {info.address}")
+        if info.general_schedule:
+            lines.append(f"Horario general del mall: {info.general_schedule}")
+        if info.phone:
+            lines.append(f"Teléfono de contacto del mall: {info.phone}")
+        if info.parking:
+            lines.append(f"Parqueadero: {info.parking}")
+        if info.wifi:
+            lines.append(f"WiFi: {info.wifi}")
+        if not lines:
+            return ""
+        return "\n\n--- INFORMACIÓN GENERAL DEL MALL (usa esto para preguntas sobre horario, ubicación, teléfono o parqueadero del CENTRO COMERCIAL en sí, no de una tienda puntual) ---\n" + "\n".join(lines) + "\n---"
+    except Exception as e:
+        logger.error(f"Error cargando info general del mall: {str(e)}")
+        return ""
+
 
 def _build_promotions_block(db, user_profile: str) -> str:
     """
@@ -221,6 +256,18 @@ async def generate_response(
         context = "\n\n".join(f"📌 {doc}" for doc in rag_docs)
         system_content += f"\n\n--- INFORMACIÓN DEL MALL ---\n{context}\n---"
 
+    # ── Info general del mall — SIEMPRE disponible, sin depender de RAG ──
+    # Con 138+ tiendas cargadas, una pregunta genérica como "¿cuál es el
+    # horario?" o "¿dónde queda el mall?" puede perder la competencia
+    # semántica contra el horario de tiendas individuales, y esa info
+    # general nunca llega a aparecer en los 8 resultados de arriba.
+    # Por eso la inyectamos siempre, aparte, para preguntas de horario,
+    # ubicación o parqueadero — igual que ya hacemos con las promociones.
+    if db is not None and intent in ("horario", "ubicacion", "general", "categoria"):
+        mall_block = _build_mall_info_block(db)
+        if mall_block:
+            system_content += mall_block
+
     if user_profile:
         system_content += f"\n\nPERFIL DEL USUARIO: {user_profile}"
 
@@ -275,6 +322,144 @@ def is_delivery_intent(message: str) -> bool:
     Las preguntas de estado ('cuánto se demora', 'ya llegó') ya NO disparan esto.
     """
     return classify_intent(message) == "domicilio"
+
+
+# ── Gestión completa de domicilios (carta + datos + link personalizado) ────
+
+MANAGEMENT_KEYWORDS = [
+    "ayúdame a gestionar", "ayudame a gestionar", "gestiona mi pedido",
+    "gestionar mi domicilio", "gestionar mi pedido", "ayúdame con mi pedido",
+    "ayudame con mi pedido", "quiero que gestiones", "haz mi pedido",
+    "tramitar mi pedido", "gestionar el domicilio",
+    # Formas más naturales de pedir lo mismo — la gente rara vez dice
+    # "gestionar" literalmente, así que hay que cubrir cómo hablan de verdad
+    "ayúdame a hacer el domicilio", "ayudame a hacer el domicilio",
+    "ayúdame a hacer mi pedido", "ayudame a hacer mi pedido",
+    "que tu me ayudes a hacer el domicilio", "que tu me ayudes con el domicilio",
+    "que me ayudes a hacer el domicilio", "que me ayudes con el domicilio",
+    "me ayudas a hacer el domicilio", "me ayudas con el domicilio",
+    "me ayudas a hacer mi pedido", "me ayudas con mi pedido",
+    "hazme el domicilio", "hazme el pedido", "encárgate de mi pedido",
+    "encargate de mi pedido", "encárgate del domicilio", "encargate del domicilio",
+]
+
+
+def is_delivery_management_intent(message: str) -> bool:
+    """
+    Distingue una MENCIÓN simple ('quiero pedir de Zirus') de una
+    GESTIÓN explícita ('ayúdame a gestionar mi pedido a Zirus') — solo
+    la segunda dispara el flujo completo de recolección de datos.
+    """
+    msg = message.lower()
+    return any(k in msg for k in MANAGEMENT_KEYWORDS)
+
+
+def _safe_json_parse(raw: str) -> dict | None:
+    """Intenta parsear JSON aunque el modelo agregue texto extra alrededor."""
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+async def extract_order_data(message: str, existing: dict) -> dict:
+    """
+    Usa la IA para extraer nombre, celular, dirección, pedido y forma de
+    pago del mensaje del cliente, combinando con lo que ya se había
+    recolectado antes (para no perder datos entre mensajes).
+    """
+    client = _get_groq_client()
+    prompt = f"""Extrae datos de un pedido a domicilio de este mensaje de un cliente.
+
+Datos ya recolectados en mensajes anteriores (puede haber campos vacíos):
+{json.dumps(existing, ensure_ascii=False)}
+
+Mensaje nuevo del cliente: "{message}"
+
+Devuelve SOLO un objeto JSON con estas claves exactas: nombre, celular, direccion, pedido, forma_pago.
+Reglas:
+- Si un dato aparece en el mensaje nuevo, úsalo (actualiza el campo).
+- Si no aparece en el mensaje nuevo pero ya estaba recolectado antes, mantén el valor anterior.
+- Si nunca ha aparecido en ningún mensaje, pon null.
+- forma_pago debe ser "efectivo" o "transferencia" si se puede inferir con claridad, si no null.
+- No inventes ningún dato que no esté explícito.
+No agregues texto antes ni después del JSON."""
+
+    try:
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+            temperature=0.1,
+        )
+        raw = completion.choices[0].message.content or ""
+        raw = _strip_thinking_tags(raw)
+        parsed = _safe_json_parse(raw)
+        if parsed:
+            return {
+                "customer_name": parsed.get("nombre") or existing.get("nombre"),
+                "customer_phone": parsed.get("celular") or existing.get("celular"),
+                "address": parsed.get("direccion") or existing.get("direccion"),
+                "order_details": parsed.get("pedido") or existing.get("pedido"),
+                "payment_method": parsed.get("forma_pago") or existing.get("forma_pago"),
+            }
+    except Exception as e:
+        logger.error(f"Error extrayendo datos de pedido: {str(e)}")
+
+    return {
+        "customer_name": existing.get("nombre"),
+        "customer_phone": existing.get("celular"),
+        "address": existing.get("direccion"),
+        "order_details": existing.get("pedido"),
+        "payment_method": existing.get("forma_pago"),
+    }
+
+
+DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+async def check_store_open(schedule: str | None) -> tuple[bool, str | None]:
+    """
+    Usa la IA para interpretar el horario en texto libre del local y
+    decidir si está abierto ahora mismo (hora Colombia). Si el local no
+    tiene horario registrado, se asume que sí puede intentar el pedido.
+    """
+    if not schedule:
+        return True, None
+
+    now = datetime.now(ZoneInfo("America/Bogota"))
+    dia = DIAS_ES[now.weekday()]
+    hora = now.strftime("%H:%M")
+
+    client = _get_groq_client()
+    prompt = f"""Horario de atención de un local: "{schedule}"
+Ahora mismo es {dia}, {hora} (hora de Colombia).
+
+¿Está el local abierto en este momento? Responde SOLO con un JSON:
+{{"abierto": true o false, "mensaje": "si está cerrado, una frase breve y natural en español diciendo cuándo abre; si está abierto, null"}}"""
+
+    try:
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150,
+            temperature=0.1,
+        )
+        raw = _strip_thinking_tags(completion.choices[0].message.content or "")
+        parsed = _safe_json_parse(raw)
+        if parsed is not None:
+            return bool(parsed.get("abierto", True)), parsed.get("mensaje")
+    except Exception as e:
+        logger.error(f"Error validando horario: {str(e)}")
+
+    return True, None
 
 
 # ── Escalamiento a humano ──────────────────────────────────────────
