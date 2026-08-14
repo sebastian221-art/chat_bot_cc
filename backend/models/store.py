@@ -15,7 +15,7 @@ class Store(Base):
     phone         = Column(String(20), nullable=True)
     location_hint = Column(String(200), nullable=True)
     tags          = Column(String(300), nullable=True)
-    photo_url     = Column(String(500), nullable=True)  # link a una foto del local
+    photo_url     = Column(String(500), nullable=True)  # link a una foto del local (externo — ver nota en el panel)
     extra_info    = Column(Text, nullable=True)  # campo libre: carta, cartelera, o cualquier info adicional del local
     active        = Column(Boolean, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())

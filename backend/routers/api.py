@@ -33,7 +33,6 @@ from models.zone_scan import ZoneScan
 from models.mall_info import MallInfo
 from models.info_point import InfoPoint
 from models.delivery_transfer import DeliveryTransfer
-from models.delivery_management import DeliveryManagement
 from models.raffle import Raffle
 from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
@@ -54,6 +53,7 @@ class StoreIn(BaseModel):
     location_hint: Optional[str] = ""
     tags: Optional[str] = ""
     photo_url: Optional[str] = ""
+    extra_info: Optional[str] = ""
 
 class EventIn(BaseModel):
     name: str
@@ -106,10 +106,35 @@ class RaffleIn(BaseModel):
 
 
 def _reindex(db: Session):
-    try:
-        load_stores_to_rag(db)
-    except Exception as e:
-        logger.warning(f"RAG no se pudo actualizar: {e}")
+    """
+    Dispara el re-indexado del RAG en un HILO APARTE, sin bloquear la
+    respuesta HTTP.
+
+    Antes esto se hacía de forma síncrona (reconstruyendo TODO el
+    índice desde cero cada vez) — con importaciones grandes (ej. 138
+    locales de una sola vez) el navegador terminaba cortando la
+    conexión por tardanza, y eso se veía en pantalla como un confuso
+    error de "CORS bloqueado" que en realidad no tenía nada que ver
+    con CORS — era un timeout disfrazado.
+
+    Usamos threading (no BackgroundTasks de FastAPI) para no tener que
+    tocar la firma de los 20 endpoints que llaman a esta función — el
+    cambio queda contenido aquí, en un solo lugar.
+    """
+    import threading
+    from models.database import SessionLocal
+
+    def _run_in_background():
+        bg_db = SessionLocal()
+        try:
+            load_stores_to_rag(bg_db)
+            print("  🔄  RAG reindexado en segundo plano")
+        except Exception as e:
+            logger.warning(f"RAG no se pudo actualizar en background: {e}")
+        finally:
+            bg_db.close()
+
+    threading.Thread(target=_run_in_background, daemon=True).start()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -141,6 +166,7 @@ FIELD_ALIASES = {
         "location_hint": ["location_hint", "ubicacion", "ubicacion_hint", "ubicacion_exacta"],
         "tags":          ["tags", "etiquetas", "palabras_clave"],
         "photo_url":     ["photo_url", "foto", "foto_url", "imagen", "url_foto"],
+        "extra_info":    ["extra_info", "carta", "cartelera", "informacion_adicional", "info_adicional"],
     },
     "event": {
         "name":        ["name", "nombre", "evento"],
@@ -414,7 +440,7 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
 @router.get("/stores/export")
 def export_stores(db: Session = Depends(get_db)):
     stores = db.query(Store).order_by(Store.name).all()
-    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]
+    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url", "extra_info"]
     rows = [{k: (getattr(s, k) or "") for k in fieldnames} for s in stores]
     return _csv_response(rows, fieldnames, "locales.csv")
 
@@ -439,7 +465,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
             .first()
         )
         if existing:
-            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]:
+            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url", "extra_info"]:
                 if mapped.get(field):
                     setattr(existing, field, mapped[field])
             updated += 1
@@ -455,6 +481,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
                 location_hint=mapped.get("location_hint", ""),
                 tags=mapped.get("tags", ""),
                 photo_url=mapped.get("photo_url", ""),
+                extra_info=mapped.get("extra_info", ""),
                 active=True,
             ))
             created += 1
@@ -906,52 +933,3 @@ def delete_raffle(raffle_id: int, db: Session = Depends(get_db)):
     _reindex(db)
     print(f"  🗑️   Sorteo eliminado: {name}")
     return {"ok": True, "removed": name}
-
-
-# ══════════════════════════════════════════════════════════════════
-# GESTIONES DE DOMICILIO — flujo completo (carta + datos + link)
-# Distinto de /delivery-transfers, que es la simple mención sin datos.
-# ══════════════════════════════════════════════════════════════════
-
-@router.get("/delivery-managements/stats")
-def delivery_management_stats(db: Session = Depends(get_db)):
-    today = datetime.now(timezone.utc).date()
-    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-
-    base_query = db.query(DeliveryManagement).filter(DeliveryManagement.created_at >= week_ago)
-
-    total_week = base_query.count()
-    completed_week = base_query.filter(DeliveryManagement.status == "completed").count()
-    closed_week = base_query.filter(DeliveryManagement.status == "closed").count()
-    abandoned_week = base_query.filter(DeliveryManagement.status == "collecting").count()
-
-    total_today = db.query(DeliveryManagement).filter(func.date(DeliveryManagement.created_at) == today).count()
-
-    top_stores = (
-        db.query(DeliveryManagement.store_name, func.count(DeliveryManagement.id).label("total"))
-        .filter(DeliveryManagement.created_at >= week_ago, DeliveryManagement.status == "completed")
-        .group_by(DeliveryManagement.store_name)
-        .order_by(desc("total"))
-        .limit(10)
-        .all()
-    )
-
-    return {
-        "total_today": total_today,
-        "total_this_week": total_week,
-        "completed_this_week": completed_week,
-        "closed_this_week": closed_week,
-        "abandoned_this_week": abandoned_week,
-        "top_stores": [{"store": s, "total": t} for s, t in top_stores],
-    }
-
-
-@router.get("/delivery-managements")
-def list_delivery_managements(db: Session = Depends(get_db)):
-    rows = (
-        db.query(DeliveryManagement)
-        .order_by(DeliveryManagement.created_at.desc())
-        .limit(100)
-        .all()
-    )
-    return [r.to_dict() for r in rows]
