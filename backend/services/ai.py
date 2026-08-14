@@ -14,7 +14,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from groq import AsyncGroq
 from config import get_settings
-from services.rag import search_stores
+from services.rag import search_stores, search_knowledge_and_events
 
 settings = get_settings()
 logger   = logging.getLogger("mall_bot")
@@ -255,6 +255,18 @@ async def generate_response(
     if rag_docs:
         context = "\n\n".join(f"📌 {doc}" for doc in rag_docs)
         system_content += f"\n\n--- INFORMACIÓN DEL MALL ---\n{context}\n---"
+
+    # ── Base de Conocimiento, Eventos y Sorteos — búsqueda APARTE ────
+    # Igual que con la info general del mall: con 138+ tiendas cargadas,
+    # una entrada real de la Base de Conocimiento (ej. política de
+    # mascotas) puede perder la competencia semántica contra puras
+    # tiendas y nunca llegar a los 8 resultados de arriba. Esta segunda
+    # búsqueda, filtrada para que las tiendas no puedan participar,
+    # garantiza que esta información SIEMPRE tenga su propio espacio.
+    kb_docs = search_knowledge_and_events(user_message, n_results=4)
+    if kb_docs:
+        kb_context = "\n\n".join(f"📖 {doc}" for doc in kb_docs)
+        system_content += f"\n\n--- BASE DE CONOCIMIENTO / EVENTOS / SORTEOS RELEVANTES ---\n{kb_context}\n---"
 
     # ── Info general del mall — SIEMPRE disponible, sin depender de RAG ──
     # Con 138+ tiendas cargadas, una pregunta genérica como "¿cuál es el

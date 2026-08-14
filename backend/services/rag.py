@@ -166,3 +166,32 @@ def search_stores(query: str, n_results: int = 8) -> List[str]:
     except Exception as e:
         logger.error(f"Error RAG búsqueda: {str(e)}")
         return []
+
+
+def search_knowledge_and_events(query: str, n_results: int = 4) -> List[str]:
+    """
+    Busca SOLO entre Base de Conocimiento, Eventos y Sorteos — filtrando
+    por metadata para que las 138+ tiendas nunca puedan "ganarle" el
+    espacio a esta información en la búsqueda combinada normal.
+
+    Sin esto, una pregunta genérica (ej. "¿se permiten mascotas?") corre
+    el riesgo de que los 8 resultados de la búsqueda general se llenen
+    solo con tiendas semánticamente parecidas, y la política de mascotas
+    real (que sí existe en la Base de Conocimiento) nunca llegue a
+    aparecer en el contexto que recibe la IA.
+    """
+    collection = _get_collection()
+
+    if collection.count() == 0:
+        return []
+
+    try:
+        results = collection.query(
+            query_texts=[query],
+            n_results=n_results,
+            where={"source": {"$in": ["knowledge", "event", "raffle"]}},
+        )
+        return results.get("documents", [[]])[0]
+    except Exception as e:
+        logger.error(f"Error RAG búsqueda filtrada (conocimiento/eventos/sorteos): {str(e)}")
+        return []
