@@ -151,13 +151,17 @@ export const getAnalyticsInsights = ()         => req(`/analytics/insights`)
 
 // ── Transferencias de Domicilio (reemplaza el flujo viejo de pedidos) ──
 export const getDeliveryTransferStats = () => req('/delivery-transfers/stats')
+export const getDeliveryTransfers     = () => req('/delivery-transfers')
 
 // ── Subida real de imágenes (Locales, Zonas, Eventos, Sorteos, Conocimiento) ──
 export const uploadImage = async (file: File): Promise<string> => {
   const result = await uploadFile('/uploads/image', file)
   return result.url
 }
-export const getDeliveryTransfers     = () => req('/delivery-transfers')
+
+// ── Gestiones completas de domicilio (carta + datos + link personalizado) ──
+export const getDeliveryManagementStats = () => req('/delivery-managements/stats')
+export const getDeliveryManagements     = () => req('/delivery-managements')
 
 // ── Sorteos y Campañas (distinto de Eventos) ────────────────────────
 export interface Raffle {

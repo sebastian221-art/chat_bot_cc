@@ -143,12 +143,68 @@ TIPO DE RESPUESTA: Consulta general sobre una tienda o servicio
 
 # ── Función principal ─────────────────────────────────────────────
 
+def _build_promotions_block(db, user_profile: str) -> str:
+    """
+    Arma el bloque de promociones disponibles para esta respuesta:
+    1) Eventos/sorteos de prioridad alta (4-5) — se cargan SIEMPRE,
+       para que el mall pueda garantizar visibilidad real, sin
+       depender de que el tema de la conversación coincida por azar.
+    2) Recomendaciones personalizadas — busca, entre la info de las
+       tiendas, lo que más encaje con el perfil de intereses de este
+       cliente específico (si existe un perfil).
+    En ambos casos, la decisión de MENCIONARLO o no queda en manos del
+    modelo — esto es contenido disponible, no una orden.
+    """
+    from models.event import Event
+    from models.raffle import Raffle
+
+    parts = []
+
+    try:
+        high_priority_events = db.query(Event).filter(Event.priority >= 4).all()
+        high_priority_raffles = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
+        promo_texts = [e.to_rag_text() for e in high_priority_events] + [r.to_rag_text() for r in high_priority_raffles]
+        if promo_texts:
+            parts.append(
+                "PROMOCIONES DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real — "
+                "busca un momento natural en tu respuesta para mencionarlo, variando cómo lo dices "
+                "cada vez, sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO de cómo lo "
+                "mencionas al tipo de cosa que es — un sorteo de un carro se menciona con emoción y "
+                "urgencia ('¡no te lo pierdas!'), una promoción de ropa con un tono más de moda y "
+                "estilo, un evento familiar con calidez. No uses siempre la misma fórmula):\n" +
+                "\n".join(f"🎯 {t}" for t in promo_texts)
+            )
+    except Exception as e:
+        logger.error(f"Error cargando promociones de prioridad: {str(e)}")
+
+    if user_profile:
+        try:
+            personalized = search_stores(user_profile, n_results=3)
+            if personalized:
+                parts.append(
+                    "POSIBLES RECOMENDACIONES SEGÚN EL PERFIL DE ESTE CLIENTE (solo menciónalas si "
+                    "de verdad encajan con lo que está preguntando o con sus gustos conocidos — "
+                    "si no calzan bien, ignóralas por completo. Si las mencionas, hazlo con un toque "
+                    "personal que muestre que conoces sus gustos, ej. 'ya que te gusta la tecnología, "
+                    "tal vez te interese...' — y adapta el estilo del mensaje a la categoría de lo que "
+                    "recomiendas, igual que con las promociones de arriba):\n" +
+                    "\n".join(f"💡 {t}" for t in personalized)
+                )
+        except Exception as e:
+            logger.error(f"Error buscando recomendaciones personalizadas: {str(e)}")
+
+    if not parts:
+        return ""
+    return "\n\n--- CONTENIDO PROMOCIONAL DISPONIBLE ---\n" + "\n\n".join(parts) + "\n---"
+
+
 async def generate_response(
     user_message: str,
     user_name: str,
     conversation_history: list[dict],
     user_profile: str = "",
     active_order_context: str = "",   # ← NUEVO: contexto del pedido activo si existe
+    db=None,                          # ← NUEVO: para promociones por prioridad + personalizadas
 ) -> str:
     client = _get_groq_client()
     intent = classify_intent(user_message)
@@ -167,6 +223,15 @@ async def generate_response(
 
     if user_profile:
         system_content += f"\n\nPERFIL DEL USUARIO: {user_profile}"
+
+    # ── Promoción por prioridad + recomendaciones personalizadas ────
+    # Se agregan como contenido DISPONIBLE, no como orden — el prompt le
+    # deja al modelo la decisión de si encaja mencionarlo o no, para
+    # que nunca se sienta forzado ni repetitivo.
+    if db is not None:
+        promo_block = _build_promotions_block(db, user_profile)
+        if promo_block:
+            system_content += promo_block
 
     messages = [{"role": "system", "content": system_content}]
 

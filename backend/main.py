@@ -34,12 +34,11 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle
+from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle, delivery_management
 from routers import webhook
 from routers.api    import router as api_router
 from routers.orders import router as orders_router
 from routers.auth   import router as auth_router
-from routers.uploads import router as uploads_router
 from services.rag   import load_stores_to_rag
 from services.analytics import get_weekly_summary
 from services.auth  import create_default_admin
@@ -96,17 +95,10 @@ app.include_router(webhook.router)
 app.include_router(api_router)
 app.include_router(orders_router)
 app.include_router(auth_router)
-app.include_router(uploads_router)
 
 static_path = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_path, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_path), name="static")
-
-# Carpeta de imágenes subidas por el panel (Locales, Zonas, Eventos,
-# Sorteos, Conocimiento) — vive en el Volume persistente de Railway,
-# montado en settings.UPLOAD_DIR, para que no se pierda en cada redeploy.
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 @app.get("/")
 async def root(): return {"status": "online", "app": settings.APP_NAME}

@@ -172,6 +172,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         user_name=user_name,
         conversation_history=history,
         user_profile=profile_text,
+        db=db,
     )
 
     # Si el cliente mencionó una tienda, evento o sorteo específico y

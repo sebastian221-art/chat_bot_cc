@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react'
 import {
   getAnalyticsSummary, getTopStores, getTopWords,
-  getTopCategories, getAnalyticsHeatmap, getAnalyticsInsights,
+  getTopCategories, getAnalyticsHeatmap, getAnalyticsInsights, getZoneStats,
 } from '@/lib/api'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, Radar
 } from 'recharts'
-import { TrendingUp, TrendingDown, Store, Hash, Tag, Lightbulb, AlertTriangle, Star, Clock } from 'lucide-react'
+import { TrendingUp, TrendingDown, Store, Hash, Tag, Lightbulb, AlertTriangle, Star, Clock, MapPin, Flame } from 'lucide-react'
 
 const DAYS_OPTIONS = [7, 14, 30]
 
@@ -20,6 +20,7 @@ export default function AnalyticsPage() {
   const [topWords, setTopWords]   = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [insights, setInsights]   = useState<any[]>([])
+  const [zoneStats, setZoneStats] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
@@ -30,12 +31,14 @@ export default function AnalyticsPage() {
       getTopWords(days),
       getTopCategories(days),
       getAnalyticsInsights(),
-    ]).then(([s, st, tw, cats, ins]) => {
+      getZoneStats(),
+    ]).then(([s, st, tw, cats, ins, zs]) => {
       setSummary(s)
       setTopStores(st)
       setTopWords(tw)
       setCategories(cats)
       setInsights(ins)
+      setZoneStats(zs)
     }).catch(console.error)
     .finally(() => setLoading(false))
   }, [days])
@@ -192,6 +195,41 @@ export default function AnalyticsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Zonas con más tráfico — de los escaneos QR de navegación */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+        <h2 className="text-white font-semibold mb-1 flex items-center gap-2">
+          <MapPin size={15} className="text-cyan-400" /> Zonas con más tráfico
+        </h2>
+        <p className="text-zinc-500 text-xs mb-5">
+          Cuántas veces se escaneó el QR de cada zona — tráfico real dentro del mall
+        </p>
+        {zoneStats.length === 0 ? (
+          <p className="text-zinc-600 text-sm text-center py-8">
+            Sin escaneos todavía — asegúrate de que los códigos QR de las zonas ya estén impresos y pegados en el mall
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {zoneStats.slice(0, 8).map((z: any, i: number) => {
+              const max = zoneStats[0].scans
+              const pct = Math.round((z.scans / max) * 100)
+              return (
+                <div key={z.zone_code}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-white font-medium flex items-center gap-1.5">
+                      {i === 0 && <Flame size={11} className="text-orange-400" />} Zona {z.zone_code}
+                    </span>
+                    <span className="text-zinc-500">{z.scans} escaneos</span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-cyan-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Palabras más buscadas */}
