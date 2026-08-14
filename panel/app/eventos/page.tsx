@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEvents, createEvent, updateEvent, deleteEvent, exportEvents, importEvents, EventPayload } from '@/lib/api'
 import Modal from '@/components/Modal'
-import EntityPhotoGallery from '@/components/EntityPhotoGallery'
+import ImageUpload from '@/components/ImageUpload'
 import { Plus, Pencil, Trash2, RefreshCw, Calendar, Download, Upload } from 'lucide-react'
 
 const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3, photo_url: '' }
@@ -82,7 +82,7 @@ export default function EventosPage() {
   }
 
   const f = (key: keyof EventPayload) => ({
-    value: form[key],
+    value: form[key] as string,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm(p => ({ ...p, [key]: e.target.value })),
   })
@@ -281,7 +281,12 @@ export default function EventosPage() {
           </div>
 
           <div>
-            <EntityPhotoGallery entityType="event" entityId={editing} accent="indigo" />
+            <ImageUpload
+              value={form.photo_url || ''}
+              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
+              label="Foto / afiche del evento"
+              accent="indigo"
+            />
           </div>
 
           <div>
