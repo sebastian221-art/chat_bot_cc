@@ -86,6 +86,20 @@ def build_ask_which_store_message() -> str:
     )
 
 
+def build_ask_which_store_management_message() -> str:
+    """
+    Igual que build_ask_which_store_message, pero para cuando el cliente
+    pidió EXPLÍCITAMENTE gestión completa (no solo el contacto) — el
+    texto es distinto a propósito, para poder reconocer después (cuando
+    el cliente solo responda el nombre de la tienda) que debe continuar
+    con el flujo completo de carta + datos, no con la transferencia simple.
+    """
+    return (
+        "¡Con gusto te ayudo a gestionar tu pedido! 🛍️ ¿De qué tienda o restaurante quieres pedir? "
+        "Dime el nombre y arrancamos con todo el proceso — te pido los datos y armamos tu pedido juntos."
+    )
+
+
 # ── Petición directa del número de una tienda ───────────────────────
 # Distinto de "quiero pedir de X" — aquí la persona pregunta puntualmente
 # por el número/teléfono, sin necesariamente enmarcarlo como un pedido

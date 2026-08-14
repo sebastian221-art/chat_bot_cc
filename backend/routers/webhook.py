@@ -47,6 +47,7 @@ from services.store_transfer import (
     find_store_by_message,
     build_transfer_message,
     build_ask_which_store_message,
+    build_ask_which_store_management_message,
     is_phone_request_intent,
     build_phone_info_message,
 )
@@ -211,7 +212,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             # momento en que se le muestra el menú al cliente.
             photo = store.get_photo_by_label("carta")
             return {"text": text, "image_url": photo, "location": None}
-        return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
+        return {"text": build_ask_which_store_management_message(), "image_url": None, "location": None}
 
     if is_delivery_intent(message_text):
         if store:
@@ -220,7 +221,14 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
 
     # También intenta resolver tienda si el mensaje anterior fue
-    # "¿de qué tienda quieres pedir?" y ahora el cliente solo dice el nombre
+    # "¿de qué tienda quieres pedir?" — primero revisamos si esa
+    # pregunta vino de una GESTIÓN completa (para continuar el flujo
+    # correcto), y solo si no, caemos a la transferencia simple.
+    if store and _last_bot_message_was_management_ask(db, phone_number):
+        text = await start_management(db, phone_number, store)
+        photo = store.get_photo_by_label("carta")
+        return {"text": text, "image_url": photo, "location": None}
+
     if store and _last_bot_message_was_ask(db, phone_number):
         _log_delivery_transfer(db, phone_number, store.name)
         return {"text": build_transfer_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
@@ -290,6 +298,25 @@ def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
     if not last:
         return False
     return "de qué tienda" in last.message.lower() or "qué restaurante" in last.message.lower()
+
+
+def _last_bot_message_was_management_ask(db: Session, phone_number: str) -> bool:
+    """
+    Igual que _last_bot_message_was_ask, pero reconoce específicamente
+    cuando la pregunta "¿de qué tienda?" vino de una GESTIÓN completa
+    (no de una mención simple) — usa una frase que solo aparece en ese
+    mensaje ("gestionar tu pedido"), para no confundirse con la versión
+    simple que hace la misma pregunta con otras palabras.
+    """
+    last = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number, Conversation.role.in_(["assistant", "admin"]))
+        .order_by(Conversation.timestamp.desc())
+        .first()
+    )
+    if not last:
+        return False
+    return "gestionar tu pedido" in last.message.lower()
 
 
 def _last_bot_message_was_zone_ask(db: Session, phone_number: str) -> bool:

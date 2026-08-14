@@ -363,7 +363,14 @@ def is_delivery_management_intent(message: str) -> bool:
     la segunda dispara el flujo completo de recolección de datos.
     """
     msg = message.lower()
-    return any(k in msg for k in MANAGEMENT_KEYWORDS)
+    if any(k in msg for k in MANAGEMENT_KEYWORDS):
+        return True
+    # Respaldo más flexible: cualquier mensaje que combine la raíz
+    # "gestion" (gestionar/gestiona/gestiones/gestión) con pedido o
+    # domicilio, sin importar el orden exacto de las palabras — para
+    # no depender de una lista infinita de frases exactas (ej. "quiero
+    # que TÚ ME gestiones el pedido" no calzaba con ninguna frase fija).
+    return "gestion" in msg and any(k in msg for k in ("pedido", "domicilio", "orden"))
 
 
 def _safe_json_parse(raw: str) -> dict | None:
