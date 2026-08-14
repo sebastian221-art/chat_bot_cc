@@ -452,6 +452,17 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
 
     created, updated, skipped, errors = 0, 0, 0, []
 
+    # Traemos TODAS las tiendas existentes de una sola vez, en vez de
+    # consultar la base de datos una vez por cada fila del CSV — con
+    # archivos grandes (ej. 138 locales), 138 idas y vueltas separadas
+    # a la base de datos era otra causa real de que la importación
+    # tardara tanto que Railway cortaba la conexión (el mismo síntoma
+    # de "Failed to fetch" / error de CORS, pero por esta razón extra).
+    existing_stores = {
+        (s.name, s.local_number): s
+        for s in db.query(Store).all()
+    }
+
     for i, raw in enumerate(raw_rows, start=2):  # fila 2 = primera fila de datos (1 es el header)
         mapped = _map_row(raw, "store")
         if not mapped.get("name"):
@@ -459,11 +470,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
             errors.append(f"Fila {i}: sin nombre, se saltó")
             continue
 
-        existing = (
-            db.query(Store)
-            .filter(Store.name == mapped["name"], Store.local_number == mapped.get("local_number"))
-            .first()
-        )
+        existing = existing_stores.get((mapped["name"], mapped.get("local_number")))
         if existing:
             for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url", "extra_info"]:
                 if mapped.get(field):
@@ -554,6 +561,7 @@ async def import_events(file: UploadFile = File(...), db: Session = Depends(get_
     raw_rows = _read_csv_upload(content)
 
     created, updated, skipped, errors = 0, 0, 0, []
+    existing_events = {(e.name, e.date): e for e in db.query(Event).all()}
 
     for i, raw in enumerate(raw_rows, start=2):
         mapped = _map_row(raw, "event")
@@ -562,7 +570,7 @@ async def import_events(file: UploadFile = File(...), db: Session = Depends(get_
             errors.append(f"Fila {i}: falta nombre o fecha, se saltó")
             continue
 
-        existing = db.query(Event).filter(Event.name == mapped["name"], Event.date == mapped["date"]).first()
+        existing = existing_events.get((mapped["name"], mapped["date"]))
         priority = int(mapped["priority"]) if str(mapped.get("priority", "")).isdigit() else 3
         priority = max(1, min(5, priority))
 
@@ -652,6 +660,7 @@ async def import_knowledge(file: UploadFile = File(...), db: Session = Depends(g
     raw_rows = _read_csv_upload(content)
 
     created, updated, skipped, errors = 0, 0, 0, []
+    existing_knowledge = {k.title: k for k in db.query(KnowledgeEntry).all()}
 
     for i, raw in enumerate(raw_rows, start=2):
         mapped = _map_row(raw, "knowledge")
@@ -660,7 +669,7 @@ async def import_knowledge(file: UploadFile = File(...), db: Session = Depends(g
             errors.append(f"Fila {i}: falta título o contenido, se saltó")
             continue
 
-        existing = db.query(KnowledgeEntry).filter(KnowledgeEntry.title == mapped["title"]).first()
+        existing = existing_knowledge.get(mapped["title"])
         if existing:
             existing.content = mapped["content"]
             updated += 1
