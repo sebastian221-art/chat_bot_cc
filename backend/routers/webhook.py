@@ -47,6 +47,8 @@ from services.store_transfer import (
     find_store_by_message,
     build_transfer_message,
     build_ask_which_store_message,
+    is_phone_request_intent,
+    build_phone_info_message,
 )
 
 settings = get_settings()
@@ -182,6 +184,12 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             text = await build_navigation_response(last_zone, store, user_name)
             zone_photo = _pick_entity_photo(db, "zone", last_zone.id, message_text)
             return {"text": text, "image_url": _pick_store_photo(store, message_text) or zone_photo, "location": None}
+
+    # ── Petición directa del número de una tienda ────────────────────
+    # Se revisa antes que domicilios porque "número de X" no siempre
+    # implica querer pedir — puede ser cualquier consulta.
+    if is_phone_request_intent(message_text) and store:
+        return {"text": build_phone_info_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
 
     # ── Gestión completa de domicilio ────────────────────────────────
     # Prioridad alta: si ya hay una gestión en curso para este número,
