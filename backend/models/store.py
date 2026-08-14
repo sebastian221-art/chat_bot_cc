@@ -16,6 +16,7 @@ class Store(Base):
     location_hint = Column(String(200), nullable=True)
     tags          = Column(String(300), nullable=True)
     photo_url     = Column(String(500), nullable=True)  # link a una foto del local (externo — ver nota en el panel)
+    extra_info    = Column(Text, nullable=True)  # campo libre: carta, cartelera, o cualquier info adicional del local
     active        = Column(Boolean, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
@@ -33,6 +34,7 @@ class Store(Base):
             "location_hint": self.location_hint,
             "tags": self.tags,
             "photo_url": self.photo_url,
+            "extra_info": self.extra_info,
             "active": self.active,
         }
 
@@ -62,4 +64,6 @@ class Store(Base):
             parts.append(f"Ubicación: {self.location_hint}")
         if self.tags:
             parts.append(f"Palabras clave: {self.tags}")
+        if self.extra_info:
+            parts.append(f"Información adicional: {self.extra_info}")
         return " | ".join(parts)

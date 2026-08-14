@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getEvents, createEvent, updateEvent, deleteEvent, exportEvents, importEvents, EventPayload } from '@/lib/api'
 import Modal from '@/components/Modal'
+import ImageUpload from '@/components/ImageUpload'
 import { Plus, Pencil, Trash2, RefreshCw, Calendar, Download, Upload } from 'lucide-react'
 
 const EMPTY: EventPayload = { name: '', date: '', time: '', location: '', description: '', priority: 3, photo_url: '' }
@@ -280,13 +281,12 @@ export default function EventosPage() {
           </div>
 
           <div>
-            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
-              Link de la foto <span className="text-zinc-600 font-normal">(opcional — afiche o imagen del evento)</span>
-            </label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="https://..." {...f('photo_url')} />
-            {form.photo_url && (
-              <img src={form.photo_url} alt="Vista previa" className="mt-2 h-24 rounded-xl object-cover border border-zinc-700" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            )}
+            <ImageUpload
+              value={form.photo_url || ''}
+              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
+              label="Foto / afiche del evento"
+              accent="indigo"
+            />
           </div>
 
           <div>

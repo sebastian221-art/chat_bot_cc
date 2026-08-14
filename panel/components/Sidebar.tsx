@@ -1,14 +1,16 @@
 'use client'
-// 📄 ARCHIVO: panel/components/Sidebar.tsx  ← REEMPLAZA EL TUYO
-// CAMBIOS: muestra usuario logueado, botón logout, oculta secciones según rol
+// 📄 ARCHIVO: panel/components/Sidebar.tsx
+// LIMPIEZA: se eliminaron los paneles por tipo de local (Restaurantes,
+// Ropa y Moda, Farmacias, Cine, Happy City, Parqueadero) y el link
+// duplicado "Todos los locales" — ya no aplica, todo se maneja desde
+// la página única de Locales, y no hay cuentas de acceso por local.
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Store, MessageSquare, CalendarDays,
   BarChart2, ShoppingBag, FileText, ChevronRight,
-  Utensils, Shirt, Pill, Film, Gamepad2, Car,
-  Building2, ChevronDown, LogOut, Users, Shield, BookOpen, QrCode, Gift,
+  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift,
 } from 'lucide-react'
 import { getUser, clearAuth, getRoleLabel, type AuthUser } from '@/lib/auth'
 
@@ -27,24 +29,13 @@ const TOP_LINKS = [
   { href: '/usuarios',       label: 'Usuarios',         icon: Users,           roles: ['admin'] },
 ]
 
-const PANEL_LINKS = [
-  { href: '/panel/restaurante',     label: 'Restaurantes', icon: Utensils, color: '#f97316', roles: ['admin'] },
-  { href: '/panel/tienda',          label: 'Ropa y Moda',  icon: Shirt,    color: '#a78bfa', roles: ['admin'] },
-  { href: '/panel/farmacia',        label: 'Farmacias',    icon: Pill,     color: '#34d399', roles: ['admin'] },
-  { href: '/panel/cine',            label: 'Cine',         icon: Film,     color: '#60a5fa', roles: ['admin'] },
-  { href: '/panel/entretenimiento', label: 'Happy City',   icon: Gamepad2, color: '#f472b6', roles: ['admin'] },
-  { href: '/panel/parqueadero',     label: 'Parqueadero',  icon: Car,      color: '#fbbf24', roles: ['admin', 'parqueadero'] },
-]
-
 export default function Sidebar() {
-  const pathname    = usePathname()
-  const router      = useRouter()
-  const [user, setUser]           = useState<AuthUser | null>(null)
-  const [panelsOpen, setPanelsOpen] = useState(false)
+  const pathname = usePathname()
+  const router    = useRouter()
+  const [user, setUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
     setUser(getUser())
-    setPanelsOpen(pathname.startsWith('/panel') || pathname.startsWith('/locales'))
   }, [pathname])
 
   function handleLogout() {
@@ -57,12 +48,7 @@ export default function Sidebar() {
   }
 
   const role = user?.role || 'admin'
-
-  // Para rol "local": mostrar solo el link a su panel propio
-  const isLocal = role === 'local'
-
   const visibleTopLinks = TOP_LINKS.filter(l => l.roles.includes(role))
-  const visiblePanelLinks = PANEL_LINKS.filter(l => l.roles.includes(role))
 
   return (
     <aside className="w-64 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col">
@@ -82,8 +68,6 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-
-        {/* Links principales filtrados por rol */}
         {visibleTopLinks.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
@@ -96,68 +80,6 @@ export default function Sidebar() {
             </Link>
           )
         })}
-
-        {/* Sección paneles de locales — solo para admin, supervisor y parqueadero */}
-        {!isLocal && (
-          <>
-            <div className="pt-4 pb-1">
-              <p className="px-3 text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
-                Paneles de locales
-              </p>
-            </div>
-
-            {(role === 'admin' || role === 'supervisor') && (
-              <Link href="/locales"
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-                  ${pathname === '/locales' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}>
-                <Building2 size={16} />
-                <span className="flex-1">Todos los locales</span>
-                {pathname === '/locales' && <ChevronRight size={14} className="opacity-60" />}
-              </Link>
-            )}
-
-            {visiblePanelLinks.length > 0 && (
-              <>
-                <button onClick={() => setPanelsOpen(v => !v)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-white hover:bg-zinc-800">
-                  <span className="w-4 h-4" />
-                  <span className="flex-1 text-left text-xs text-zinc-500">Gestionar por tipo</span>
-                  <ChevronDown size={13} className={`transition-transform duration-200 ${panelsOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {panelsOpen && (
-                  <div className="ml-3 pl-3 border-l border-zinc-800 space-y-0.5">
-                    {visiblePanelLinks.map(({ href, label, icon: Icon, color }) => {
-                      const active = pathname.startsWith(href)
-                      return (
-                        <Link key={href} href={href}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all
-                            ${active ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white hover:bg-zinc-800/70'}`}>
-                          <Icon size={13} style={{ color: active ? color : undefined }} />
-                          <span className="flex-1">{label}</span>
-                          {active && <ChevronRight size={11} className="opacity-50" />}
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {/* Para rol local: acceso directo a su panel */}
-        {isLocal && user?.store_type && user?.store_id && (
-          <Link
-            href={`/panel/${user.store_type}/${user.store_id}`}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mt-2
-              ${pathname.includes(user.store_id) ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
-          >
-            <Building2 size={16} />
-            <span className="flex-1">{user.store_name || 'Mi local'}</span>
-            <ChevronRight size={14} className="opacity-60" />
-          </Link>
-        )}
       </nav>
 
       {/* Footer: usuario + logout */}

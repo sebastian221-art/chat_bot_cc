@@ -53,26 +53,14 @@ function _checkAccess(
 
   // supervisor: solo estas rutas
   if (role === 'supervisor') {
-    const allowed = ['/dashboard', '/conversaciones', '/eventos', '/tiendas', '/locales']
+    const allowed = ['/dashboard', '/conversaciones', '/eventos', '/tiendas']
     if (allowed.some(p => pathname.startsWith(p))) return false
     return true   // todo lo demás: sin acceso
   }
 
-  // parqueadero: solo su panel
-  if (role === 'parqueadero') {
-    if (pathname.startsWith('/panel/parqueadero')) return false
-    return true
-  }
-
-  // local: solo su panel específico
-  if (role === 'local') {
-    if (storeType && storeId && pathname.startsWith(`/panel/${storeType}/${storeId}`)) {
-      return false
-    }
-    return true
-  }
-
-  // Desconocido → sin acceso
+  // Ya no existen paneles específicos por tipo de local ni por
+  // parqueadero — el panel administrativo es de uso exclusivo del
+  // personal del Centro Comercial (admin/supervisor).
   return true
 }
 

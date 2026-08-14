@@ -9,18 +9,11 @@ import { UserPlus, Pencil, Trash2, X, Check, Shield, Store, Eye, EyeOff, Refresh
 const ROLES = [
   { value: 'admin',       label: 'Administrador',  desc: 'Acceso total' },
   { value: 'supervisor',  label: 'Supervisor CC',   desc: 'Dashboard, eventos, tiendas' },
-  { value: 'local',       label: 'Dueño de local',  desc: 'Solo su panel de pedidos y menú' },
-  { value: 'parqueadero', label: 'Parqueadero',      desc: 'Solo panel de parqueadero' },
-]
-const STORE_TYPES = [
-  { value: 'restaurante', label: 'Restaurante' }, { value: 'tienda', label: 'Tienda / Ropa' },
-  { value: 'farmacia', label: 'Farmacia' }, { value: 'cine', label: 'Cine' },
-  { value: 'entretenimiento', label: 'Entretenimiento' },
 ]
 const ROLE_COLORS: Record<string, string> = {
-  admin: '#6366f1', supervisor: '#0ea5e9', local: '#10b981', parqueadero: '#f59e0b',
+  admin: '#6366f1', supervisor: '#0ea5e9',
 }
-const BLANK: UserIn = { username: '', full_name: '', password: '', role: 'local', store_name: '', store_type: 'restaurante', store_id: '', is_active: true }
+const BLANK: UserIn = { username: '', full_name: '', password: '', role: 'supervisor', store_name: '', store_type: '', store_id: '', is_active: true }
 
 function slugify(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -213,25 +206,6 @@ export default function UsuariosPage() {
                   ))}
                 </div>
               </Field>
-              {form.role === 'local' && (
-                <div style={{ background: '#0c0c0e', border: '1px solid #27272a', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <p style={{ color: '#6366f1', fontSize: 11, fontWeight: 600, margin: 0, textTransform: 'uppercase' }}>Configuración del local</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <Field label="Nombre del local *">
-                      <input value={form.store_name || ''} onChange={e => handleFormChange('store_name', e.target.value)} placeholder="ej: El Corral" style={inputSt} />
-                    </Field>
-                    <Field label="Tipo de local">
-                      <select value={form.store_type || 'restaurante'} onChange={e => handleFormChange('store_type', e.target.value)} style={inputSt}>
-                        {STORE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </Field>
-                  </div>
-                  <Field label="ID de URL (auto-generado, editable)">
-                    <input value={form.store_id || ''} onChange={e => handleFormChange('store_id', e.target.value)} placeholder="ej: el-corral" style={inputSt} />
-                    <p style={{ color: '#52525b', fontSize: 10, marginTop: 4 }}>Accede a: /panel/{form.store_type || 'restaurante'}/{form.store_id || '...'}</p>
-                  </Field>
-                </div>
-              )}
               {modal === 'edit' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button type="button" onClick={() => handleFormChange('is_active', !form.is_active)}

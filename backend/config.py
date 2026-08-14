@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     APP_NAME: str = "Chatbot Mall El Puente"
     DEBUG: bool = True
 
+    # Subida de archivos (fotos de locales, zonas, eventos, sorteos, conocimiento)
+    # Debe coincidir con el "Mount path" del Volume creado en Railway.
+    UPLOAD_DIR: str = "/data/uploads"
+    # URL pública base del backend — para armar el link completo de cada foto.
+    # Railway la expone automáticamente como variable de entorno del servicio.
+    PUBLIC_BASE_URL: str = "https://chatbotcc-production.up.railway.app"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

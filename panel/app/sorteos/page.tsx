@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getRaffles, createRaffle, updateRaffle, toggleRaffle, deleteRaffle, Raffle } from '@/lib/api'
 import Modal from '@/components/Modal'
+import ImageUpload from '@/components/ImageUpload'
 import { Gift, Plus, Pencil, Trash2, RefreshCw, Power, Calendar, MapPin } from 'lucide-react'
 
 const EMPTY: Raffle = { name: '', prize: '', requirements: '', end_date: '', location: '', description: '', priority: 3, photo_url: '' }
@@ -195,13 +196,12 @@ export default function SorteosPage() {
             <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 resize-none h-16" {...field('description')} />
           </div>
           <div>
-            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
-              Link de la foto <span className="text-zinc-600 font-normal">(opcional — afiche o imagen del sorteo)</span>
-            </label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" placeholder="https://..." {...field('photo_url')} />
-            {form.photo_url && (
-              <img src={form.photo_url} alt="Vista previa" className="mt-2 h-24 rounded-xl object-cover border border-zinc-700" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            )}
+            <ImageUpload
+              value={form.photo_url || ''}
+              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
+              label="Foto / afiche del sorteo"
+              accent="amber"
+            />
           </div>
           <div>
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">

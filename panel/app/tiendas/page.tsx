@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
+import ImageUpload from '@/components/ImageUpload'
 import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload, ImageOff, MapPin, Phone, Clock } from 'lucide-react'
 
 const CATEGORIES = [
@@ -17,7 +18,7 @@ const FLOORS = ['Sótano','Piso 1','Piso 2','Piso 3','Piso 1 y Piso 2']
 
 const EMPTY: StorePayload = {
   name:'', local_number:'', floor:'Piso 1', category:'', description:'',
-  schedule:'', phone:'', location_hint:'', tags:'', photo_url:'',
+  schedule:'', phone:'', location_hint:'', tags:'', photo_url:'', extra_info:'',
 }
 
 export default function TiendasPage() {
@@ -255,18 +256,23 @@ export default function TiendasPage() {
           </div>
 
           <div className="col-span-2">
+            <ImageUpload
+              value={form.photo_url}
+              onChange={url => setForm(p => ({ ...p, photo_url: url }))}
+              label="Foto del local"
+              accent="indigo"
+            />
+          </div>
+
+          <div className="col-span-2">
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">
-              Link de la foto <span className="text-zinc-600 font-normal">(pega un link público de una imagen)</span>
+              Información adicional <span className="text-zinc-600 font-normal">(carta, cartelera, promociones — lo que aplique a este local)</span>
             </label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="https://..." {...field('photo_url')} />
-            {form.photo_url && (
-              <img
-                src={form.photo_url}
-                alt="Vista previa"
-                className="mt-2 h-24 rounded-xl object-cover border border-zinc-700"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-              />
-            )}
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 resize-none h-24"
+              placeholder="ej: Carta del restaurante, cartelera de películas de la semana, promociones vigentes..."
+              {...field('extra_info')}
+            />
           </div>
 
           <div>

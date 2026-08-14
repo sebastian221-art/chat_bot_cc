@@ -53,6 +53,7 @@ class StoreIn(BaseModel):
     location_hint: Optional[str] = ""
     tags: Optional[str] = ""
     photo_url: Optional[str] = ""
+    extra_info: Optional[str] = ""
 
 class EventIn(BaseModel):
     name: str
@@ -140,6 +141,7 @@ FIELD_ALIASES = {
         "location_hint": ["location_hint", "ubicacion", "ubicacion_hint", "ubicacion_exacta"],
         "tags":          ["tags", "etiquetas", "palabras_clave"],
         "photo_url":     ["photo_url", "foto", "foto_url", "imagen", "url_foto"],
+        "extra_info":    ["extra_info", "carta", "cartelera", "informacion_adicional", "info_adicional"],
     },
     "event": {
         "name":        ["name", "nombre", "evento"],
@@ -413,7 +415,7 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
 @router.get("/stores/export")
 def export_stores(db: Session = Depends(get_db)):
     stores = db.query(Store).order_by(Store.name).all()
-    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]
+    fieldnames = ["name", "local_number", "floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url", "extra_info"]
     rows = [{k: (getattr(s, k) or "") for k in fieldnames} for s in stores]
     return _csv_response(rows, fieldnames, "locales.csv")
 
@@ -438,7 +440,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
             .first()
         )
         if existing:
-            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url"]:
+            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "photo_url", "extra_info"]:
                 if mapped.get(field):
                     setattr(existing, field, mapped[field])
             updated += 1
@@ -454,6 +456,7 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
                 location_hint=mapped.get("location_hint", ""),
                 tags=mapped.get("tags", ""),
                 photo_url=mapped.get("photo_url", ""),
+                extra_info=mapped.get("extra_info", ""),
                 active=True,
             ))
             created += 1

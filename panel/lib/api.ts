@@ -151,6 +151,12 @@ export const getAnalyticsInsights = ()         => req(`/analytics/insights`)
 
 // ── Transferencias de Domicilio (reemplaza el flujo viejo de pedidos) ──
 export const getDeliveryTransferStats = () => req('/delivery-transfers/stats')
+
+// ── Subida real de imágenes (Locales, Zonas, Eventos, Sorteos, Conocimiento) ──
+export const uploadImage = async (file: File): Promise<string> => {
+  const result = await uploadFile('/uploads/image', file)
+  return result.url
+}
 export const getDeliveryTransfers     = () => req('/delivery-transfers')
 
 // ── Sorteos y Campañas (distinto de Eventos) ────────────────────────
@@ -215,7 +221,7 @@ export interface UserIn {
 export interface StorePayload {
   id?: number; name: string; local_number: string; floor: string; category: string
   description: string; schedule: string
-  phone: string; location_hint: string; tags: string; photo_url: string
+  phone: string; location_hint: string; tags: string; photo_url: string; extra_info: string
 }
 export interface EventPayload {
   id?: number; name: string; date: string; time: string
