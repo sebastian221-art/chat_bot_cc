@@ -76,6 +76,8 @@ class Store(Base):
             parts.append(f"Descripción: {self.description}")
         if self.schedule:
             parts.append(f"Horario: {self.schedule}")
+        if self.phone:
+            parts.append(f"Teléfono: {self.phone}")
         if self.location_hint:
             parts.append(f"Ubicación: {self.location_hint}")
         if self.tags:

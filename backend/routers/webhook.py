@@ -118,6 +118,31 @@ def _pick_entity_photo(db, entity_type: str, entity_id: int, message_text: str) 
     return get_entity_photo(db, entity_type, entity_id, default_label)
 
 
+def _find_recently_discussed_store(db, phone_number: str, current_store):
+    """
+    Si el mensaje actual no menciona ninguna tienda por nombre (ej. un
+    seguimiento como "¿tienes una foto?" sin repetir de cuál tienda),
+    busca en los últimos mensajes cuál se estaba discutiendo — así la
+    foto que se manda sigue coincidiendo con el tema real de la
+    conversación, igual que ya hace el texto de la IA (que sí ve el
+    historial completo).
+    """
+    if current_store:
+        return current_store
+    recent = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number)
+        .order_by(Conversation.timestamp.desc())
+        .limit(6)
+        .all()
+    )
+    for r in recent:
+        s = find_store_by_message(db, r.message)
+        if s:
+            return s
+    return None
+
+
 async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> dict:
     """
     Decide y genera la respuesta del bot para un mensaje entrante.
@@ -228,10 +253,13 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     # Si el cliente mencionó una tienda, evento o sorteo específico y
     # tiene foto cargada en el panel, la mandamos junto con la respuesta
     # — usando la etiqueta correcta según lo que haya preguntado
-    # (ej. "premio" si pregunta qué se gana en un sorteo).
+    # (ej. "premio" si pregunta qué se gana en un sorteo). Si el mensaje
+    # actual no menciona ninguna tienda (ej. "¿tienes una foto?" como
+    # seguimiento), buscamos en los últimos mensajes cuál se discutía.
     image_url = None
-    if store:
-        image_url = _pick_store_photo(store, message_text)
+    photo_store = _find_recently_discussed_store(db, phone_number, store)
+    if photo_store:
+        image_url = _pick_store_photo(photo_store, message_text)
     if not image_url:
         event = find_event_by_message(db, message_text)
         if event:
