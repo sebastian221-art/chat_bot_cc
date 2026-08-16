@@ -46,17 +46,29 @@ def find_store_by_message(db: Session, message: str) -> Store | None:
     if len(exact_matches) > 1:
         return None
 
-    # 2) Respaldo: coincidencia por una palabra distintiva del nombre
+    # 2) Respaldo: coincidencia por palabras distintivas del nombre
     #    (ej. "Hamburgo" encuentra "Hamburgo 1718", "zirus" encuentra "Zirus Pizza")
-    word_matches = []
+    #    IMPORTANTE: contamos CUÁNTAS palabras coinciden por tienda, y
+    #    preferimos la que más comparte — antes, con que 2 tiendas
+    #    compartieran aunque fuera 1 sola palabra cualquiera, se rendía
+    #    y no encontraba nada (ej. "12B Burguer" no encontraba "12B
+    #    Burguer Angus" por una ambigüedad menor con otra tienda).
+    candidates = []
     for s in stores:
         sig_words = _significant_words(s.name)
-        if any(_contains_word(msg, w) for w in sig_words):
-            word_matches.append(s)
+        matched = [w for w in sig_words if _contains_word(msg, w)]
+        if matched:
+            candidates.append((s, len(matched)))
 
-    if len(word_matches) == 1:
-        return word_matches[0]
-    return None
+    if not candidates:
+        return None
+
+    max_score = max(score for _, score in candidates)
+    best = [s for s, score in candidates if score == max_score]
+
+    if len(best) == 1:
+        return best[0]
+    return None  # empate real en la coincidencia más fuerte — ahí sí es ambiguo de verdad
 
 
 def build_transfer_message(store: Store) -> str:

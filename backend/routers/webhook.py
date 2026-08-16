@@ -129,12 +129,18 @@ def _find_recently_discussed_store(db, phone_number: str, current_store):
     foto que se manda sigue coincidiendo con el tema real de la
     conversación, igual que ya hace el texto de la IA (que sí ve el
     historial completo).
+
+    IMPORTANTE: revisamos SOLO lo que escribió el cliente (role="user"),
+    nunca las respuestas del bot — el bot usa muletillas como "¡Claro!"
+    todo el tiempo, y si existe una tienda real llamada "Claro" (el
+    operador de telefonía, por ejemplo), esa interjección se confundía
+    con el nombre de la tienda.
     """
     if current_store:
         return current_store
     recent = (
         db.query(Conversation)
-        .filter(Conversation.phone_number == phone_number)
+        .filter(Conversation.phone_number == phone_number, Conversation.role == "user")
         .order_by(Conversation.timestamp.desc())
         .limit(6)
         .all()
