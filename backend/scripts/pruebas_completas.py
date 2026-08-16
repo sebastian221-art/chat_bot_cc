@@ -17,8 +17,13 @@ el detalle completo.
 import httpx
 import time
 import sys
+import os
 
-BASE = "http://localhost:8000"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import get_settings
+
+settings = get_settings()
+BASE = settings.PUBLIC_BASE_URL
 PHONE_PREFIX = "test_script_"
 
 # ── Ayudantes ────────────────────────────────────────────────────

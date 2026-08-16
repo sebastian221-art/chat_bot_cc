@@ -243,8 +243,12 @@ async def generate_response(
 ) -> str:
     client = _get_groq_client()
     intent = classify_intent(user_message)
+    print(f"    🔍 TRAZA IA — intención clasificada: '{intent}' → usando prompt '{intent if intent in PROMPTS else 'general'}'")
 
     rag_docs = search_stores(user_message, n_results=8)
+    print(f"    🔍 TRAZA IA — búsqueda RAG general (tiendas/mall): {len(rag_docs)} documento(s) encontrado(s)")
+    for i, doc in enumerate(rag_docs[:8], 1):
+        print(f"       {i}. {doc[:120]}{'...' if len(doc) > 120 else ''}")
 
     system_content = PROMPTS.get(intent, PROMPTS["general"])
 
@@ -264,6 +268,9 @@ async def generate_response(
     # búsqueda, filtrada para que las tiendas no puedan participar,
     # garantiza que esta información SIEMPRE tenga su propio espacio.
     kb_docs = search_knowledge_and_events(user_message, n_results=4)
+    print(f"    🔍 TRAZA IA — búsqueda filtrada (conocimiento/eventos/sorteos): {len(kb_docs)} documento(s) encontrado(s)")
+    for i, doc in enumerate(kb_docs, 1):
+        print(f"       {i}. {doc[:120]}{'...' if len(doc) > 120 else ''}")
     if kb_docs:
         kb_context = "\n\n".join(f"📖 {doc}" for doc in kb_docs)
         system_content += f"\n\n--- BASE DE CONOCIMIENTO / EVENTOS / SORTEOS RELEVANTES ---\n{kb_context}\n---"
@@ -277,11 +284,15 @@ async def generate_response(
     # ubicación o parqueadero — igual que ya hacemos con las promociones.
     if db is not None and intent in ("horario", "ubicacion", "general", "categoria"):
         mall_block = _build_mall_info_block(db)
+        print(f"    🔍 TRAZA IA — info general del mall inyectada: {'SÍ' if mall_block else 'NO (mall_info vacío o intención no aplica)'}")
         if mall_block:
             system_content += mall_block
+    else:
+        print(f"    🔍 TRAZA IA — info general del mall inyectada: NO (intención '{intent}' no la necesita)")
 
     if user_profile:
         system_content += f"\n\nPERFIL DEL USUARIO: {user_profile}"
+    print(f"    🔍 TRAZA IA — perfil de usuario inyectado: {'SÍ' if user_profile else 'NO'}")
 
     # ── Promoción por prioridad + recomendaciones personalizadas ────
     # Se agregan como contenido DISPONIBLE, no como orden — el prompt le
@@ -289,8 +300,11 @@ async def generate_response(
     # que nunca se sienta forzado ni repetitivo.
     if db is not None:
         promo_block = _build_promotions_block(db, user_profile)
+        print(f"    🔍 TRAZA IA — promociones de prioridad alta inyectadas: {'SÍ' if promo_block else 'NO'}")
         if promo_block:
             system_content += promo_block
+
+    print(f"    🔍 TRAZA IA — tamaño total del prompt del sistema: {len(system_content)} caracteres | historial incluido: {min(len(conversation_history), 12)} mensajes | modelo: {settings.GROQ_MODEL}")
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -298,6 +312,8 @@ async def generate_response(
         messages.append({"role": turn["role"], "content": turn["content"]})
 
     messages.append({"role": "user", "content": f"[Usuario: {user_name}] {user_message}"})
+
+    print(f"    🔍 TRAZA IA — llamando a la API de Groq (modelo: {settings.GROQ_MODEL}, {len(messages)} mensajes en el contexto)...")
 
     try:
         completion = await client.chat.completions.create(
@@ -314,9 +330,12 @@ async def generate_response(
             # del <think> se hace después, con _strip_thinking_tags().
         )
         raw = completion.choices[0].message.content or ""
-        return _strip_thinking_tags(raw)
+        limpio = _strip_thinking_tags(raw)
+        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar")
+        return limpio
 
     except Exception as e:
+        print(f"    🔍 TRAZA IA — ❌ ERROR llamando a Groq: {str(e)}")
         logger.error(f"Error Groq API: {str(e)}")
         return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?"
 
