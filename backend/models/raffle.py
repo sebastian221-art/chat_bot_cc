@@ -42,6 +42,7 @@ class Raffle(Base):
     def to_rag_text(self) -> str:
         urgencia = {1: "baja", 2: "baja", 3: "normal", 4: "alta", 5: "máxima"}.get(self.priority, "normal")
         parts = [
+            f"ID: {self.id}",
             f"Sorteo/Campaña: {self.name}",
             f"Premio: {self.prize}",
             f"Prioridad de promoción: {urgencia}",

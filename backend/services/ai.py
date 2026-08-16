@@ -77,24 +77,24 @@ REGLAS SIEMPRE:
 - NUNCA uses tablas (con | o guiones de separación entre columnas) — WhatsApp no las muestra bien. Usa listas simples con guion o texto corrido
 - Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba
 
-MARCA DE TIENDA (instrucción técnica interna — el cliente NUNCA ve esto):
-Al final de tu respuesta, SIEMPRE en una línea completamente aparte, escribe
-esta marca exacta con el ID de la tienda principal de la que trató tu
-respuesta (el número que aparece como "ID:" en la información de tiendas
-de abajo):
-[TIENDA:<id>]
-Si tu respuesta no trató sobre ninguna tienda/local específico (ej. info
-general del mall, saludo, horario general, mascotas, sorteos, o cualquier
-otra cosa sin relación a un local puntual), escribe en su lugar:
-[TIENDA:NINGUNA]
-Esta marca se elimina automáticamente antes de que el cliente vea el
-mensaje — va SIEMPRE, sin excepción, como la última línea de cada respuesta.
+MARCAS DE IDENTIFICACIÓN (instrucción técnica interna — el cliente NUNCA ve esto):
+Al final de tu respuesta, SIEMPRE en 3 líneas completamente aparte (una por
+cada marca, en este orden), escribe con el ID exacto (el número que aparece
+como "ID:" en la información de abajo) de la tienda, evento o sorteo del
+que trató tu respuesta — o NINGUNA si no aplica:
+[TIENDA:<id o NINGUNA>]
+[EVENTO:<id o NINGUNA>]
+[SORTEO:<id o NINGUNA>]
+Ejemplo si hablaste de una tienda: [TIENDA:42] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA]
+Ejemplo si hablaste de un sorteo: [TIENDA:NINGUNA] / [EVENTO:NINGUNA] / [SORTEO:7]
+Estas marcas se eliminan automáticamente antes de que el cliente vea el
+mensaje — van SIEMPRE, las 3, sin excepción, como las últimas líneas.
 
-Sobre preguntas de fotos: si te preguntan si tienes una foto de un local
-específico, nunca respondas de entrada "no tengo foto" — el sistema puede
-adjuntar una automáticamente aunque tú no sepas si existe. Responde algo
-neutral como "te comparto lo que tengo" o simplemente da la información
-pedida sin negar la existencia de la foto."""
+Sobre preguntas de fotos: si te preguntan si tienes una foto de un local,
+evento o sorteo específico, nunca respondas de entrada "no tengo foto" — el
+sistema puede adjuntar una automáticamente aunque tú no sepas si existe.
+Responde algo neutral como "te comparto lo que tengo" o simplemente da la
+información pedida sin negar la existencia de la foto."""
 
 # ── Prompts por intención ─────────────────────────────────────────
 
@@ -260,12 +260,13 @@ async def generate_response(
     active_order_context: str = "",   # ← contexto del pedido activo si existe
     photo_note: str = "",             # ← aviso de que ya se va a adjuntar una foto/ubicación, para que el texto no la contradiga
     db=None,                          # ← para promociones por prioridad + personalizadas
-) -> tuple[str, int | None]:
+) -> tuple[str, int | None, int | None, int | None]:
     """
-    Devuelve (texto_de_respuesta, id_de_tienda_mencionada). El segundo
-    valor viene de la marca [TIENDA:<id>] que la IA agrega internamente
-    — permite saber con certeza de qué tienda habló, sin tener que
-    adivinar por palabras sueltas del mensaje del cliente.
+    Devuelve (texto_de_respuesta, id_tienda, id_evento, id_sorteo). Los
+    3 IDs vienen de las marcas [TIENDA:<id>]/[EVENTO:<id>]/[SORTEO:<id>]
+    que la IA agrega internamente — permite saber con certeza de qué
+    tienda/evento/sorteo habló, sin tener que adivinar por palabras
+    sueltas del mensaje del cliente.
     """
     client = _get_groq_client()
     intent = classify_intent(user_message)
@@ -360,14 +361,14 @@ async def generate_response(
         )
         raw = completion.choices[0].message.content or ""
         limpio = _strip_thinking_tags(raw)
-        limpio, tienda_id = _extract_store_marker(limpio)
-        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda identificada: {tienda_id if tienda_id else 'ninguna'}")
-        return limpio, tienda_id
+        limpio, tienda_id, evento_id, sorteo_id = _extract_entity_markers(limpio)
+        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda: {tienda_id or 'ninguna'} | evento: {evento_id or 'ninguno'} | sorteo: {sorteo_id or 'ninguno'}")
+        return limpio, tienda_id, evento_id, sorteo_id
 
     except Exception as e:
         print(f"    🔍 TRAZA IA — ❌ ERROR llamando a Groq: {str(e)}")
         logger.error(f"Error Groq API: {str(e)}")
-        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?", None
+        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?", None, None, None
 
 
 # ── Helpers para webhook ──────────────────────────────────────────
@@ -664,30 +665,38 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
         return ""
 
 
-def _extract_store_marker(text: str) -> tuple[str, int | None]:
+def _extract_entity_markers(text: str) -> tuple[str, int | None, int | None, int | None]:
     """
-    Busca la marca [TIENDA:<id>] o [TIENDA:NINGUNA] que la IA agrega al
-    final de cada respuesta (ver instrucción en BASE_PERSONA), la quita
-    del texto (el cliente nunca debe verla), y devuelve el ID de tienda
-    que identificó — así, en vez de adivinar por palabras sueltas cuál
-    tienda mencionó el mensaje (frágil: "Juan" vs "Juan Valdez Café",
-    "¡Claro!" vs la tienda "Claro", "12B Burguer" sin encontrar "12B
-    Burguer Angus"), usamos el mismo criterio inteligente que la IA ya
-    usó para escribir la respuesta — una sola fuente de verdad.
+    Busca las 3 marcas [TIENDA:...], [EVENTO:...], [SORTEO:...] que la
+    IA agrega al final de cada respuesta (ver instrucción en
+    BASE_PERSONA), las quita del texto (el cliente nunca debe verlas),
+    y devuelve los 3 IDs que identificó — así, en vez de adivinar por
+    palabras sueltas qué tienda/evento/sorteo mencionó el mensaje
+    (frágil: "Juan" vs "Juan Valdez Café", "¡Claro!" vs la tienda
+    "Claro", "12B Burguer" sin encontrar "12B Burguer Angus"), usamos
+    el mismo criterio inteligente que la IA ya usó para escribir la
+    respuesta — una sola fuente de verdad.
+
+    Devuelve (texto_limpio, id_tienda, id_evento, id_sorteo).
 
     Es defensivo a propósito: si el modelo no siguió el formato exacto
-    (pasa a veces), simplemente no encontramos ID y seguimos con el
-    comportamiento de respaldo anterior (buscar por palabras) — nunca
-    se rompe nada por esto, en el peor caso perdemos la mejora.
+    para alguna marca, simplemente no encontramos ese ID en particular
+    y seguimos con el comportamiento de respaldo anterior (buscar por
+    palabras) — nunca se rompe nada por esto, en el peor caso perdemos
+    la mejora para esa marca puntual.
     """
     import re
-    match = re.search(r"\n?\[TIENDA:\s*([^\]]*)\]\s*$", text, flags=re.IGNORECASE)
-    if not match:
-        return text, None
-    raw_value = match.group(1).strip()
-    cleaned_text = text[:match.start()].rstrip()
-    store_id = int(raw_value) if raw_value.isdigit() else None
-    return cleaned_text, store_id
+    cleaned = text
+    ids = {}
+    for label in ("TIENDA", "EVENTO", "SORTEO"):
+        match = re.search(rf"\n?\[{label}:\s*([^\]]*)\]", cleaned, flags=re.IGNORECASE)
+        if match:
+            raw_value = match.group(1).strip()
+            ids[label] = int(raw_value) if raw_value.isdigit() else None
+            cleaned = cleaned[:match.start()] + cleaned[match.end():]
+        else:
+            ids[label] = None
+    return cleaned.strip(), ids["TIENDA"], ids["EVENTO"], ids["SORTEO"]
 
 
 def _strip_thinking_tags(text: str) -> str:

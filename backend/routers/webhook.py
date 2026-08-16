@@ -339,7 +339,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     _trace(phone_number, f"RUTA TOMADA: respuesta conversacional general — historial: {len(history)} mensajes | perfil de usuario: {'SÍ' if profile_text else 'NO'} | foto ya decidida: {'SÍ' if image_url else 'NO'}")
     _trace(phone_number, "Llamando a generate_response() — internamente busca en RAG (tiendas), en Base de Conocimiento/Eventos/Sorteos por separado, e inyecta info general del mall + promociones de prioridad alta")
 
-    text, tienda_id_ia = await generate_response(
+    text, tienda_id_ia, evento_id_ia, sorteo_id_ia = await generate_response(
         user_message=message_text,
         user_name=user_name,
         conversation_history=history,
@@ -349,17 +349,32 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     )
 
     # ── Respaldo: si el matching por palabras no encontró ninguna
-    # tienda para la foto, pero la IA sí identificó una específica (con
-    # su propio criterio semántico, más confiable — el mismo que usó
-    # para escribir el texto), lo intentamos como último recurso. Esto
-    # resuelve casos como "12B Burguer" sin encontrar "12B Burguer
-    # Angus" por ambigüedad de palabras sueltas.
+    # tienda/evento/sorteo para la foto, pero la IA sí identificó uno
+    # específico (con su propio criterio semántico, más confiable — el
+    # mismo que usó para escribir el texto), lo intentamos como último
+    # recurso. Esto resuelve casos como "12B Burguer" sin encontrar
+    # "12B Burguer Angus" por ambigüedad de palabras sueltas — y lo
+    # mismo puede pasar con nombres de eventos o sorteos.
     if not image_url and tienda_id_ia:
         from models.store import Store as StoreModel
         store_ia = db.query(StoreModel).filter(StoreModel.id == tienda_id_ia).first()
         if store_ia:
             image_url = _pick_store_photo(store_ia, message_text)
-            _trace(phone_number, f"Respaldo (IA identificó por ID): '{store_ia.name}' (ID {tienda_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+            _trace(phone_number, f"Respaldo (IA identificó tienda por ID): '{store_ia.name}' (ID {tienda_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+
+    if not image_url and evento_id_ia:
+        from models.event import Event as EventModel
+        evento_ia = db.query(EventModel).filter(EventModel.id == evento_id_ia).first()
+        if evento_ia:
+            image_url = _pick_entity_photo(db, "event", evento_id_ia, message_text)
+            _trace(phone_number, f"Respaldo (IA identificó evento por ID): '{evento_ia.name}' (ID {evento_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+
+    if not image_url and sorteo_id_ia:
+        from models.raffle import Raffle as RaffleModel
+        sorteo_ia = db.query(RaffleModel).filter(RaffleModel.id == sorteo_id_ia).first()
+        if sorteo_ia:
+            image_url = _pick_entity_photo(db, "raffle", sorteo_id_ia, message_text)
+            _trace(phone_number, f"Respaldo (IA identificó sorteo por ID): '{sorteo_ia.name}' (ID {sorteo_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | foto: {'SÍ' if image_url else 'NO'} | ubicación: {'SÍ' if location_data else 'NO'}")
     return {"text": text, "image_url": image_url, "location": location_data}
