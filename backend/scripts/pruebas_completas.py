@@ -24,7 +24,7 @@ from config import get_settings
 
 settings = get_settings()
 BASE = settings.PUBLIC_BASE_URL
-PHONE_PREFIX = "test_script_"
+PHONE_PREFIX = "test_"  # corto a propósito — la columna phone_number solo acepta 20 caracteres
 
 # ── Ayudantes ────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ for msg, esperado in [
 # BLOQUE 4 — Domicilio simple
 # ══════════════════════════════════════════════════════════════════
 seccion("BLOQUE 4 — Domicilio: mención simple")
-tel = PHONE_PREFIX + "domicilio_simple"
+tel = PHONE_PREFIX + "dom_simple"
 limpiar_historial(tel)
 
 for msg, esperado in [
@@ -154,7 +154,7 @@ for msg, esperado in pasos:
 # BLOQUE 6 — Gestión: cancelación y pregunta fuera de tema
 # ══════════════════════════════════════════════════════════════════
 seccion("BLOQUE 6 — Gestión: pregunta fuera de tema + cancelación")
-tel = PHONE_PREFIX + "gestion_cancela"
+tel = PHONE_PREFIX + "gest_cancela"
 limpiar_historial(tel)
 
 pasos = [
@@ -170,7 +170,7 @@ for msg, esperado in pasos:
 # BLOQUE 7 — Seguimiento de gestión (nombrar tienda después de preguntar)
 # ══════════════════════════════════════════════════════════════════
 seccion("BLOQUE 7 — Gestión iniciada sin nombrar tienda, luego solo el nombre")
-tel = PHONE_PREFIX + "gestion_seguimiento"
+tel = PHONE_PREFIX + "gest_seguim"
 limpiar_historial(tel)
 
 pasos = [
@@ -184,7 +184,7 @@ for msg, esperado in pasos:
 # BLOQUE 8 — Fotos de tienda (portada y carta)
 # ══════════════════════════════════════════════════════════════════
 seccion("BLOQUE 8 — Fotos de tienda con etiqueta correcta")
-tel = PHONE_PREFIX + "fotos_tienda"
+tel = PHONE_PREFIX + "fotos"
 limpiar_historial(tel)
 
 for msg, esperado in [
@@ -211,7 +211,7 @@ for msg, esperado in [
 # BLOQUE 10 — Base de conocimiento
 # ══════════════════════════════════════════════════════════════════
 seccion("BLOQUE 10 — Base de Conocimiento")
-tel = PHONE_PREFIX + "conocimiento"
+tel = PHONE_PREFIX + "conocim"
 limpiar_historial(tel)
 
 for msg, esperado in [
