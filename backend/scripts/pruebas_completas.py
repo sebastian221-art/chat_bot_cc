@@ -72,6 +72,11 @@ def imprimir_resultado(mensaje: str, resultado: dict, esperado: str = ""):
     print(f"  ⏱️  Tiempo: {tiempo}s")
     if esperado:
         print(f"  🎯 Se esperaba: {esperado}")
+    debug_log = resultado.get("debug_log", "")
+    if debug_log.strip():
+        print(f"  🔍 Detalle interno (qué hizo el bot paso a paso):")
+        for linea in debug_log.strip().splitlines():
+            print(f"     {linea}")
     print()
 
 

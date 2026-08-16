@@ -646,10 +646,21 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
 
         image_url = None
         location_data = None
+        debug_log = ""
         if escalated:
             response_text = build_handoff_message(user_name)
         else:
-            result = await _route_message(db, phone_number, user_name, message_text)
+            # Capturamos todo lo que se imprime durante el procesamiento
+            # (las líneas "🔍 TRAZA...") y lo devolvemos directo en la
+            # respuesta — así no hay que ir a buscar en Deploy Logs de
+            # Railway, que ya nos ha hecho perder tiempo antes.
+            import io
+            import contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = await _route_message(db, phone_number, user_name, message_text)
+            debug_log = buf.getvalue()
+            print(debug_log, end="")  # igual lo mandamos a los logs reales de Railway
             response_text = result["text"]
             image_url = result["image_url"]
             location_data = result["location"]
@@ -685,6 +696,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
         "location":     location_data,
         "phone":        phone_number,
         "time_seconds": elapsed,
+        "debug_log":    debug_log,
     }
 
 
