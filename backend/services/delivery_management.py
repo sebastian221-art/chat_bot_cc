@@ -133,7 +133,7 @@ async def continue_management(db: Session, session: DeliveryManagement, message:
     #    ignorar la pregunta o insistir con los datos que faltan.
     if not extracted.get("relacionado", True):
         from services.ai import generate_response
-        respuesta_real = await generate_response(
+        respuesta_real, _ = await generate_response(
             user_message=message,
             user_name=user_name,
             conversation_history=[],

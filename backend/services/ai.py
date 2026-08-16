@@ -75,7 +75,26 @@ REGLAS SIEMPRE:
 - Si no sabes algo, dilo con amabilidad y sugiere el Punto de Información (Piso 1)
 - Usa máximo 1-2 emojis por mensaje, solo cuando aporten
 - NUNCA uses tablas (con | o guiones de separación entre columnas) — WhatsApp no las muestra bien. Usa listas simples con guion o texto corrido
-- Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba"""
+- Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba
+
+MARCA DE TIENDA (instrucción técnica interna — el cliente NUNCA ve esto):
+Al final de tu respuesta, SIEMPRE en una línea completamente aparte, escribe
+esta marca exacta con el ID de la tienda principal de la que trató tu
+respuesta (el número que aparece como "ID:" en la información de tiendas
+de abajo):
+[TIENDA:<id>]
+Si tu respuesta no trató sobre ninguna tienda/local específico (ej. info
+general del mall, saludo, horario general, mascotas, sorteos, o cualquier
+otra cosa sin relación a un local puntual), escribe en su lugar:
+[TIENDA:NINGUNA]
+Esta marca se elimina automáticamente antes de que el cliente vea el
+mensaje — va SIEMPRE, sin excepción, como la última línea de cada respuesta.
+
+Sobre preguntas de fotos: si te preguntan si tienes una foto de un local
+específico, nunca respondas de entrada "no tengo foto" — el sistema puede
+adjuntar una automáticamente aunque tú no sepas si existe. Responde algo
+neutral como "te comparto lo que tengo" o simplemente da la información
+pedida sin negar la existencia de la foto."""
 
 # ── Prompts por intención ─────────────────────────────────────────
 
@@ -239,9 +258,15 @@ async def generate_response(
     conversation_history: list[dict],
     user_profile: str = "",
     active_order_context: str = "",   # ← contexto del pedido activo si existe
-    photo_note: str = "",             # ← NUEVO: aviso de que ya se va a adjuntar una foto/ubicación, para que el texto no la contradiga
-    db=None,                          # ← NUEVO: para promociones por prioridad + personalizadas
-) -> str:
+    photo_note: str = "",             # ← aviso de que ya se va a adjuntar una foto/ubicación, para que el texto no la contradiga
+    db=None,                          # ← para promociones por prioridad + personalizadas
+) -> tuple[str, int | None]:
+    """
+    Devuelve (texto_de_respuesta, id_de_tienda_mencionada). El segundo
+    valor viene de la marca [TIENDA:<id>] que la IA agrega internamente
+    — permite saber con certeza de qué tienda habló, sin tener que
+    adivinar por palabras sueltas del mensaje del cliente.
+    """
     client = _get_groq_client()
     intent = classify_intent(user_message)
     print(f"    🔍 TRAZA IA — intención clasificada: '{intent}' → usando prompt '{intent if intent in PROMPTS else 'general'}'")
@@ -335,13 +360,14 @@ async def generate_response(
         )
         raw = completion.choices[0].message.content or ""
         limpio = _strip_thinking_tags(raw)
-        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar")
-        return limpio
+        limpio, tienda_id = _extract_store_marker(limpio)
+        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda identificada: {tienda_id if tienda_id else 'ninguna'}")
+        return limpio, tienda_id
 
     except Exception as e:
         print(f"    🔍 TRAZA IA — ❌ ERROR llamando a Groq: {str(e)}")
         logger.error(f"Error Groq API: {str(e)}")
-        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?"
+        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?", None
 
 
 # ── Helpers para webhook ──────────────────────────────────────────
@@ -636,6 +662,32 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
     except Exception as e:
         logger.error(f"Error Groq Vision: {str(e)}")
         return ""
+
+
+def _extract_store_marker(text: str) -> tuple[str, int | None]:
+    """
+    Busca la marca [TIENDA:<id>] o [TIENDA:NINGUNA] que la IA agrega al
+    final de cada respuesta (ver instrucción en BASE_PERSONA), la quita
+    del texto (el cliente nunca debe verla), y devuelve el ID de tienda
+    que identificó — así, en vez de adivinar por palabras sueltas cuál
+    tienda mencionó el mensaje (frágil: "Juan" vs "Juan Valdez Café",
+    "¡Claro!" vs la tienda "Claro", "12B Burguer" sin encontrar "12B
+    Burguer Angus"), usamos el mismo criterio inteligente que la IA ya
+    usó para escribir la respuesta — una sola fuente de verdad.
+
+    Es defensivo a propósito: si el modelo no siguió el formato exacto
+    (pasa a veces), simplemente no encontramos ID y seguimos con el
+    comportamiento de respaldo anterior (buscar por palabras) — nunca
+    se rompe nada por esto, en el peor caso perdemos la mejora.
+    """
+    import re
+    match = re.search(r"\n?\[TIENDA:\s*([^\]]*)\]\s*$", text, flags=re.IGNORECASE)
+    if not match:
+        return text, None
+    raw_value = match.group(1).strip()
+    cleaned_text = text[:match.start()].rstrip()
+    store_id = int(raw_value) if raw_value.isdigit() else None
+    return cleaned_text, store_id
 
 
 def _strip_thinking_tags(text: str) -> str:

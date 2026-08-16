@@ -81,4 +81,5 @@ async def build_navigation_response(zone: Zone, store: Store, user_name: str) ->
         f"{', ubicación: ' + store.location_hint if store.location_hint else ''}. "
         f"Dale indicaciones claras y breves de cómo llegar desde donde está hasta esa tienda."
     )
-    return await generate_response(user_message=query, user_name=user_name, conversation_history=[])
+    texto, _ = await generate_response(user_message=query, user_name=user_name, conversation_history=[])
+    return texto

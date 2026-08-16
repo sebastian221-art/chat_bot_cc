@@ -67,6 +67,7 @@ class Store(Base):
 
     def to_rag_text(self) -> str:
         parts = [
+            f"ID: {self.id}",
             f"Tienda: {self.name}",
             f"Local: {self.local_number or 'S/N'}",
             f"Piso: {self.floor}",
