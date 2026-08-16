@@ -50,8 +50,15 @@ def limpiar_historial(telefono: str):
 
 def imprimir_resultado(mensaje: str, resultado: dict, esperado: str = ""):
     print(f"  📨 Mensaje: {mensaje}")
+    if "traceback" in resultado and resultado.get("traceback"):
+        print(f"  💥 ERROR INTERNO DEL SERVIDOR ({resultado.get('error_type', '?')}): {resultado.get('error')}")
+        print(f"  📋 Traceback completo:")
+        for linea in resultado["traceback"].splitlines():
+            print(f"     {linea}")
+        print()
+        return
     if "error" in resultado:
-        print(f"  ❌ ERROR: {resultado['error']}")
+        print(f"  ❌ ERROR DE CONEXIÓN: {resultado['error']}")
         print()
         return
     bot = resultado.get("bot", "(sin respuesta)")

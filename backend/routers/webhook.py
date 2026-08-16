@@ -603,44 +603,63 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
 
     print(f"\n  📨  [{phone_number}] {user_name}: {message_text[:80]}")
 
-    db.add(Conversation(
-        phone_number=phone_number,
-        user_name=user_name,
-        role="user",
-        message=message_text,
-    ))
-    db.commit()
-    _trim_history(db, phone_number)
+    # Este endpoint es SOLO para pruebas/diagnóstico (nunca lo usan
+    # clientes reales por WhatsApp) — por eso, a diferencia del resto
+    # del sistema, aquí SÍ devolvemos el traceback completo si algo
+    # truena, directo en la respuesta. Así no hay que ir a cazar el
+    # error entre miles de líneas de logs de Railway.
+    try:
+        db.add(Conversation(
+            phone_number=phone_number,
+            user_name=user_name,
+            role="user",
+            message=message_text,
+        ))
+        db.commit()
+        _trim_history(db, phone_number)
 
-    escalated = _flag_if_needs_human(db, phone_number, message_text)
+        escalated = _flag_if_needs_human(db, phone_number, message_text)
 
-    paused = _is_bot_paused(db, phone_number)
-    if paused:
+        paused = _is_bot_paused(db, phone_number)
+        if paused:
+            return {
+                "user": message_text,
+                "bot": None,
+                "phone": phone_number,
+                "note": "Bot en pausa para este número — un admin lo está atendiendo manualmente.",
+                "time_seconds": round(time.time() - start, 2),
+            }
+
+        image_url = None
+        location_data = None
+        if escalated:
+            response_text = build_handoff_message(user_name)
+        else:
+            result = await _route_message(db, phone_number, user_name, message_text)
+            response_text = result["text"]
+            image_url = result["image_url"]
+            location_data = result["location"]
+
+        db.add(Conversation(
+            phone_number=phone_number,
+            user_name=user_name,
+            role="assistant",
+            message=response_text,
+        ))
+        db.commit()
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"  💥💥💥 ERROR EN /webhook/test 💥💥💥\n{tb}")
         return {
             "user": message_text,
             "bot": None,
             "phone": phone_number,
-            "note": "Bot en pausa para este número — un admin lo está atendiendo manualmente.",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": tb,
             "time_seconds": round(time.time() - start, 2),
         }
-
-    image_url = None
-    location_data = None
-    if escalated:
-        response_text = build_handoff_message(user_name)
-    else:
-        result = await _route_message(db, phone_number, user_name, message_text)
-        response_text = result["text"]
-        image_url = result["image_url"]
-        location_data = result["location"]
-
-    db.add(Conversation(
-        phone_number=phone_number,
-        user_name=user_name,
-        role="assistant",
-        message=response_text,
-    ))
-    db.commit()
 
     elapsed = round(time.time() - start, 2)
     print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
