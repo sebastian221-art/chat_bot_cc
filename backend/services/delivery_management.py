@@ -157,10 +157,16 @@ async def continue_management(db: Session, session: DeliveryManagement, message:
         db.commit()
         return build_missing_fields_message(session)
 
-    # Completo — armamos el link. Necesitamos la tienda para el teléfono.
-    if store is None:
-        from models.store import Store as StoreModel
-        store = db.query(StoreModel).filter(StoreModel.name == session.store_name).first()
+    # Completo — armamos el link. IMPORTANTE: usamos SIEMPRE
+    # session.store_name para saber a qué tienda va el pedido — nunca
+    # el parámetro "store" que llega de afuera. Ese parámetro se
+    # calcula analizando el mensaje ACTUAL (el que trae los datos del
+    # cliente), y puede coincidir por accidente con el nombre de otra
+    # tienda real — por ejemplo, un cliente llamado "Juan" coincidiendo
+    # con "Juan Valdez Café". La tienda correcta ya quedó fija desde
+    # que arrancó la gestión, en session.store_name.
+    from models.store import Store as StoreModel
+    store = db.query(StoreModel).filter(StoreModel.name == session.store_name).first()
 
     if not store:
         return "Se me perdió el dato de a qué local le estabas pidiendo 😅 ¿me confirmas el nombre de la tienda o restaurante otra vez?"

@@ -295,7 +295,42 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     ]
     profile = db.query(UserProfile).filter(UserProfile.phone_number == phone_number).first()
     profile_text = profile.to_context_string() if profile else ""
-    _trace(phone_number, f"RUTA TOMADA: respuesta conversacional general — historial: {len(history)} mensajes | perfil de usuario: {'SÍ' if profile_text else 'NO'}")
+
+    # ── Determinamos la foto ANTES de generar el texto ───────────────
+    # Antes, el texto se escribía primero (sin saber si se iba a
+    # adjuntar una foto), y la IA a veces decía "no tengo foto" justo
+    # cuando sí se mandaba una — contradicción confusa para el cliente.
+    # Ahora avisamos de antemano, para que el texto y la foto siempre
+    # cuenten la misma historia.
+    image_url = None
+    photo_note = ""
+    photo_store = _find_recently_discussed_store(db, phone_number, store)
+    if photo_store:
+        image_url = _pick_store_photo(photo_store, message_text)
+        _trace(phone_number, f"Buscando foto para '{photo_store.name}'{' (tienda recordada del historial)' if not store else ''} → {'encontrada: ' + image_url if image_url else 'sin foto con esa etiqueta'}")
+        if image_url:
+            pidiendo_carta = any(k in message_text.lower() for k in CARTA_KEYWORDS)
+            if pidiendo_carta:
+                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto junto con tu respuesta (la de la carta si existe, o la de portada si no hay carta cargada) — así que SÍ tienes algo que mostrarle, no digas que no tienes foto o carta."
+            else:
+                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto de {photo_store.name} junto con tu respuesta — puedes mencionar que le compartes la imagen, no digas que no tienes foto."
+
+    event_for_photo = None
+    raffle_for_photo = None
+    if not image_url:
+        event_for_photo = find_event_by_message(db, message_text)
+        if event_for_photo:
+            image_url = _pick_entity_photo(db, "event", event_for_photo.id, message_text)
+            if image_url:
+                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto del evento '{event_for_photo.name}' junto con tu respuesta — no digas que no tienes foto."
+        else:
+            raffle_for_photo = find_raffle_by_message(db, message_text)
+            if raffle_for_photo:
+                image_url = _pick_entity_photo(db, "raffle", raffle_for_photo.id, message_text)
+                if image_url:
+                    photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto del sorteo '{raffle_for_photo.name}' junto con tu respuesta — no digas que no tienes foto."
+
+    _trace(phone_number, f"RUTA TOMADA: respuesta conversacional general — historial: {len(history)} mensajes | perfil de usuario: {'SÍ' if profile_text else 'NO'} | foto ya decidida: {'SÍ' if image_url else 'NO'}")
     _trace(phone_number, "Llamando a generate_response() — internamente busca en RAG (tiendas), en Base de Conocimiento/Eventos/Sorteos por separado, e inyecta info general del mall + promociones de prioridad alta")
 
     text = await generate_response(
@@ -303,30 +338,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         user_name=user_name,
         conversation_history=history,
         user_profile=profile_text,
+        photo_note=photo_note,
         db=db,
     )
-
-    # Si el cliente mencionó una tienda, evento o sorteo específico y
-    # tiene foto cargada en el panel, la mandamos junto con la respuesta
-    # — usando la etiqueta correcta según lo que haya preguntado
-    # (ej. "premio" si pregunta qué se gana en un sorteo). Si el mensaje
-    # actual no menciona ninguna tienda (ej. "¿tienes una foto?" como
-    # seguimiento), buscamos en los últimos mensajes cuál se discutía.
-    image_url = None
-    photo_store = _find_recently_discussed_store(db, phone_number, store)
-    if photo_store:
-        image_url = _pick_store_photo(photo_store, message_text)
-        _trace(phone_number, f"Buscando foto para '{photo_store.name}'{' (tienda recordada del historial)' if not store else ''} → {'encontrada: ' + image_url if image_url else 'sin foto con esa etiqueta'}")
-    if not image_url:
-        event = find_event_by_message(db, message_text)
-        if event:
-            image_url = _pick_entity_photo(db, "event", event.id, message_text)
-            _trace(phone_number, f"Evento mencionado: '{event.name}' → foto: {image_url or 'sin foto con esa etiqueta'}")
-        else:
-            raffle = find_raffle_by_message(db, message_text)
-            if raffle:
-                image_url = _pick_entity_photo(db, "raffle", raffle.id, message_text)
-                _trace(phone_number, f"Sorteo mencionado: '{raffle.name}' → foto: {image_url or 'sin foto con esa etiqueta'}")
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | foto: {'SÍ' if image_url else 'NO'} | ubicación: {'SÍ' if location_data else 'NO'}")
     return {"text": text, "image_url": image_url, "location": location_data}

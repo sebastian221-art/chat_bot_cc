@@ -238,7 +238,8 @@ async def generate_response(
     user_name: str,
     conversation_history: list[dict],
     user_profile: str = "",
-    active_order_context: str = "",   # ← NUEVO: contexto del pedido activo si existe
+    active_order_context: str = "",   # ← contexto del pedido activo si existe
+    photo_note: str = "",             # ← NUEVO: aviso de que ya se va a adjuntar una foto/ubicación, para que el texto no la contradiga
     db=None,                          # ← NUEVO: para promociones por prioridad + personalizadas
 ) -> str:
     client = _get_groq_client()
@@ -255,6 +256,9 @@ async def generate_response(
     # Inyectar contexto del pedido activo cuando la pregunta es sobre estado
     if active_order_context:
         system_content += f"\n\n--- PEDIDO ACTIVO DEL CLIENTE ---\n{active_order_context}\n---"
+
+    if photo_note:
+        system_content += f"\n\n--- AVISO SOBRE ARCHIVOS ADJUNTOS ---\n{photo_note}\n---"
 
     if rag_docs:
         context = "\n\n".join(f"📌 {doc}" for doc in rag_docs)
