@@ -108,6 +108,18 @@ export const deleteEvent = (i: number)                   => req(`/events/${i}`, 
 export const exportEvents = ()          => downloadFile('/events/export', 'eventos.csv')
 export const importEvents = (file: File) => uploadFile('/events/import', file)
 
+// ── Marketing (promociones de tiendas, del cine, o generales) ────
+export const getMarketing    = ()                               => req('/marketing')
+export const createMarketing = (d: MarketingPayload)            => req('/marketing', { method: 'POST', body: JSON.stringify(d) })
+export const updateMarketing = (i: number, d: MarketingPayload) => req(`/marketing/${i}`, { method: 'PUT', body: JSON.stringify(d) })
+export const deleteMarketing = (i: number)                      => req(`/marketing/${i}`, { method: 'DELETE' })
+
+// ── Cartelera de Cine (funciones/estrenos ligadas a la tienda del Cine) ──
+export const getCineFunciones    = (storeId: number)                  => req(`/cine-funciones?store_id=${storeId}`)
+export const createCineFuncion   = (d: CineFuncionPayload)            => req('/cine-funciones', { method: 'POST', body: JSON.stringify(d) })
+export const updateCineFuncion   = (i: number, d: CineFuncionPayload) => req(`/cine-funciones/${i}`, { method: 'PUT', body: JSON.stringify(d) })
+export const deleteCineFuncion   = (i: number)                        => req(`/cine-funciones/${i}`, { method: 'DELETE' })
+
 // ── Base de Conocimiento ────────────────────────────────────────────
 export interface KnowledgeEntry { id?: number; title: string; content: string; photo_url?: string; active?: boolean; photos?: EntityPhoto[] }
 export const getKnowledge    = ()                              => req('/knowledge')
@@ -243,6 +255,15 @@ export interface StorePayload {
 export interface EventPayload {
   id?: number; name: string; date: string; time: string
   location: string; description: string; priority: number; photo_url?: string; photos?: EntityPhoto[]
+}
+export interface MarketingPayload {
+  id?: number; title: string; description: string
+  store_id: number | null; store_name?: string
+  priority: number; valid_until: string; active: boolean; photo_url?: string; photos?: EntityPhoto[]
+}
+export interface CineFuncionPayload {
+  id?: number; store_id: number; title: string
+  showtimes: string; description: string; is_premiere: boolean; active: boolean
 }
 export interface ProductPayload {
   store_name: string; name: string; description: string

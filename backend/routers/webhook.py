@@ -29,10 +29,11 @@ from models.conversation_flag import ConversationFlag
 from models.delivery_transfer import DeliveryTransfer
 from models.delivery_management import DeliveryManagement
 from models.mall_info import MallInfo
+from models.promotion_shown import PromotionShown
 from services.whatsapp import send_text_message, send_image_message, send_location_message, parse_incoming_message, download_media
 from services.ai import generate_response, is_delivery_intent, is_delivery_management_intent, needs_human_attention, build_handoff_message, classify_intent
 from services.vision_search import handle_image_message
-from services.content_matching import find_event_by_message, find_raffle_by_message
+from services.content_matching import find_event_by_message, find_raffle_by_message, find_marketing_by_message
 from services.delivery_management import get_active_session, start_management, continue_management
 from services.navigation import (
     parse_zone_code,
@@ -112,12 +113,12 @@ def _pick_store_photo(store, message_text: str) -> str | None:
 
 
 def _pick_entity_photo(db, entity_type: str, entity_id: int, message_text: str) -> str | None:
-    """Igual que _pick_store_photo, pero para eventos/sorteos/zonas usando la tabla genérica."""
+    """Igual que _pick_store_photo, pero para eventos/sorteos/zonas/marketing usando la tabla genérica."""
     from models.entity_photo import get_entity_photo
     msg = message_text.lower()
     if entity_type == "raffle" and any(k in msg for k in PREMIO_KEYWORDS):
         return get_entity_photo(db, "raffle", entity_id, "premio")
-    default_label = "afiche" if entity_type in ("event", "raffle") else "principal"
+    default_label = "afiche" if entity_type in ("event", "raffle", "marketing") else "principal"
     return get_entity_photo(db, entity_type, entity_id, default_label)
 
 
@@ -163,16 +164,28 @@ def _trace(phone_number: str, texto: str):
     print(f"  🔍 TRAZA [{phone_number}] {texto}")
 
 
+def _wrap(candidatos: list) -> list:
+    """Convierte una lista de posibles URLs de foto (puede traer None
+    mezclado) en una lista limpia, sin duplicados, máximo 2 — el tope
+    de imágenes que se pueden mandar en una sola respuesta."""
+    limpio = []
+    for c in candidatos:
+        if c and c not in limpio:
+            limpio.append(c)
+    return limpio[:2]
+
+
 async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> dict:
     """
     Decide y genera la respuesta del bot para un mensaje entrante.
     Compartido entre el webhook real y el endpoint /test para que
     ambos se comporten exactamente igual.
 
-    Devuelve {"text": ..., "image_url": ..., "location": ...} — según
-    el caso, además del texto puede venir una foto (tienda/zona/evento/
-    sorteo con foto cargada) o un pin de ubicación real (cuando
-    preguntan dónde queda el mall en sí, no una tienda puntual).
+    Devuelve {"text": ..., "image_urls": ..., "location": ...} — según
+    el caso, además del texto puede venir hasta 2 fotos (tienda/zona/
+    evento/sorteo/marketing con foto cargada, sin mezclar más de 2 en
+    una sola respuesta) o un pin de ubicación real (cuando preguntan
+    dónde queda el mall en sí, no una tienda puntual).
     """
     _trace(phone_number, f"Mensaje recibido: \"{message_text}\"")
 
@@ -187,16 +200,16 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         zone = find_zone(db, zone_code)
         if not zone:
             _trace(phone_number, f"Zona '{zone_code}' no existe en la base de datos → aviso de zona no encontrada")
-            return {"text": build_zone_not_found_message(), "image_url": None, "location": None}
+            return {"text": build_zone_not_found_message(), "image_urls": [], "location": None}
 
         store = find_store_by_message(db, message_text)
         zone_photo = _pick_entity_photo(db, "zone", zone.id, message_text)
         if store:
             _trace(phone_number, f"Zona '{zone_code}' encontrada + tienda '{store.name}' mencionada → indicaciones de navegación")
             text = await build_navigation_response(zone, store, user_name)
-            return {"text": text, "image_url": _pick_store_photo(store, message_text) or zone_photo, "location": None}
+            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None}
         _trace(phone_number, f"Zona '{zone_code}' encontrada, sin tienda mencionada → confirma zona y pregunta a dónde quiere ir")
-        return {"text": build_zone_confirmation_message(zone), "image_url": zone_photo, "location": None}
+        return {"text": build_zone_confirmation_message(zone), "image_urls": _wrap([zone_photo]), "location": None}
 
     # Si el mensaje anterior fue "¿a qué tienda quieres llegar?" (después
     # de escanear un QR), usamos la última zona escaneada por este número
@@ -210,7 +223,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             _trace(phone_number, f"Era respuesta a '¿a qué tienda quieres llegar?' tras escanear zona '{last_zone.code}' → indicaciones")
             text = await build_navigation_response(last_zone, store, user_name)
             zone_photo = _pick_entity_photo(db, "zone", last_zone.id, message_text)
-            return {"text": text, "image_url": _pick_store_photo(store, message_text) or zone_photo, "location": None}
+            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None}
 
     # ── Petición directa del número de una tienda ────────────────────
     # Se revisa antes que domicilios porque "número de X" no siempre
@@ -219,7 +232,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     _trace(phone_number, f"¿Pide el número de una tienda? {'SÍ' if pide_numero else 'NO'}")
     if pide_numero and store:
         _trace(phone_number, f"RUTA TOMADA: número de teléfono de '{store.name}' → responde con número + link + pregunta de seguimiento")
-        return {"text": build_phone_info_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
+        return {"text": build_phone_info_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
 
     # ── Gestión completa de domicilio ────────────────────────────────
     # Prioridad alta: si ya hay una gestión en curso para este número,
@@ -231,7 +244,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         _trace(phone_number, "RUTA TOMADA: continuar gestión de domicilio (extrae datos, detecta cancelación o pregunta fuera de tema)")
         text = await continue_management(db, active_session, message_text, store, user_name)
         img = _pick_store_photo(store, message_text)
-        return {"text": text, "image_url": img, "location": None}
+        return {"text": text, "image_urls": _wrap([img]), "location": None}
 
     # Si no hay sesión activa pero el cliente pide EXPLÍCITAMENTE que se
     # le ayude a gestionar el pedido (no solo lo menciona de pasada),
@@ -245,9 +258,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             # Aquí forzamos la etiqueta "carta" — es exactamente el
             # momento en que se le muestra el menú al cliente.
             photo = store.get_photo_by_label("carta")
-            return {"text": text, "image_url": photo, "location": None}
+            return {"text": text, "image_urls": _wrap([photo]), "location": None}
         _trace(phone_number, "RUTA TOMADA: pide gestión pero sin tienda identificada → pregunta cuál (versión gestión)")
-        return {"text": build_ask_which_store_management_message(), "image_url": None, "location": None}
+        return {"text": build_ask_which_store_management_message(), "image_urls": [], "location": None}
 
     quiere_domicilio_simple = is_delivery_intent(message_text)
     _trace(phone_number, f"¿Menciona domicilio simple? {'SÍ' if quiere_domicilio_simple else 'NO'}")
@@ -255,9 +268,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         if store:
             _trace(phone_number, f"RUTA TOMADA: transferencia simple a '{store.name}' (solo el link, sin recolectar datos)")
             _log_delivery_transfer(db, phone_number, store.name)
-            return {"text": build_transfer_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
+            return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
         _trace(phone_number, "RUTA TOMADA: menciona domicilio pero sin tienda identificada → pregunta cuál (versión simple)")
-        return {"text": build_ask_which_store_message(), "image_url": None, "location": None}
+        return {"text": build_ask_which_store_message(), "image_urls": [], "location": None}
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" — primero revisamos si esa
@@ -267,12 +280,12 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         _trace(phone_number, f"Era respuesta a la pregunta '¿de qué tienda?' de GESTIÓN → arranca gestión completa para '{store.name}'")
         text = await start_management(db, phone_number, store)
         photo = store.get_photo_by_label("carta")
-        return {"text": text, "image_url": photo, "location": None}
+        return {"text": text, "image_urls": _wrap([photo]), "location": None}
 
     if store and _last_bot_message_was_ask(db, phone_number):
         _trace(phone_number, f"Era respuesta a la pregunta '¿de qué tienda?' SIMPLE → transferencia directa a '{store.name}'")
         _log_delivery_transfer(db, phone_number, store.name)
-        return {"text": build_transfer_message(store), "image_url": _pick_store_photo(store, message_text), "location": None}
+        return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
 
     # ── Ubicación del mall en sí (no de una tienda puntual) ──────────
     # Si preguntan "dónde queda" sin mencionar una tienda específica,
@@ -302,82 +315,143 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     profile = db.query(UserProfile).filter(UserProfile.phone_number == phone_number).first()
     profile_text = profile.to_context_string() if profile else ""
 
-    # ── Determinamos la foto ANTES de generar el texto ───────────────
+    # ── Determinamos las fotos ANTES de generar el texto ──────────────
     # Antes, el texto se escribía primero (sin saber si se iba a
     # adjuntar una foto), y la IA a veces decía "no tengo foto" justo
     # cuando sí se mandaba una — contradicción confusa para el cliente.
-    # Ahora avisamos de antemano, para que el texto y la foto siempre
+    # Ahora avisamos de antemano, para que el texto y las fotos siempre
     # cuenten la misma historia.
-    image_url = None
-    photo_note = ""
+    #
+    # Se pueden juntar HASTA 2 fotos de tipos distintos (ej. la tienda
+    # de la que se habló + un evento que también se mencionó) — nunca
+    # más de una del MISMO tipo, y nunca más de 2 en total, para no
+    # saturar el mensaje.
+    image_urls = []
+    tipos_cubiertos = set()
+    photo_notes = []
+
+    def _agregar_foto(tipo: str, nombre: str, url) -> bool:
+        if not url or tipo in tipos_cubiertos or len(image_urls) >= 2:
+            return False
+        image_urls.append(url)
+        tipos_cubiertos.add(tipo)
+        return True
+
     photo_store = _find_recently_discussed_store(db, phone_number, store)
     if photo_store:
-        image_url = _pick_store_photo(photo_store, message_text)
-        _trace(phone_number, f"Buscando foto para '{photo_store.name}'{' (tienda recordada del historial)' if not store else ''} → {'encontrada: ' + image_url if image_url else 'sin foto con esa etiqueta'}")
-        if image_url:
+        url = _pick_store_photo(photo_store, message_text)
+        _trace(phone_number, f"Buscando foto para '{photo_store.name}'{' (tienda recordada del historial)' if not store else ''} → {'encontrada: ' + url if url else 'sin foto con esa etiqueta'}")
+        if _agregar_foto("store", photo_store.name, url):
             pidiendo_carta = any(k in message_text.lower() for k in CARTA_KEYWORDS)
             if pidiendo_carta:
-                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto junto con tu respuesta (la de la carta si existe, o la de portada si no hay carta cargada) — así que SÍ tienes algo que mostrarle, no digas que no tienes foto o carta."
+                photo_notes.append("ya se le va a adjuntar una foto junto con tu respuesta (la de la carta si existe, o la de portada si no hay carta cargada) — así que SÍ tienes algo que mostrarle, no digas que no tienes foto o carta")
             else:
-                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto de {photo_store.name} junto con tu respuesta — puedes mencionar que le compartes la imagen, no digas que no tienes foto."
+                photo_notes.append(f"ya se le va a adjuntar una foto de {photo_store.name} junto con tu respuesta — puedes mencionar que le compartes la imagen, no digas que no tienes foto")
 
-    event_for_photo = None
-    raffle_for_photo = None
-    if not image_url:
-        event_for_photo = find_event_by_message(db, message_text)
-        if event_for_photo:
-            image_url = _pick_entity_photo(db, "event", event_for_photo.id, message_text)
-            if image_url:
-                photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto del evento '{event_for_photo.name}' junto con tu respuesta — no digas que no tienes foto."
-        else:
-            raffle_for_photo = find_raffle_by_message(db, message_text)
-            if raffle_for_photo:
-                image_url = _pick_entity_photo(db, "raffle", raffle_for_photo.id, message_text)
-                if image_url:
-                    photo_note = f"IMPORTANTE: ya se le va a adjuntar una foto del sorteo '{raffle_for_photo.name}' junto con tu respuesta — no digas que no tienes foto."
+    event_for_photo = find_event_by_message(db, message_text)
+    if event_for_photo:
+        url = _pick_entity_photo(db, "event", event_for_photo.id, message_text)
+        if _agregar_foto("event", event_for_photo.name, url):
+            photo_notes.append(f"ya se le va a adjuntar una foto del evento '{event_for_photo.name}' junto con tu respuesta — no digas que no tienes foto")
 
-    _trace(phone_number, f"RUTA TOMADA: respuesta conversacional general — historial: {len(history)} mensajes | perfil de usuario: {'SÍ' if profile_text else 'NO'} | foto ya decidida: {'SÍ' if image_url else 'NO'}")
-    _trace(phone_number, "Llamando a generate_response() — internamente busca en RAG (tiendas), en Base de Conocimiento/Eventos/Sorteos por separado, e inyecta info general del mall + promociones de prioridad alta")
+    raffle_for_photo = find_raffle_by_message(db, message_text)
+    if raffle_for_photo:
+        url = _pick_entity_photo(db, "raffle", raffle_for_photo.id, message_text)
+        if _agregar_foto("raffle", raffle_for_photo.name, url):
+            photo_notes.append(f"ya se le va a adjuntar una foto del sorteo '{raffle_for_photo.name}' junto con tu respuesta — no digas que no tienes foto")
 
-    text, tienda_id_ia, evento_id_ia, sorteo_id_ia = await generate_response(
+    marketing_for_photo = find_marketing_by_message(db, message_text)
+    if marketing_for_photo:
+        url = _pick_entity_photo(db, "marketing", marketing_for_photo.id, message_text)
+        if _agregar_foto("marketing", marketing_for_photo.title, url):
+            photo_notes.append(f"ya se le va a adjuntar una foto de la promoción '{marketing_for_photo.title}' junto con tu respuesta — no digas que no tienes foto")
+
+    photo_note = "IMPORTANTE: " + " Además, ".join(photo_notes) + "." if photo_notes else ""
+
+    _trace(phone_number, f"RUTA TOMADA: respuesta conversacional general — historial: {len(history)} mensajes | perfil de usuario: {'SÍ' if profile_text else 'NO'} | fotos ya decididas: {len(image_urls)}")
+    _trace(phone_number, "Llamando a generate_response() — internamente busca en RAG (tiendas), en Base de Conocimiento/Eventos/Sorteos/Marketing por separado, e inyecta info general del mall + promociones de prioridad alta")
+
+    text, tienda_id_ia, evento_id_ia, sorteo_id_ia, marketing_id_ia = await generate_response(
         user_message=message_text,
         user_name=user_name,
         conversation_history=history,
         user_profile=profile_text,
         photo_note=photo_note,
         db=db,
+        phone_number=phone_number,
     )
 
+    # Si la IA sí mencionó un evento, sorteo o promoción de marketing
+    # (según su propia marca), lo registramos como "ya mostrado" para
+    # este número — así, la próxima vez que se arme el bloque de
+    # promociones, cuenta contra el límite de 2 por sesión. Es
+    # idempotente DENTRO de la sesión actual: si el cliente pregunta 2
+    # veces seguidas por lo MISMO, eso sigue contando como 1 sola
+    # promoción, no 2 — pero en una sesión NUEVA (después de las horas
+    # de inactividad), la misma promoción vuelve a estar disponible
+    # desde cero.
+    if evento_id_ia or sorteo_id_ia or marketing_id_ia:
+        from services.ai import _get_session_start
+        session_start = _get_session_start(db, phone_number)
+        for tipo, entity_id in (("event", evento_id_ia), ("raffle", sorteo_id_ia), ("marketing", marketing_id_ia)):
+            if not entity_id:
+                continue
+            ya_existe = (
+                db.query(PromotionShown)
+                .filter(
+                    PromotionShown.phone_number == phone_number,
+                    PromotionShown.entity_type == tipo,
+                    PromotionShown.entity_id == entity_id,
+                    PromotionShown.shown_at >= session_start,
+                )
+                .first()
+            )
+            if not ya_existe:
+                db.add(PromotionShown(phone_number=phone_number, entity_type=tipo, entity_id=entity_id))
+        db.commit()
+
     # ── Respaldo: si el matching por palabras no encontró ninguna
-    # tienda/evento/sorteo para la foto, pero la IA sí identificó uno
-    # específico (con su propio criterio semántico, más confiable — el
-    # mismo que usó para escribir el texto), lo intentamos como último
-    # recurso. Esto resuelve casos como "12B Burguer" sin encontrar
-    # "12B Burguer Angus" por ambigüedad de palabras sueltas — y lo
-    # mismo puede pasar con nombres de eventos o sorteos.
-    if not image_url and tienda_id_ia:
+    # tienda/evento/sorteo/marketing para la foto, pero la IA sí
+    # identificó uno específico (con su propio criterio semántico, más
+    # confiable — el mismo que usó para escribir el texto), lo
+    # intentamos como último recurso. Esto resuelve casos como "12B
+    # Burguer" sin encontrar "12B Burguer Angus" por ambigüedad de
+    # palabras sueltas. Solo se agrega si ese TIPO todavía no tiene
+    # foto y aún queda espacio (máximo 2 en total).
+    if "store" not in tipos_cubiertos and tienda_id_ia:
         from models.store import Store as StoreModel
         store_ia = db.query(StoreModel).filter(StoreModel.id == tienda_id_ia).first()
         if store_ia:
-            image_url = _pick_store_photo(store_ia, message_text)
-            _trace(phone_number, f"Respaldo (IA identificó tienda por ID): '{store_ia.name}' (ID {tienda_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+            url = _pick_store_photo(store_ia, message_text)
+            if _agregar_foto("store", store_ia.name, url):
+                _trace(phone_number, f"Respaldo (IA identificó tienda por ID): '{store_ia.name}' (ID {tienda_id_ia}) → foto: {url}")
 
-    if not image_url and evento_id_ia:
+    if "event" not in tipos_cubiertos and evento_id_ia:
         from models.event import Event as EventModel
         evento_ia = db.query(EventModel).filter(EventModel.id == evento_id_ia).first()
         if evento_ia:
-            image_url = _pick_entity_photo(db, "event", evento_id_ia, message_text)
-            _trace(phone_number, f"Respaldo (IA identificó evento por ID): '{evento_ia.name}' (ID {evento_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+            url = _pick_entity_photo(db, "event", evento_id_ia, message_text)
+            if _agregar_foto("event", evento_ia.name, url):
+                _trace(phone_number, f"Respaldo (IA identificó evento por ID): '{evento_ia.name}' (ID {evento_id_ia}) → foto: {url}")
 
-    if not image_url and sorteo_id_ia:
+    if "raffle" not in tipos_cubiertos and sorteo_id_ia:
         from models.raffle import Raffle as RaffleModel
         sorteo_ia = db.query(RaffleModel).filter(RaffleModel.id == sorteo_id_ia).first()
         if sorteo_ia:
-            image_url = _pick_entity_photo(db, "raffle", sorteo_id_ia, message_text)
-            _trace(phone_number, f"Respaldo (IA identificó sorteo por ID): '{sorteo_ia.name}' (ID {sorteo_id_ia}) → foto: {image_url or 'sin foto con esa etiqueta'}")
+            url = _pick_entity_photo(db, "raffle", sorteo_id_ia, message_text)
+            if _agregar_foto("raffle", sorteo_ia.name, url):
+                _trace(phone_number, f"Respaldo (IA identificó sorteo por ID): '{sorteo_ia.name}' (ID {sorteo_id_ia}) → foto: {url}")
 
-    _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | foto: {'SÍ' if image_url else 'NO'} | ubicación: {'SÍ' if location_data else 'NO'}")
-    return {"text": text, "image_url": image_url, "location": location_data}
+    if "marketing" not in tipos_cubiertos and marketing_id_ia:
+        from models.marketing import Marketing as MarketingModel
+        marketing_ia = db.query(MarketingModel).filter(MarketingModel.id == marketing_id_ia).first()
+        if marketing_ia:
+            url = _pick_entity_photo(db, "marketing", marketing_id_ia, message_text)
+            if _agregar_foto("marketing", marketing_ia.title, url):
+                _trace(phone_number, f"Respaldo (IA identificó marketing por ID): '{marketing_ia.title}' (ID {marketing_id_ia}) → foto: {url}")
+
+    _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | fotos: {len(image_urls)} | ubicación: {'SÍ' if location_data else 'NO'}")
+    return {"text": text, "image_urls": image_urls, "location": location_data}
 
 
 def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
@@ -517,14 +591,14 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
         return
 
     # 5. Generar respuesta
-    image_url = None
+    image_urls = []
     location_data = None
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
         result = await _route_message(db, phone_number, user_name, message_text)
         response_text = result["text"]
-        image_url = result["image_url"]
+        image_urls = result["image_urls"]
         location_data = result["location"]
 
     # 6. Guardar respuesta y enviar
@@ -540,9 +614,11 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     print(f"  🤖  Bot ({elapsed}s): {response_text[:80]}")
 
     await send_text_message(to=phone_number, message=response_text)
-    if image_url:
-        await send_image_message(to=phone_number, image_url=image_url)
-        print(f"  🖼️   Foto enviada: {image_url}")
+    # Se mandan como mensajes separados, uno por foto, en orden — hasta
+    # 2 (el tope que ya viene aplicado desde _route_message).
+    for img_url in image_urls:
+        await send_image_message(to=phone_number, image_url=img_url)
+        print(f"  🖼️   Foto enviada: {img_url}")
     if location_data:
         await send_location_message(to=phone_number, **location_data)
         print(f"  📍  Ubicación enviada: {location_data['name']}")
@@ -678,7 +754,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
                 "time_seconds": round(time.time() - start, 2),
             }
 
-        image_url = None
+        image_urls = []
         location_data = None
         debug_log = ""
         if escalated:
@@ -696,7 +772,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             debug_log = buf.getvalue()
             print(debug_log, end="")  # igual lo mandamos a los logs reales de Railway
             response_text = result["text"]
-            image_url = result["image_url"]
+            image_urls = result["image_urls"]
             location_data = result["location"]
 
         db.add(Conversation(
@@ -726,7 +802,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     return {
         "user":         message_text,
         "bot":          response_text,
-        "image_url":    image_url,
+        "image_urls":   image_urls,
         "location":     location_data,
         "phone":        phone_number,
         "time_seconds": elapsed,

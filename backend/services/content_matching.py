@@ -1,15 +1,17 @@
 """
 services/content_matching.py
 
-Reconoce si el cliente mencionó un evento o sorteo específico por
-nombre en su mensaje — mismo mecanismo que ya usa store_transfer.py
-para tiendas (nombre completo o palabra distintiva), para poder
-mandar la foto correcta cuando preguntan por algo puntual.
+Reconoce si el cliente mencionó un evento, sorteo o promoción de
+marketing específico por nombre en su mensaje — mismo mecanismo que ya
+usa store_transfer.py para tiendas (nombre completo o palabra
+distintiva), para poder mandar la foto correcta cuando preguntan por
+algo puntual.
 """
 import re
 from sqlalchemy.orm import Session
 from models.event import Event
 from models.raffle import Raffle
+from models.marketing import Marketing
 
 STOPWORDS_ES = {"la", "el", "los", "las", "de", "del", "y", "un", "una", "en", "por", "para"}
 
@@ -50,6 +52,22 @@ def find_raffle_by_message(db: Session, message: str) -> Raffle | None:
         return None
 
     word_matches = [r for r in raffles if any(_contains_word(msg, w) for w in _significant_words(r.name))]
+    if len(word_matches) == 1:
+        return word_matches[0]
+    return None
+
+
+def find_marketing_by_message(db: Session, message: str) -> Marketing | None:
+    msg = message.lower()
+    promos = db.query(Marketing).filter(Marketing.active == True).all()
+
+    exact = [m for m in promos if m.title.lower() in msg]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+
+    word_matches = [m for m in promos if any(_contains_word(msg, w) for w in _significant_words(m.title))]
     if len(word_matches) == 1:
         return word_matches[0]
     return None

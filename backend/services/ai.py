@@ -78,23 +78,24 @@ REGLAS SIEMPRE:
 - Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba
 
 MARCAS DE IDENTIFICACIÓN (instrucción técnica interna — el cliente NUNCA ve esto):
-Al final de tu respuesta, SIEMPRE en 3 líneas completamente aparte (una por
+Al final de tu respuesta, SIEMPRE en 4 líneas completamente aparte (una por
 cada marca, en este orden), escribe con el ID exacto (el número que aparece
-como "ID:" en la información de abajo) de la tienda, evento o sorteo del
-que trató tu respuesta — o NINGUNA si no aplica:
+como "ID:" en la información de abajo) de la tienda, evento, sorteo o
+promoción de marketing del que trató tu respuesta — o NINGUNA si no aplica:
 [TIENDA:<id o NINGUNA>]
 [EVENTO:<id o NINGUNA>]
 [SORTEO:<id o NINGUNA>]
-Ejemplo si hablaste de una tienda: [TIENDA:42] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA]
-Ejemplo si hablaste de un sorteo: [TIENDA:NINGUNA] / [EVENTO:NINGUNA] / [SORTEO:7]
+[MARKETING:<id o NINGUNA>]
+Ejemplo si hablaste de una tienda: [TIENDA:42] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA] / [MARKETING:NINGUNA]
+Ejemplo si hablaste de una promoción: [TIENDA:NINGUNA] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA] / [MARKETING:9]
 Estas marcas se eliminan automáticamente antes de que el cliente vea el
-mensaje — van SIEMPRE, las 3, sin excepción, como las últimas líneas.
+mensaje — van SIEMPRE, las 4, sin excepción, como las últimas líneas.
 
 Sobre preguntas de fotos: si te preguntan si tienes una foto de un local,
-evento o sorteo específico, nunca respondas de entrada "no tengo foto" — el
-sistema puede adjuntar una automáticamente aunque tú no sepas si existe.
-Responde algo neutral como "te comparto lo que tengo" o simplemente da la
-información pedida sin negar la existencia de la foto."""
+evento, sorteo o promoción específica, nunca respondas de entrada "no tengo
+foto" — el sistema puede adjuntar una automáticamente aunque tú no sepas si
+existe. Responde algo neutral como "te comparto lo que tengo" o simplemente
+da la información pedida sin negar la existencia de la foto."""
 
 # ── Prompts por intención ─────────────────────────────────────────
 
@@ -197,37 +198,110 @@ def _build_mall_info_block(db) -> str:
         return ""
 
 
-def _build_promotions_block(db, user_profile: str) -> str:
+SESSION_GAP_HOURS = 4  # más de esto sin escribir = cuenta como sesión nueva (punto de partida razonable, fácil de ajustar)
+MAX_PROMOS_PER_SESSION = 2
+
+
+def _get_session_start(db, phone_number: str):
+    """
+    Determina cuándo empezó la sesión de conversación ACTUAL — busca el
+    hueco de inactividad más reciente (mayor a SESSION_GAP_HOURS) entre
+    mensajes consecutivos de este número. Todo lo que pasó antes de ese
+    hueco pertenece a una sesión anterior; lo de después es la sesión
+    actual. Si nunca hay un hueco así, toda la conversación cuenta como
+    una sola sesión desde el primer mensaje.
+    """
+    from datetime import timedelta
+    from models.conversation import Conversation
+
+    records = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number)
+        .order_by(Conversation.timestamp.asc())
+        .all()
+    )
+    if not records:
+        return None
+
+    session_start = records[0].timestamp
+    gap = timedelta(hours=SESSION_GAP_HOURS)
+    for prev, curr in zip(records, records[1:]):
+        if curr.timestamp - prev.timestamp > gap:
+            session_start = curr.timestamp
+    return session_start
+
+
+def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> str:
     """
     Arma el bloque de promociones disponibles para esta respuesta:
-    1) Eventos/sorteos de prioridad alta (4-5) — se cargan SIEMPRE,
-       para que el mall pueda garantizar visibilidad real, sin
-       depender de que el tema de la conversación coincida por azar.
+    1) Eventos/sorteos/promociones de marketing de prioridad alta (4-5)
+       — con un límite real de MAX_PROMOS_PER_SESSION promociones
+       DISTINTAS por sesión de conversación (se reinicia solo por
+       inactividad, ver SESSION_GAP_HOURS) — para no saturar al
+       cliente. Además, solo se ofrece UNA candidata nueva a la vez
+       (nunca varias juntas), para que el mensaje no termine mezclando
+       dos promociones distintas.
     2) Recomendaciones personalizadas — busca, entre la info de las
        tiendas, lo que más encaje con el perfil de intereses de este
-       cliente específico (si existe un perfil).
+       cliente específico (si existe un perfil). Esto NO cuenta contra
+       el límite de 2 — es una sugerencia orgánica, no una campaña.
     En ambos casos, la decisión de MENCIONARLO o no queda en manos del
     modelo — esto es contenido disponible, no una orden.
     """
     from models.event import Event
     from models.raffle import Raffle
+    from models.marketing import Marketing
+    from models.promotion_shown import PromotionShown
 
     parts = []
 
     try:
-        high_priority_events = db.query(Event).filter(Event.priority >= 4).all()
-        high_priority_raffles = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
-        promo_texts = [e.to_rag_text() for e in high_priority_events] + [r.to_rag_text() for r in high_priority_raffles]
-        if promo_texts:
-            parts.append(
-                "PROMOCIONES DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real — "
-                "busca un momento natural en tu respuesta para mencionarlo, variando cómo lo dices "
-                "cada vez, sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO de cómo lo "
-                "mencionas al tipo de cosa que es — un sorteo de un carro se menciona con emoción y "
-                "urgencia ('¡no te lo pierdas!'), una promoción de ropa con un tono más de moda y "
-                "estilo, un evento familiar con calidez. No uses siempre la misma fórmula):\n" +
-                "\n".join(f"🎯 {t}" for t in promo_texts)
-            )
+        ya_mostradas = set()
+        restantes = MAX_PROMOS_PER_SESSION
+        if phone_number:
+            session_start = _get_session_start(db, phone_number)
+            if session_start:
+                mostradas_query = (
+                    db.query(PromotionShown.entity_type, PromotionShown.entity_id)
+                    .filter(
+                        PromotionShown.phone_number == phone_number,
+                        PromotionShown.shown_at >= session_start,
+                    )
+                    .distinct()
+                    .all()
+                )
+                ya_mostradas = {(t, i) for t, i in mostradas_query}
+                restantes = MAX_PROMOS_PER_SESSION - len(ya_mostradas)
+
+        if restantes > 0:
+            high_priority_events = db.query(Event).filter(Event.priority >= 4).all()
+            high_priority_raffles = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
+            high_priority_marketing = db.query(Marketing).filter(Marketing.priority >= 4, Marketing.active == True).all()
+
+            candidatos = [("event", e.id, e.priority, e.to_rag_text()) for e in high_priority_events]
+            candidatos += [("raffle", r.id, r.priority, r.to_rag_text()) for r in high_priority_raffles]
+            candidatos += [("marketing", m.id, m.priority, m.to_rag_text()) for m in high_priority_marketing]
+
+            # Solo las que NO se han mostrado ya en esta sesión
+            candidatos = [c for c in candidatos if (c[0], c[1]) not in ya_mostradas]
+            # La de mayor prioridad primero, y solo UNA a la vez —
+            # nunca varias juntas, para no mezclar 2 promociones en un
+            # mismo mensaje
+            candidatos.sort(key=lambda c: -c[2])
+            candidatos = candidatos[:1]
+
+            if candidatos:
+                promo_texts = [c[3] for c in candidatos]
+                parts.append(
+                    "PROMOCIÓN DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real — "
+                    "busca un momento natural en tu respuesta para mencionarlo, variando cómo lo dices "
+                    "cada vez, sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO de cómo lo "
+                    "mencionas al tipo de cosa que es — un sorteo de un carro se menciona con emoción y "
+                    "urgencia ('¡no te lo pierdas!'), una promoción de ropa con un tono más de moda y "
+                    "estilo, un evento familiar con calidez. Menciona SOLO esta, no mezcles con otras "
+                    "promociones en el mismo mensaje):\n" +
+                    "\n".join(f"🎯 {t}" for t in promo_texts)
+                )
     except Exception as e:
         logger.error(f"Error cargando promociones de prioridad: {str(e)}")
 
@@ -260,9 +334,10 @@ async def generate_response(
     active_order_context: str = "",   # ← contexto del pedido activo si existe
     photo_note: str = "",             # ← aviso de que ya se va a adjuntar una foto/ubicación, para que el texto no la contradiga
     db=None,                          # ← para promociones por prioridad + personalizadas
-) -> tuple[str, int | None, int | None, int | None]:
+    phone_number: str = "",           # ← para el límite de 2 promociones por sesión
+) -> tuple[str, int | None, int | None, int | None, int | None]:
     """
-    Devuelve (texto_de_respuesta, id_tienda, id_evento, id_sorteo). Los
+    Devuelve (texto_de_respuesta, id_tienda, id_evento, id_sorteo, id_marketing). Los
     3 IDs vienen de las marcas [TIENDA:<id>]/[EVENTO:<id>]/[SORTEO:<id>]
     que la IA agrega internamente — permite saber con certeza de qué
     tienda/evento/sorteo habló, sin tener que adivinar por palabras
@@ -329,7 +404,7 @@ async def generate_response(
     # deja al modelo la decisión de si encaja mencionarlo o no, para
     # que nunca se sienta forzado ni repetitivo.
     if db is not None:
-        promo_block = _build_promotions_block(db, user_profile)
+        promo_block = _build_promotions_block(db, user_profile, phone_number)
         print(f"    🔍 TRAZA IA — promociones de prioridad alta inyectadas: {'SÍ' if promo_block else 'NO'}")
         if promo_block:
             system_content += promo_block
@@ -361,14 +436,14 @@ async def generate_response(
         )
         raw = completion.choices[0].message.content or ""
         limpio = _strip_thinking_tags(raw)
-        limpio, tienda_id, evento_id, sorteo_id = _extract_entity_markers(limpio)
-        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda: {tienda_id or 'ninguna'} | evento: {evento_id or 'ninguno'} | sorteo: {sorteo_id or 'ninguno'}")
-        return limpio, tienda_id, evento_id, sorteo_id
+        limpio, tienda_id, evento_id, sorteo_id, marketing_id = _extract_entity_markers(limpio)
+        print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda: {tienda_id or 'ninguna'} | evento: {evento_id or 'ninguno'} | sorteo: {sorteo_id or 'ninguno'} | marketing: {marketing_id or 'ninguno'}")
+        return limpio, tienda_id, evento_id, sorteo_id, marketing_id
 
     except Exception as e:
         print(f"    🔍 TRAZA IA — ❌ ERROR llamando a Groq: {str(e)}")
         logger.error(f"Error Groq API: {str(e)}")
-        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?", None, None, None
+        return "Uy, tuve un problema técnico 😅 ¿Puedes intentarlo de nuevo en un momento?", None, None, None, None
 
 
 # ── Helpers para webhook ──────────────────────────────────────────
@@ -665,19 +740,19 @@ async def analyze_product_image(image_bytes: bytes, mime_type: str, caption: str
         return ""
 
 
-def _extract_entity_markers(text: str) -> tuple[str, int | None, int | None, int | None]:
+def _extract_entity_markers(text: str) -> tuple[str, int | None, int | None, int | None, int | None]:
     """
-    Busca las 3 marcas [TIENDA:...], [EVENTO:...], [SORTEO:...] que la
-    IA agrega al final de cada respuesta (ver instrucción en
-    BASE_PERSONA), las quita del texto (el cliente nunca debe verlas),
-    y devuelve los 3 IDs que identificó — así, en vez de adivinar por
-    palabras sueltas qué tienda/evento/sorteo mencionó el mensaje
-    (frágil: "Juan" vs "Juan Valdez Café", "¡Claro!" vs la tienda
-    "Claro", "12B Burguer" sin encontrar "12B Burguer Angus"), usamos
-    el mismo criterio inteligente que la IA ya usó para escribir la
-    respuesta — una sola fuente de verdad.
+    Busca las 4 marcas [TIENDA:...], [EVENTO:...], [SORTEO:...],
+    [MARKETING:...] que la IA agrega al final de cada respuesta (ver
+    instrucción en BASE_PERSONA), las quita del texto (el cliente nunca
+    debe verlas), y devuelve los 4 IDs que identificó — así, en vez de
+    adivinar por palabras sueltas qué tienda/evento/sorteo/promoción
+    mencionó el mensaje (frágil: "Juan" vs "Juan Valdez Café", "¡Claro!"
+    vs la tienda "Claro", "12B Burguer" sin encontrar "12B Burguer
+    Angus"), usamos el mismo criterio inteligente que la IA ya usó para
+    escribir la respuesta — una sola fuente de verdad.
 
-    Devuelve (texto_limpio, id_tienda, id_evento, id_sorteo).
+    Devuelve (texto_limpio, id_tienda, id_evento, id_sorteo, id_marketing).
 
     Es defensivo a propósito: si el modelo no siguió el formato exacto
     para alguna marca, simplemente no encontramos ese ID en particular
@@ -688,7 +763,7 @@ def _extract_entity_markers(text: str) -> tuple[str, int | None, int | None, int
     import re
     cleaned = text
     ids = {}
-    for label in ("TIENDA", "EVENTO", "SORTEO"):
+    for label in ("TIENDA", "EVENTO", "SORTEO", "MARKETING"):
         match = re.search(rf"\n?\[{label}:\s*([^\]]*)\]", cleaned, flags=re.IGNORECASE)
         if match:
             raw_value = match.group(1).strip()
@@ -696,7 +771,7 @@ def _extract_entity_markers(text: str) -> tuple[str, int | None, int | None, int
             cleaned = cleaned[:match.start()] + cleaned[match.end():]
         else:
             ids[label] = None
-    return cleaned.strip(), ids["TIENDA"], ids["EVENTO"], ids["SORTEO"]
+    return cleaned.strip(), ids["TIENDA"], ids["EVENTO"], ids["SORTEO"], ids["MARKETING"]
 
 
 def _strip_thinking_tags(text: str) -> str:

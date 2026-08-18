@@ -35,7 +35,7 @@ async def handle_image_message(
         f"¿Qué tienda o local del mall tiene algo parecido a esto?"
     )
 
-    response, _, _, _ = await generate_response(
+    response, _, _, _, _ = await generate_response(
         user_message=search_query,
         user_name=user_name,
         conversation_history=conversation_history or [],

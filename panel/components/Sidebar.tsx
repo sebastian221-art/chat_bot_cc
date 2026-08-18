@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Store, MessageSquare, CalendarDays,
   BarChart2, ShoppingBag, FileText, ChevronRight,
-  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift,
+  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift, Megaphone,
 } from 'lucide-react'
 import { getUser, clearAuth, getRoleLabel, type AuthUser } from '@/lib/auth'
 
@@ -20,6 +20,7 @@ const TOP_LINKS = [
   { href: '/domicilios',     label: 'Domicilios',      icon: ShoppingBag,     roles: ['admin'] },
   { href: '/eventos',        label: 'Eventos',          icon: CalendarDays,    roles: ['admin', 'supervisor'] },
   { href: '/sorteos',        label: 'Sorteos',          icon: Gift,            roles: ['admin', 'supervisor'] },
+  { href: '/marketing',      label: 'Marketing',        icon: Megaphone,       roles: ['admin', 'supervisor'] },
   { href: '/tiendas',        label: 'Locales',          icon: Store,           roles: ['admin', 'supervisor'] },
   { href: '/conocimiento',   label: 'Base de Conocimiento', icon: BookOpen,    roles: ['admin', 'supervisor'] },
   { href: '/zonas',          label: 'Navegación QR',       icon: QrCode,       roles: ['admin', 'supervisor'] },

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
+import CineCartelera from '@/components/CineCartelera'
 import { Plus, Pencil, Trash2, Search, RefreshCw, Store, Download, Upload, ImageOff, MapPin, Phone, Clock } from 'lucide-react'
 
 const CATEGORIES = [
@@ -258,6 +259,16 @@ export default function TiendasPage() {
           <div className="col-span-2">
             <StorePhotoGallery storeId={editing} />
           </div>
+
+          {/* Sección especial — solo aparece si el nombre del local
+              contiene "cine" (ej. "Cine", "Cinemark"). Distinto a un
+              local normal porque cambia semana a semana: cartelera de
+              películas y horarios de función, no un horario fijo. */}
+          {editing !== null && form.name.toLowerCase().includes('cine') && (
+            <div className="col-span-2">
+              <CineCartelera storeId={editing} />
+            </div>
+          )}
 
           <div className="col-span-2">
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">

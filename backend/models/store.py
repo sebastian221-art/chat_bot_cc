@@ -85,4 +85,11 @@ class Store(Base):
             parts.append(f"Palabras clave: {self.tags}")
         if self.extra_info:
             parts.append(f"Información adicional: {self.extra_info}")
+        # Si esta tienda es el Cine y tiene funciones cargadas, se
+        # incluyen aquí mismo — así, cuando alguien pregunte por el
+        # cine, la cartelera actual viene incluida automáticamente,
+        # sin necesitar un sistema aparte.
+        funciones_activas = [f for f in self.cine_funciones if f.active]
+        if funciones_activas:
+            parts.append("Cartelera actual: " + " | ".join(f.to_rag_text() for f in funciones_activas))
         return " | ".join(parts)

@@ -35,6 +35,8 @@ from models.info_point import InfoPoint
 from models.delivery_transfer import DeliveryTransfer
 from models.delivery_management import DeliveryManagement
 from models.raffle import Raffle
+from models.marketing import Marketing
+from models.cine_funcion import CineFuncion
 from models.store_photo import StorePhoto, VALID_LABELS as STORE_PHOTO_LABELS
 from models.entity_photo import EntityPhoto, VALID_ENTITY_TYPES, ENTITY_LABELS, get_entity_photo
 from services.rag import load_stores_to_rag
@@ -66,6 +68,23 @@ class EventIn(BaseModel):
     description: Optional[str] = ""
     priority: Optional[int] = 3
     photo_url: Optional[str] = ""
+
+class MarketingIn(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    store_id: Optional[int] = None
+    priority: Optional[int] = 3
+    valid_until: Optional[str] = ""
+    active: Optional[bool] = True
+    photo_url: Optional[str] = ""
+
+class CineFuncionIn(BaseModel):
+    store_id: int
+    title: str
+    showtimes: Optional[str] = ""
+    description: Optional[str] = ""
+    is_premiere: Optional[bool] = False
+    active: Optional[bool] = True
 
 class ReplyIn(BaseModel):
     message: str
@@ -648,6 +667,108 @@ async def import_events(file: UploadFile = File(...), db: Session = Depends(get_
     _reindex(db)
     print(f"  📥  Import eventos: {created} nuevos, {updated} actualizados, {skipped} saltados")
     return {"ok": True, "created": created, "updated": updated, "skipped": skipped, "errors": errors[:20]}
+
+
+# ══════════════════════════════════════════════════════════════════
+# MARKETING  (promociones de tiendas, del cine, o generales del mall)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/marketing")
+def list_marketing(db: Session = Depends(get_db)):
+    promos = db.query(Marketing).order_by(Marketing.priority.desc(), Marketing.created_at.desc()).all()
+    return _attach_photos(db, "marketing", promos)
+
+
+@router.post("/marketing", status_code=201)
+def create_marketing(promo: MarketingIn, db: Session = Depends(get_db)):
+    new_promo = Marketing(**promo.model_dump())
+    db.add(new_promo)
+    db.commit()
+    db.refresh(new_promo)
+    _reindex(db)
+    print(f"  ✅  Promoción de marketing agregada: {new_promo.title} (id={new_promo.id})")
+    return {"ok": True, "marketing": new_promo.to_dict()}
+
+
+@router.put("/marketing/{marketing_id}")
+def update_marketing(marketing_id: int, promo: MarketingIn, db: Session = Depends(get_db)):
+    existing = db.query(Marketing).filter(Marketing.id == marketing_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Promoción no encontrada")
+    for field, value in promo.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  ✅  Promoción de marketing actualizada: {existing.title} (id={existing.id})")
+    return {"ok": True, "marketing": existing.to_dict()}
+
+
+@router.delete("/marketing/{marketing_id}")
+def delete_marketing(marketing_id: int, db: Session = Depends(get_db)):
+    existing = db.query(Marketing).filter(Marketing.id == marketing_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Promoción no encontrada")
+    title = existing.title
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Promoción de marketing eliminada: {title}")
+    return {"ok": True, "removed": title}
+
+
+# ══════════════════════════════════════════════════════════════════
+# CARTELERA DE CINE  (funciones/estrenos — ligadas a la tienda del Cine)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/cine-funciones")
+def list_cine_funciones(store_id: int, db: Session = Depends(get_db)):
+    """Siempre filtrado por store_id — la cartelera se administra desde el local del Cine específico."""
+    funciones = (
+        db.query(CineFuncion)
+        .filter(CineFuncion.store_id == store_id)
+        .order_by(CineFuncion.is_premiere.desc(), CineFuncion.title)
+        .all()
+    )
+    return [f.to_dict() for f in funciones]
+
+
+@router.post("/cine-funciones", status_code=201)
+def create_cine_funcion(funcion: CineFuncionIn, db: Session = Depends(get_db)):
+    new_funcion = CineFuncion(**funcion.model_dump())
+    db.add(new_funcion)
+    db.commit()
+    db.refresh(new_funcion)
+    _reindex(db)
+    print(f"  🎬  Función de cine agregada: {new_funcion.title} (id={new_funcion.id})")
+    return {"ok": True, "funcion": new_funcion.to_dict()}
+
+
+@router.put("/cine-funciones/{funcion_id}")
+def update_cine_funcion(funcion_id: int, funcion: CineFuncionIn, db: Session = Depends(get_db)):
+    existing = db.query(CineFuncion).filter(CineFuncion.id == funcion_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Función no encontrada")
+    for field, value in funcion.model_dump().items():
+        setattr(existing, field, value)
+    db.commit()
+    db.refresh(existing)
+    _reindex(db)
+    print(f"  🎬  Función de cine actualizada: {existing.title} (id={existing.id})")
+    return {"ok": True, "funcion": existing.to_dict()}
+
+
+@router.delete("/cine-funciones/{funcion_id}")
+def delete_cine_funcion(funcion_id: int, db: Session = Depends(get_db)):
+    existing = db.query(CineFuncion).filter(CineFuncion.id == funcion_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Función no encontrada")
+    title = existing.title
+    db.delete(existing)
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️   Función de cine eliminada: {title}")
+    return {"ok": True, "removed": title}
 
 
 # ══════════════════════════════════════════════════════════════════

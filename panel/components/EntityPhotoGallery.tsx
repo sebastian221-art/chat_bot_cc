@@ -23,10 +23,14 @@ const LABELS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
     { value: 'principal', label: '🖼️ Principal' },
     { value: 'otra', label: '📷 Otra' },
   ],
+  marketing: [
+    { value: 'afiche', label: '🖼️ Afiche' },
+    { value: 'otra', label: '📷 Otra' },
+  ],
 }
 
 interface Props {
-  entityType: 'event' | 'raffle' | 'knowledge' | 'zone'
+  entityType: 'event' | 'raffle' | 'knowledge' | 'zone' | 'marketing'
   entityId: number | null
   accent?: string
 }

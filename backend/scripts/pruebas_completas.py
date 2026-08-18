@@ -62,11 +62,15 @@ def imprimir_resultado(mensaje: str, resultado: dict, esperado: str = ""):
         print()
         return
     bot = resultado.get("bot", "(sin respuesta)")
-    img = resultado.get("image_url")
+    imgs = resultado.get("image_urls", [])
     loc = resultado.get("location")
     tiempo = resultado.get("time_seconds", "?")
     print(f"  🤖 Respuesta: {bot}")
-    print(f"  🖼️  Foto adjunta: {img if img else '(ninguna)'}")
+    if imgs:
+        for i, url in enumerate(imgs, 1):
+            print(f"  🖼️  Foto {i}/{len(imgs)}: {url}")
+    else:
+        print(f"  🖼️  Fotos adjuntas: (ninguna)")
     if loc:
         print(f"  📍 Ubicación adjunta: {loc}")
     print(f"  ⏱️  Tiempo: {tiempo}s")

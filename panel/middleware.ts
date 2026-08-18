@@ -53,7 +53,7 @@ function _checkAccess(
 
   // supervisor: solo estas rutas
   if (role === 'supervisor') {
-    const allowed = ['/dashboard', '/conversaciones', '/eventos', '/tiendas']
+    const allowed = ['/dashboard', '/conversaciones', '/eventos', '/tiendas', '/marketing']
     if (allowed.some(p => pathname.startsWith(p))) return false
     return true   // todo lo demás: sin acceso
   }

@@ -3,17 +3,19 @@ from models.database import Base
 
 # Qué tipo de cosa es cada foto — así una sola tabla sirve para varios
 # tipos de contenido, sin repetir la misma tabla 4 veces.
-VALID_ENTITY_TYPES = ["event", "raffle", "knowledge", "zone"]
+VALID_ENTITY_TYPES = ["event", "raffle", "knowledge", "zone", "marketing"]
 
 # Etiquetas válidas por tipo de entidad — cada una tiene sentido distinto:
 # - event: solo necesita un afiche principal
 # - raffle: afiche promocional Y, aparte, una foto del premio (ej. el carro)
 # - knowledge/zone: una foto principal ilustrativa, sin mucha variedad
+# - marketing: un afiche/foto principal de la promoción
 ENTITY_LABELS = {
     "event": ["afiche", "otra"],
     "raffle": ["afiche", "premio", "otra"],
     "knowledge": ["principal", "otra"],
     "zone": ["principal", "otra"],
+    "marketing": ["afiche", "otra"],
 }
 
 LABEL_DISPLAY = {
