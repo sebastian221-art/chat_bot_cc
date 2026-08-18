@@ -26,6 +26,12 @@ settings = get_settings()
 BASE = settings.PUBLIC_BASE_URL
 PHONE_PREFIX = "test_"  # corto a propósito — la columna phone_number solo acepta 20 caracteres
 
+# Guardamos TODAS las respuestas del bot durante toda la corrida — al
+# final se usa para una verificación automática de que ninguna marca
+# interna ([TIENDA:...], [EVENTO:...], etc.) se haya filtrado al
+# cliente en NINGUNA respuesta, sin importar el bloque.
+TODAS_LAS_RESPUESTAS = []
+
 # ── Ayudantes ────────────────────────────────────────────────────
 
 def enviar(mensaje: str, telefono: str, nombre: str = "Tester") -> dict:
@@ -62,6 +68,7 @@ def imprimir_resultado(mensaje: str, resultado: dict, esperado: str = ""):
         print()
         return
     bot = resultado.get("bot", "(sin respuesta)")
+    TODAS_LAS_RESPUESTAS.append(bot)
     imgs = resultado.get("image_urls", [])
     loc = resultado.get("location")
     tiempo = resultado.get("time_seconds", "?")
@@ -228,6 +235,60 @@ for msg, esperado in [
     ("Como participo en las campañas?", "Debe dar la info real de campañas/sorteos"),
 ]:
     imprimir_resultado(msg, enviar(msg, tel), esperado)
+
+# ══════════════════════════════════════════════════════════════════
+# BLOQUE 11 — Marketing (promociones de tiendas/cine/generales)
+# ══════════════════════════════════════════════════════════════════
+seccion("BLOQUE 11 — Marketing")
+tel = PHONE_PREFIX + "marketing"
+limpiar_historial(tel)
+
+for msg, esperado in [
+    ("Tienen alguna promoción u oferta ahora mismo?", "DEPENDE de si hay algo cargado en Panel → Marketing — si hay, debe mencionarla; si no, respuesta general normal"),
+]:
+    imprimir_resultado(msg, enviar(msg, tel), esperado)
+
+# ══════════════════════════════════════════════════════════════════
+# BLOQUE 12 — Cartelera de Cine
+# ══════════════════════════════════════════════════════════════════
+seccion("BLOQUE 12 — Cartelera de Cine")
+tel = PHONE_PREFIX + "cine"
+limpiar_historial(tel)
+
+for msg, esperado in [
+    ("Qué películas están en cartelera en el cine?", "DEPENDE de si hay funciones cargadas en Locales → Cine — si hay, debe listarlas con horarios; si no, debe decir que no tiene esa info puntual"),
+]:
+    imprimir_resultado(msg, enviar(msg, tel), esperado)
+
+# ══════════════════════════════════════════════════════════════════
+# BLOQUE 13 — Varias fotos en un mismo mensaje (hasta 2)
+# ══════════════════════════════════════════════════════════════════
+seccion("BLOQUE 13 — Varias fotos en un mismo mensaje")
+tel = PHONE_PREFIX + "multifoto"
+limpiar_historial(tel)
+
+for msg, esperado in [
+    ("Cuéntame de 12B Burguer y también qué eventos de alta prioridad hay esta semana", "Puede traer HASTA 2 fotos distintas (una de la tienda, una del evento) — nunca más de 2, nunca repetidas"),
+]:
+    imprimir_resultado(msg, enviar(msg, tel), esperado)
+
+# ══════════════════════════════════════════════════════════════════
+# VERIFICACIÓN FINAL — ninguna marca interna debe filtrarse al cliente
+# ══════════════════════════════════════════════════════════════════
+seccion("VERIFICACIÓN FINAL — marcas internas nunca visibles al cliente")
+
+marcas_filtradas = []
+for i, texto in enumerate(TODAS_LAS_RESPUESTAS, 1):
+    for marca in ("[TIENDA:", "[EVENTO:", "[SORTEO:", "[MARKETING:"):
+        if marca in texto:
+            marcas_filtradas.append((i, marca, texto[:150]))
+
+if marcas_filtradas:
+    print(f"  ❌ ¡PROBLEMA! Se encontraron {len(marcas_filtradas)} marca(s) internas visibles en respuestas reales:")
+    for idx, marca, fragmento in marcas_filtradas:
+        print(f"     Respuesta #{idx} — marca '{marca}' — texto: {fragmento}...")
+else:
+    print(f"  ✅ Ninguna marca interna se filtró en ninguna de las {len(TODAS_LAS_RESPUESTAS)} respuestas revisadas.")
 
 print()
 print("=" * 70)
