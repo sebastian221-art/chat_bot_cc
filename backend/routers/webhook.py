@@ -264,6 +264,15 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     if pide_cartelera:
         cine_store = find_cine_store(db)
         if cine_store:
+            # Traza de diagnóstico: TODAS las funciones de esta tienda,
+            # activas o no — para ver exactamente qué hay guardado de
+            # verdad, sin adivinar.
+            from models.cine_funcion import CineFuncion as CineFuncionModel
+            todas = db.query(CineFuncionModel).filter(CineFuncionModel.store_id == cine_store.id).all()
+            _trace(phone_number, f"Tienda de cine encontrada: '{cine_store.name}' (ID {cine_store.id}) | Funciones totales en la BD para esta tienda: {len(todas)}")
+            for f in todas:
+                _trace(phone_number, f"   Función en BD: '{f.title}' | store_id={f.store_id} | active={f.active}")
+
             funcion_puntual = find_cine_funcion_by_message(db, cine_store.id, message_text)
             if funcion_puntual:
                 _trace(phone_number, f"RUTA TOMADA: cartelera — película puntual '{funcion_puntual.title}'")
