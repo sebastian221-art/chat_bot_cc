@@ -76,6 +76,7 @@ REGLAS SIEMPRE:
 - Usa máximo 1-2 emojis por mensaje, solo cuando aporten
 - NUNCA uses tablas (con | o guiones de separación entre columnas) — WhatsApp no las muestra bien. Usa listas simples con guion o texto corrido
 - Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba
+- La información de tiendas/eventos/sorteos/promociones que ves abajo incluye un campo "ID: <número>" al principio de cada una — eso es SOLO para uso técnico interno, el cliente JAMÁS debe verlo. NUNCA escribas frases como "(ID 1)", "ID: 42", o el número de ID de ninguna forma en tu respuesta visible — refiérete a las cosas por su nombre únicamente (ej. "el evento festipatitas", nunca "festipatitas (ID 1)")
 
 MARCAS DE IDENTIFICACIÓN (instrucción técnica interna — el cliente NUNCA ve esto):
 Al final de tu respuesta, SIEMPRE en 4 líneas completamente aparte (una por
@@ -299,7 +300,10 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
                     "mencionas al tipo de cosa que es — un sorteo de un carro se menciona con emoción y "
                     "urgencia ('¡no te lo pierdas!'), una promoción de ropa con un tono más de moda y "
                     "estilo, un evento familiar con calidez. Menciona SOLO esta, no mezcles con otras "
-                    "promociones en el mismo mensaje):\n" +
+                    "promociones en el mismo mensaje. SOBRE EL FORMATO: escríbelo como una invitación "
+                    "natural y breve (2-3 líneas, nunca un bloque de datos tipo ficha técnica) — separa "
+                    "la respuesta principal del anuncio promocional con un salto de línea en blanco, y "
+                    "usa como máximo 1 emoji para todo el anuncio, no varios seguidos ni uno por dato):\n" +
                     "\n".join(f"🎯 {t}" for t in promo_texts)
                 )
     except Exception as e:

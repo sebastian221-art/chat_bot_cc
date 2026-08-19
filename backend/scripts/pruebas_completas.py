@@ -282,6 +282,12 @@ for i, texto in enumerate(TODAS_LAS_RESPUESTAS, 1):
     for marca in ("[TIENDA:", "[EVENTO:", "[SORTEO:", "[MARKETING:"):
         if marca in texto:
             marcas_filtradas.append((i, marca, texto[:150]))
+    # También revisa patrones tipo "(ID 1)" o "ID: 42" colándose en el
+    # texto visible — pasó una vez con una promoción de alta prioridad,
+    # la IA leyó el campo interno "ID:" y lo repitió en su respuesta.
+    import re
+    for m in re.finditer(r'\(?\bID:?\s*\d+\)?', texto):
+        marcas_filtradas.append((i, m.group(), texto[:150]))
 
 if marcas_filtradas:
     print(f"  ❌ ¡PROBLEMA! Se encontraron {len(marcas_filtradas)} marca(s) internas visibles en respuestas reales:")

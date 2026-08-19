@@ -378,16 +378,28 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         tipos_cubiertos.add(tipo)
         return True
 
-    photo_store = _find_recently_discussed_store(db, phone_number, store)
-    if photo_store:
-        url = _pick_store_photo(photo_store, message_text)
-        _trace(phone_number, f"Buscando foto para '{photo_store.name}'{' (tienda recordada del historial)' if not store else ''} → {'encontrada: ' + url if url else 'sin foto con esa etiqueta'}")
-        if _agregar_foto("store", photo_store.name, url):
+    photo_notes = []
+
+    def _agregar_foto(tipo: str, nombre: str, url) -> bool:
+        if not url or tipo in tipos_cubiertos or len(image_urls) >= 2:
+            return False
+        image_urls.append(url)
+        tipos_cubiertos.add(tipo)
+        return True
+
+    # ── 1) Coincidencias del MENSAJE ACTUAL únicamente ────────────────
+    # (no miramos historial todavía — eso queda como último recurso más
+    # abajo, para no dejar que una tienda de una conversación VIEJA le
+    # gane el turno a la información fresca de este mensaje)
+    if store:
+        url = _pick_store_photo(store, message_text)
+        _trace(phone_number, f"Buscando foto para '{store.name}' (mencionada en el mensaje actual) → {'encontrada: ' + url if url else 'sin foto con esa etiqueta'}")
+        if _agregar_foto("store", store.name, url):
             pidiendo_carta = any(k in message_text.lower() for k in CARTA_KEYWORDS)
             if pidiendo_carta:
                 photo_notes.append("ya se le va a adjuntar una foto junto con tu respuesta (la de la carta si existe, o la de portada si no hay carta cargada) — así que SÍ tienes algo que mostrarle, no digas que no tienes foto o carta")
             else:
-                photo_notes.append(f"ya se le va a adjuntar una foto de {photo_store.name} junto con tu respuesta — puedes mencionar que le compartes la imagen, no digas que no tienes foto")
+                photo_notes.append(f"ya se le va a adjuntar una foto de {store.name} junto con tu respuesta — puedes mencionar que le compartes la imagen, no digas que no tienes foto")
 
     event_for_photo = find_event_by_message(db, message_text)
     if event_for_photo:
@@ -451,14 +463,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
                 db.add(PromotionShown(phone_number=phone_number, entity_type=tipo, entity_id=entity_id))
         db.commit()
 
-    # ── Respaldo: si el matching por palabras no encontró ninguna
-    # tienda/evento/sorteo/marketing para la foto, pero la IA sí
-    # identificó uno específico (con su propio criterio semántico, más
-    # confiable — el mismo que usó para escribir el texto), lo
-    # intentamos como último recurso. Esto resuelve casos como "12B
-    # Burguer" sin encontrar "12B Burguer Angus" por ambigüedad de
-    # palabras sueltas. Solo se agrega si ese TIPO todavía no tiene
-    # foto y aún queda espacio (máximo 2 en total).
+    # ── 2) Respaldo — la propia IA identificó algo por ID ─────────────
+    # (más confiable que adivinar por palabras: resuelve casos como
+    # "12B Burguer" sin encontrar "12B Burguer Angus")
     if "store" not in tipos_cubiertos and tienda_id_ia:
         from models.store import Store as StoreModel
         store_ia = db.query(StoreModel).filter(StoreModel.id == tienda_id_ia).first()
@@ -490,6 +497,20 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             url = _pick_entity_photo(db, "marketing", marketing_id_ia, message_text)
             if _agregar_foto("marketing", marketing_ia.title, url):
                 _trace(phone_number, f"Respaldo (IA identificó marketing por ID): '{marketing_ia.title}' (ID {marketing_id_ia}) → foto: {url}")
+
+    # ── 3) Último recurso — buscar en el historial de la conversación ─
+    # Solo si NADA de lo anterior encontró una tienda (ni el mensaje
+    # actual, ni la IA por ID) — típicamente cuando el mensaje es un
+    # seguimiento puro como "¿tienes una foto?" sin mencionar nada.
+    # Se deja para el final a propósito: si corriera primero, una
+    # tienda VIEJA de horas atrás en la misma conversación podría
+    # "ganarle el turno" a la información fresca de este mensaje.
+    if "store" not in tipos_cubiertos:
+        photo_store = _find_recently_discussed_store(db, phone_number, None)
+        if photo_store:
+            url = _pick_store_photo(photo_store, message_text)
+            _trace(phone_number, f"Último recurso — tienda recordada del historial: '{photo_store.name}' → {'encontrada: ' + url if url else 'sin foto con esa etiqueta'}")
+            _agregar_foto("store", photo_store.name, url)
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | fotos: {len(image_urls)} | ubicación: {'SÍ' if location_data else 'NO'}")
     return {"text": text, "image_urls": image_urls, "location": location_data, "mentioned_store_id": tienda_id_ia}
