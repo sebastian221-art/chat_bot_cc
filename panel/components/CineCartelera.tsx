@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getCineFunciones, createCineFuncion, updateCineFuncion, deleteCineFuncion, CineFuncionPayload } from '@/lib/api'
 import EntityPhotoGallery from '@/components/EntityPhotoGallery'
-import { Plus, Pencil, Trash2, Film, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Film, X, Eye, EyeOff } from 'lucide-react'
 
 interface Props {
   storeId: number
@@ -63,6 +63,22 @@ export default function CineCartelera({ storeId }: Props) {
     }
   }
 
+  // Activa/desactiva con un solo clic, sin tener que abrir el
+  // formulario completo — reutiliza todos los demás datos de la
+  // película tal como están, solo cambia el estado activo/inactivo.
+  const handleToggleActive = async (f: CineFuncionPayload) => {
+    try {
+      const payload: CineFuncionPayload = {
+        title: f.title, showtimes: f.showtimes, description: f.description,
+        is_premiere: f.is_premiere, active: !f.active, store_id: storeId,
+      }
+      await updateCineFuncion(f.id!, payload)
+      await load()
+    } catch (err: any) {
+      alert('Error al cambiar el estado: ' + err.message)
+    }
+  }
+
   return (
     <div className="bg-zinc-950 border border-amber-900/40 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
@@ -92,12 +108,26 @@ export default function CineCartelera({ storeId }: Props) {
                 <p className="text-white text-sm font-medium flex items-center gap-1.5">
                   {f.title}
                   {f.is_premiere && <span className="text-[10px] bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded-full font-semibold">ESTRENO</span>}
-                  {!f.active && <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded-full">Inactiva</span>}
+                  {!f.active && (
+                    <button
+                      onClick={() => handleToggleActive(f)}
+                      className="text-[10px] bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 px-1.5 py-0.5 rounded-full font-semibold transition-colors"
+                    >
+                      Inactiva — click para activar
+                    </button>
+                  )}
                 </p>
                 {f.showtimes && <p className="text-zinc-500 text-xs mt-0.5">🕒 {f.showtimes}</p>}
                 {f.description && <p className="text-zinc-600 text-xs mt-0.5 line-clamp-1">{f.description}</p>}
               </div>
               <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => handleToggleActive(f)}
+                  title={f.active ? 'Quitar de cartelera' : 'Poner en cartelera'}
+                  className={f.active ? 'text-emerald-400 hover:text-emerald-300 transition-colors' : 'text-zinc-500 hover:text-zinc-300 transition-colors'}
+                >
+                  {f.active ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
                 <button onClick={() => openEdit(f)} className="text-zinc-400 hover:text-white transition-colors">
                   <Pencil size={14} />
                 </button>
