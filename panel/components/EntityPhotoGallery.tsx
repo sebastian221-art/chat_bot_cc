@@ -27,10 +27,14 @@ const LABELS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
     { value: 'afiche', label: '🖼️ Afiche' },
     { value: 'otra', label: '📷 Otra' },
   ],
+  cine_funcion: [
+    { value: 'poster', label: '🎬 Póster' },
+    { value: 'otra', label: '📷 Otra' },
+  ],
 }
 
 interface Props {
-  entityType: 'event' | 'raffle' | 'knowledge' | 'zone' | 'marketing'
+  entityType: 'event' | 'raffle' | 'knowledge' | 'zone' | 'marketing' | 'cine_funcion'
   entityId: number | null
   accent?: string
 }

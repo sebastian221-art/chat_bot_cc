@@ -2,6 +2,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { getCineFunciones, createCineFuncion, updateCineFuncion, deleteCineFuncion, CineFuncionPayload } from '@/lib/api'
+import EntityPhotoGallery from '@/components/EntityPhotoGallery'
 import { Plus, Pencil, Trash2, Film, X } from 'lucide-react'
 
 interface Props {
@@ -149,6 +150,12 @@ export default function CineCartelera({ storeId }: Props) {
               onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
             />
           </div>
+
+          {editing !== null && (
+            <div>
+              <EntityPhotoGallery entityType="cine_funcion" entityId={editing} accent="amber" />
+            </div>
+          )}
 
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-1.5 text-zinc-300 text-xs">

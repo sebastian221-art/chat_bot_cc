@@ -12,6 +12,12 @@ class Conversation(Base):
     message      = Column(Text, nullable=False)
     timestamp    = Column(DateTime(timezone=True), server_default=func.now())
     session_id   = Column(String(50), nullable=True)
+    # De qué tienda trató la respuesta del bot (si trató de alguna) —
+    # se llena con el ID que la propia IA identificó (marca [TIENDA:]),
+    # no adivinando por palabras. Permite que un mensaje de seguimiento
+    # como "¿tienes foto?" sepa con certeza de qué tienda se hablaba,
+    # sin tener que re-analizar el texto viejo (frágil).
+    mentioned_store_id = Column(Integer, nullable=True)
 
     def to_dict(self):
         return {

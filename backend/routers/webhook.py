@@ -52,6 +52,13 @@ from services.store_transfer import (
     is_phone_request_intent,
     build_phone_info_message,
 )
+from services.cine import (
+    is_cartelera_intent,
+    find_cine_store,
+    find_cine_funcion_by_message,
+    build_cartelera_message,
+    build_funcion_especifica_message,
+)
 
 settings = get_settings()
 logger   = logging.getLogger("mall_bot")
@@ -126,19 +133,32 @@ def _find_recently_discussed_store(db, phone_number: str, current_store):
     """
     Si el mensaje actual no menciona ninguna tienda por nombre (ej. un
     seguimiento como "¿tienes una foto?" sin repetir de cuál tienda),
-    busca en los últimos mensajes cuál se estaba discutiendo — así la
-    foto que se manda sigue coincidiendo con el tema real de la
-    conversación, igual que ya hace el texto de la IA (que sí ve el
-    historial completo).
+    busca cuál se estaba discutiendo — así la foto que se manda sigue
+    coincidiendo con el tema real de la conversación.
 
-    IMPORTANTE: revisamos SOLO lo que escribió el cliente (role="user"),
-    nunca las respuestas del bot — el bot usa muletillas como "¡Claro!"
-    todo el tiempo, y si existe una tienda real llamada "Claro" (el
-    operador de telefonía, por ejemplo), esa interjección se confundía
-    con el nombre de la tienda.
+    Primero revisa mentioned_store_id — el ID que la propia IA
+    identificó en la ÚLTIMA respuesta del bot (confiable, sin adivinar
+    por palabras). Solo si eso no está disponible (respuestas viejas
+    de antes de este arreglo, o casos raros donde la IA no lo marcó),
+    cae al método viejo de comparar palabras del último mensaje del
+    cliente — como respaldo, no como método principal.
     """
     if current_store:
         return current_store
+
+    from models.store import Store as StoreModel
+    last_bot_msg = (
+        db.query(Conversation)
+        .filter(Conversation.phone_number == phone_number, Conversation.role == "assistant")
+        .order_by(Conversation.timestamp.desc())
+        .first()
+    )
+    if last_bot_msg and last_bot_msg.mentioned_store_id:
+        store = db.query(StoreModel).filter(StoreModel.id == last_bot_msg.mentioned_store_id).first()
+        if store:
+            return store
+
+    # Respaldo — método viejo, solo si lo de arriba no encontró nada
     recent = (
         db.query(Conversation)
         .filter(Conversation.phone_number == phone_number, Conversation.role == "user")
@@ -200,16 +220,16 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         zone = find_zone(db, zone_code)
         if not zone:
             _trace(phone_number, f"Zona '{zone_code}' no existe en la base de datos → aviso de zona no encontrada")
-            return {"text": build_zone_not_found_message(), "image_urls": [], "location": None}
+            return {"text": build_zone_not_found_message(), "image_urls": [], "location": None, "mentioned_store_id": None}
 
         store = find_store_by_message(db, message_text)
         zone_photo = _pick_entity_photo(db, "zone", zone.id, message_text)
         if store:
             _trace(phone_number, f"Zona '{zone_code}' encontrada + tienda '{store.name}' mencionada → indicaciones de navegación")
             text = await build_navigation_response(zone, store, user_name)
-            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None}
+            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None, "mentioned_store_id": store.id}
         _trace(phone_number, f"Zona '{zone_code}' encontrada, sin tienda mencionada → confirma zona y pregunta a dónde quiere ir")
-        return {"text": build_zone_confirmation_message(zone), "image_urls": _wrap([zone_photo]), "location": None}
+        return {"text": build_zone_confirmation_message(zone), "image_urls": _wrap([zone_photo]), "location": None, "mentioned_store_id": None}
 
     # Si el mensaje anterior fue "¿a qué tienda quieres llegar?" (después
     # de escanear un QR), usamos la última zona escaneada por este número
@@ -223,7 +243,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             _trace(phone_number, f"Era respuesta a '¿a qué tienda quieres llegar?' tras escanear zona '{last_zone.code}' → indicaciones")
             text = await build_navigation_response(last_zone, store, user_name)
             zone_photo = _pick_entity_photo(db, "zone", last_zone.id, message_text)
-            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None}
+            return {"text": text, "image_urls": _wrap([_pick_store_photo(store, message_text) or zone_photo]), "location": None, "mentioned_store_id": store.id}
 
     # ── Petición directa del número de una tienda ────────────────────
     # Se revisa antes que domicilios porque "número de X" no siempre
@@ -232,7 +252,28 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     _trace(phone_number, f"¿Pide el número de una tienda? {'SÍ' if pide_numero else 'NO'}")
     if pide_numero and store:
         _trace(phone_number, f"RUTA TOMADA: número de teléfono de '{store.name}' → responde con número + link + pregunta de seguimiento")
-        return {"text": build_phone_info_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
+        return {"text": build_phone_info_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None, "mentioned_store_id": store.id}
+
+    # ── Cartelera de cine ─────────────────────────────────────────────
+    # Determinística, igual que el número de teléfono — no dependemos
+    # de que la búsqueda semántica (RAG) encuentre la tienda del Cine
+    # por casualidad. Si preguntan por películas/cartelera/estrenos,
+    # vamos directo a los datos reales.
+    pide_cartelera = is_cartelera_intent(message_text)
+    _trace(phone_number, f"¿Pregunta por cartelera de cine? {'SÍ' if pide_cartelera else 'NO'}")
+    if pide_cartelera:
+        cine_store = find_cine_store(db)
+        if cine_store:
+            funcion_puntual = find_cine_funcion_by_message(db, cine_store.id, message_text)
+            if funcion_puntual:
+                _trace(phone_number, f"RUTA TOMADA: cartelera — película puntual '{funcion_puntual.title}'")
+                from models.entity_photo import get_entity_photo
+                poster = get_entity_photo(db, "cine_funcion", funcion_puntual.id, "poster")
+                return {"text": build_funcion_especifica_message(funcion_puntual, cine_store), "image_urls": _wrap([poster]), "location": None, "mentioned_store_id": cine_store.id}
+            _trace(phone_number, f"RUTA TOMADA: cartelera completa de '{cine_store.name}'")
+            return {"text": build_cartelera_message(cine_store), "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+        _trace(phone_number, "RUTA TOMADA: cartelera — no se encontró ninguna tienda de categoría/nombre 'Cine'")
+        return {"text": build_cartelera_message(None), "image_urls": [], "location": None, "mentioned_store_id": None}
 
     # ── Gestión completa de domicilio ────────────────────────────────
     # Prioridad alta: si ya hay una gestión en curso para este número,
@@ -244,7 +285,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         _trace(phone_number, "RUTA TOMADA: continuar gestión de domicilio (extrae datos, detecta cancelación o pregunta fuera de tema)")
         text = await continue_management(db, active_session, message_text, store, user_name)
         img = _pick_store_photo(store, message_text)
-        return {"text": text, "image_urls": _wrap([img]), "location": None}
+        return {"text": text, "image_urls": _wrap([img]), "location": None, "mentioned_store_id": store.id if store else None}
 
     # Si no hay sesión activa pero el cliente pide EXPLÍCITAMENTE que se
     # le ayude a gestionar el pedido (no solo lo menciona de pasada),
@@ -258,9 +299,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             # Aquí forzamos la etiqueta "carta" — es exactamente el
             # momento en que se le muestra el menú al cliente.
             photo = store.get_photo_by_label("carta")
-            return {"text": text, "image_urls": _wrap([photo]), "location": None}
+            return {"text": text, "image_urls": _wrap([photo]), "location": None, "mentioned_store_id": store.id if store else None}
         _trace(phone_number, "RUTA TOMADA: pide gestión pero sin tienda identificada → pregunta cuál (versión gestión)")
-        return {"text": build_ask_which_store_management_message(), "image_urls": [], "location": None}
+        return {"text": build_ask_which_store_management_message(), "image_urls": [], "location": None, "mentioned_store_id": None}
 
     quiere_domicilio_simple = is_delivery_intent(message_text)
     _trace(phone_number, f"¿Menciona domicilio simple? {'SÍ' if quiere_domicilio_simple else 'NO'}")
@@ -268,9 +309,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         if store:
             _trace(phone_number, f"RUTA TOMADA: transferencia simple a '{store.name}' (solo el link, sin recolectar datos)")
             _log_delivery_transfer(db, phone_number, store.name)
-            return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
+            return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None, "mentioned_store_id": store.id}
         _trace(phone_number, "RUTA TOMADA: menciona domicilio pero sin tienda identificada → pregunta cuál (versión simple)")
-        return {"text": build_ask_which_store_message(), "image_urls": [], "location": None}
+        return {"text": build_ask_which_store_message(), "image_urls": [], "location": None, "mentioned_store_id": None}
 
     # También intenta resolver tienda si el mensaje anterior fue
     # "¿de qué tienda quieres pedir?" — primero revisamos si esa
@@ -280,12 +321,12 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         _trace(phone_number, f"Era respuesta a la pregunta '¿de qué tienda?' de GESTIÓN → arranca gestión completa para '{store.name}'")
         text = await start_management(db, phone_number, store)
         photo = store.get_photo_by_label("carta")
-        return {"text": text, "image_urls": _wrap([photo]), "location": None}
+        return {"text": text, "image_urls": _wrap([photo]), "location": None, "mentioned_store_id": store.id if store else None}
 
     if store and _last_bot_message_was_ask(db, phone_number):
         _trace(phone_number, f"Era respuesta a la pregunta '¿de qué tienda?' SIMPLE → transferencia directa a '{store.name}'")
         _log_delivery_transfer(db, phone_number, store.name)
-        return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None}
+        return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None, "mentioned_store_id": store.id}
 
     # ── Ubicación del mall en sí (no de una tienda puntual) ──────────
     # Si preguntan "dónde queda" sin mencionar una tienda específica,
@@ -451,7 +492,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
                 _trace(phone_number, f"Respaldo (IA identificó marketing por ID): '{marketing_ia.title}' (ID {marketing_id_ia}) → foto: {url}")
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | fotos: {len(image_urls)} | ubicación: {'SÍ' if location_data else 'NO'}")
-    return {"text": text, "image_urls": image_urls, "location": location_data}
+    return {"text": text, "image_urls": image_urls, "location": location_data, "mentioned_store_id": tienda_id_ia}
 
 
 def _last_bot_message_was_ask(db: Session, phone_number: str) -> bool:
@@ -593,6 +634,7 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     # 5. Generar respuesta
     image_urls = []
     location_data = None
+    mentioned_store_id = None
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
@@ -600,6 +642,7 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
         response_text = result["text"]
         image_urls = result["image_urls"]
         location_data = result["location"]
+        mentioned_store_id = result.get("mentioned_store_id")
 
     # 6. Guardar respuesta y enviar
     db.add(Conversation(
@@ -607,6 +650,7 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
         user_name=user_name,
         role="assistant",
         message=response_text,
+        mentioned_store_id=mentioned_store_id,
     ))
     db.commit()
 
@@ -757,6 +801,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
         image_urls = []
         location_data = None
         debug_log = ""
+        mentioned_store_id = None
         if escalated:
             response_text = build_handoff_message(user_name)
         else:
@@ -774,12 +819,14 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             response_text = result["text"]
             image_urls = result["image_urls"]
             location_data = result["location"]
+            mentioned_store_id = result.get("mentioned_store_id")
 
         db.add(Conversation(
             phone_number=phone_number,
             user_name=user_name,
             role="assistant",
             message=response_text,
+            mentioned_store_id=mentioned_store_id,
         ))
         db.commit()
     except Exception as e:
