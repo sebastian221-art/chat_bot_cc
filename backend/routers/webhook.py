@@ -280,7 +280,18 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
                 poster = get_entity_photo(db, "cine_funcion", funcion_puntual.id, "poster")
                 return {"text": build_funcion_especifica_message(funcion_puntual, cine_store), "image_urls": _wrap([poster]), "location": None, "mentioned_store_id": cine_store.id}
             _trace(phone_number, f"RUTA TOMADA: cartelera completa de '{cine_store.name}'")
-            return {"text": build_cartelera_message(cine_store), "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+            # Junta los pósters de las películas activas (hasta 2, mismo
+            # tope que el resto del sistema) — con solo 1-2 en cartelera
+            # no hay ambigüedad de cuál mostrar, así que sí tiene sentido
+            # mandarlas junto con la lista.
+            from models.entity_photo import get_entity_photo
+            posters_cartelera = []
+            for f in cine_store.cine_funciones:
+                if f.active and len(posters_cartelera) < 2:
+                    p = get_entity_photo(db, "cine_funcion", f.id, "poster")
+                    if p:
+                        posters_cartelera.append(p)
+            return {"text": build_cartelera_message(cine_store), "image_urls": posters_cartelera, "location": None, "mentioned_store_id": cine_store.id}
         _trace(phone_number, "RUTA TOMADA: cartelera — no se encontró ninguna tienda de categoría/nombre 'Cine'")
         return {"text": build_cartelera_message(None), "image_urls": [], "location": None, "mentioned_store_id": None}
 
