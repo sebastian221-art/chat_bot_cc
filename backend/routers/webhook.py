@@ -34,6 +34,8 @@ from services.whatsapp import send_text_message, send_image_message, send_locati
 from services.ai import generate_response, is_delivery_intent, is_delivery_management_intent, needs_human_attention, build_handoff_message, classify_intent
 from services.vision_search import handle_image_message
 from services.content_matching import find_event_by_message, find_raffle_by_message, find_marketing_by_message
+from services.category_search import detectar_categoria, construir_lista_locales
+from services.rag import find_all_stores_by_category
 from services.delivery_management import get_active_session, start_management, continue_management
 from services.navigation import (
     parse_zone_code,
@@ -367,6 +369,24 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
                 _trace(phone_number, f"Pregunta por ubicación del MALL en sí → se adjunta pin real ({location_data['latitude']}, {location_data['longitude']})")
             except ValueError:
                 location_data = None
+
+    # ── Búsqueda JUSTA por categoría (equidad comercial) ──────────────
+    # Si preguntan por un TIPO de producto/comida ("¿dónde comer
+    # hamburguesas?", "¿zapatos formales?") y NO se identificó ninguna
+    # tienda puntual por nombre, listamos TODOS los locales de ese tipo
+    # — sin selección ni ranking, para que ningún local pueda reclamar
+    # que se promociona más a otros. Solo si hay 2+ resultados vale la
+    # pena: con 0 dejamos que la IA maneje la conversación (acotar/
+    # sugerir), y con 1 la respuesta general normal ya lo cubre bien.
+    if not store:
+        categoria_detectada = detectar_categoria(message_text)
+        if categoria_detectada:
+            nombre_cat, terminos = categoria_detectada
+            locales = find_all_stores_by_category(db, terminos)
+            _trace(phone_number, f"Búsqueda por categoría '{nombre_cat}' → {len(locales)} local(es) encontrado(s)")
+            if len(locales) >= 2:
+                texto_lista = construir_lista_locales(locales, nombre_cat)
+                return {"text": texto_lista, "image_urls": [], "location": None, "mentioned_store_id": None}
 
     records = _get_history(db, phone_number, exclude_id=exclude_msg_id)
     history = [

@@ -4,6 +4,7 @@ from typing import List
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 
 from models.store import Store
 from models.event import Event
@@ -166,6 +167,43 @@ def search_stores(query: str, n_results: int = 8) -> List[str]:
     except Exception as e:
         logger.error(f"Error RAG búsqueda: {str(e)}")
         return []
+
+
+def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]:
+    """
+    Búsqueda JUSTA por categoría/tipo — trae TODOS los locales que
+    coincidan con alguno de los términos dados (en su categoría,
+    subcategoría, nombre, descripción o palabras clave), SIN límite y
+    SIN ranking de "parecido".
+
+    Esto es distinto a search_stores() (que es semántica y tope de 8):
+    aquí el objetivo es la EQUIDAD COMERCIAL — cuando alguien pregunta
+    "¿dónde comer hamburguesas?" o "¿zapatos formales?", deben salir
+    TODOS los locales de ese tipo, no una selección, para que ningún
+    local pueda reclamar que se promociona más a otros.
+
+    El orden es alfabético (neutral) — no hay "primero" ni "destacado".
+    Devuelve objetos Store (no texto), para que quien llame decida cómo
+    presentarlos.
+    """
+    if not terminos:
+        return []
+
+    condiciones = []
+    for t in terminos:
+        like = f"%{t.lower()}%"
+        condiciones.append(func.lower(Store.category).like(like))
+        condiciones.append(func.lower(Store.name).like(like))
+        condiciones.append(func.lower(Store.description).like(like))
+        condiciones.append(func.lower(Store.tags).like(like))
+
+    stores = (
+        db.query(Store)
+        .filter(or_(*condiciones))
+        .order_by(Store.name.asc())
+        .all()
+    )
+    return stores
 
 
 def search_knowledge_and_events(query: str, n_results: int = 4) -> List[str]:
