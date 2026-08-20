@@ -394,6 +394,37 @@ async def generate_response(
 
     system_content = PROMPTS.get(intent, PROMPTS["general"])
 
+    # Para el saludo: decidir si es "primera vez" o "ya veníamos
+    # hablando" según la SESIÓN, no según si existe cualquier mensaje
+    # viejo. Si el último intercambio fue hace más de SESSION_GAP_HOURS
+    # (misma ventana que usa el sistema de promociones), cuenta como
+    # conversación nueva y saluda como primera vez — aunque haya
+    # mensajes de días anteriores en el historial. Esto evita el "¡Hola
+    # de nuevo!" a alguien que claramente está empezando una
+    # conversación fresca hoy.
+    if intent == "saludo":
+        from datetime import datetime, timedelta, timezone
+        es_sesion_nueva = True
+        if db and phone_number:
+            from models.conversation import Conversation as ConvModel
+            ultimo = (
+                db.query(ConvModel)
+                .filter(ConvModel.phone_number == phone_number, ConvModel.role != "user")
+                .order_by(ConvModel.timestamp.desc())
+                .first()
+            )
+            if ultimo and ultimo.timestamp:
+                ahora = datetime.now(timezone.utc)
+                ts = ultimo.timestamp
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                if (ahora - ts) <= timedelta(hours=SESSION_GAP_HOURS):
+                    es_sesion_nueva = False
+        if es_sesion_nueva:
+            system_content += "\n\nCONTEXTO IMPORTANTE: esta es una conversación NUEVA (no venían hablando hace poco). Salúdalo como si fuera la primera vez — preséntate como Any y sé cálido, NO digas 'de nuevo' ni 'otra vez'."
+        else:
+            system_content += "\n\nCONTEXTO IMPORTANTE: ya venían hablando hace poco en esta misma sesión. NO te presentes de nuevo — responde breve y natural, siguiendo el hilo."
+
     # Inyectar contexto del pedido activo cuando la pregunta es sobre estado
     if active_order_context:
         system_content += f"\n\n--- PEDIDO ACTIVO DEL CLIENTE ---\n{active_order_context}\n---"
@@ -464,9 +495,9 @@ async def generate_response(
         completion = await client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=messages,
-            max_tokens=600,  # antes 500 — un poco más de margen de seguridad,
-                             # aunque la segmentación de respuestas (2-3 opciones
-                             # máximo) ya debería evitar que se corten
+            max_tokens=800,  # subido a 800: las respuestas que listan varias
+                             # tiendas (ej. "dónde comer hamburguesas") se
+                             # cortaban a mitad con menos margen
             temperature=0.7,
             top_p=0.9,
             # NOTA: NO usamos reasoning_effort/reasoning_format aquí — la
