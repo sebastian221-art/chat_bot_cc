@@ -195,7 +195,7 @@ def _wrap(candidatos: list) -> list:
     return limpio[:2]
 
 
-async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str) -> dict:
+async def _route_message(db: Session, phone_number: str, user_name: str, message_text: str, exclude_msg_id: int = None) -> dict:
     """
     Decide y genera la respuesta del bot para un mensaje entrante.
     Compartido entre el webhook real y el endpoint /test para que
@@ -368,7 +368,7 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             except ValueError:
                 location_data = None
 
-    records = _get_history(db, phone_number)
+    records = _get_history(db, phone_number, exclude_id=exclude_msg_id)
     history = [
         {"role": "assistant" if r.role == "admin" else r.role, "content": r.message}
         for r in reversed(records)
@@ -650,13 +650,15 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     print(f"\n  📨  [{phone_number}] {user_name}: {message_text[:80]}")
 
     # 1. Guardar mensaje del usuario
-    db.add(Conversation(
+    current_msg = Conversation(
         phone_number=phone_number,
         user_name=user_name,
         role="user",
         message=message_text,
-    ))
+    )
+    db.add(current_msg)
     db.commit()
+    db.refresh(current_msg)
 
     # 2. Limpiar historial viejo
     _trim_history(db, phone_number)
@@ -679,7 +681,7 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
-        result = await _route_message(db, phone_number, user_name, message_text)
+        result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
         response_text = result["text"]
         image_urls = result["image_urls"]
         location_data = result["location"]
@@ -767,14 +769,11 @@ async def _process_image_message(db: Session, phone_number: str, user_name: str,
 
 # ── Helpers ───────────────────────────────────────────────────────
 
-def _get_history(db: Session, phone_number: str):
-    return (
-        db.query(Conversation)
-        .filter(Conversation.phone_number == phone_number)
-        .order_by(Conversation.timestamp.desc())
-        .limit(12)
-        .all()
-    )
+def _get_history(db: Session, phone_number: str, exclude_id: int = None):
+    query = db.query(Conversation).filter(Conversation.phone_number == phone_number)
+    if exclude_id:
+        query = query.filter(Conversation.id != exclude_id)
+    return query.order_by(Conversation.timestamp.desc()).limit(12).all()
 
 
 def _trim_history(db: Session, phone_number: str):
@@ -818,13 +817,15 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
     # truena, directo en la respuesta. Así no hay que ir a cazar el
     # error entre miles de líneas de logs de Railway.
     try:
-        db.add(Conversation(
+        current_msg = Conversation(
             phone_number=phone_number,
             user_name=user_name,
             role="user",
             message=message_text,
-        ))
+        )
+        db.add(current_msg)
         db.commit()
+        db.refresh(current_msg)
         _trim_history(db, phone_number)
 
         escalated = _flag_if_needs_human(db, phone_number, message_text)
@@ -854,7 +855,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             import contextlib
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                result = await _route_message(db, phone_number, user_name, message_text)
+                result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
             debug_log = buf.getvalue()
             print(debug_log, end="")  # igual lo mandamos a los logs reales de Railway
             response_text = result["text"]

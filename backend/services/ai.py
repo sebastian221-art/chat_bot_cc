@@ -55,10 +55,38 @@ INTENT_RULES = {
 
 def classify_intent(message: str) -> str:
     msg = message.lower()
+
+    # "ubicacion" (mandar el pin del mall) solo debe activarse cuando
+    # preguntan por la ubicación del CENTRO COMERCIAL EN SÍ — no cuando
+    # preguntan "¿dónde puedo comer/comprar X?". La palabra "dónde"
+    # aparece en ambos casos, así que aquí distinguimos: si el mensaje
+    # trae una pista de producto/comida/categoría/tienda, NO es
+    # ubicación del mall — se deja pasar a "general", donde la IA busca
+    # tiendas y responde con propiedad.
+    PISTAS_DE_BUSQUEDA = [
+        "comer", "comida", "hamburgues", "pizza", "taco", "almuerz", "desayun",
+        "restaurante", "cafeter", "café", "postre", "helad", "pollo", "carne",
+        "ropa", "vestido", "camisa", "pantal", "jean", "zapato", "tenis", "calzado",
+        "gafas", "lentes", "reloj", "joyer", "accesorio", "bolso", "maquillaje",
+        "tecnolog", "celular", "computador", "audífono", "farmacia", "medicamento",
+        "juguete", "regalo", "colchón", "mueble", "banco", "cajero", "gym", "gimnasio",
+        "comprar", "vender", "venden", "consigo", "encuentro", "hay algún", "hay algun",
+        "qué locales", "que locales", "qué tiendas", "que tiendas", "cuáles tiendas",
+    ]
+    # "comercial" contiene "comer" — lo excluimos explícitamente para
+    # que "¿dónde queda el centro comercial?" no se lea como búsqueda
+    # de comida.
+    msg_limpio = msg.replace("comercial", "")
+    hay_pista_de_busqueda = any(p in msg_limpio for p in PISTAS_DE_BUSQUEDA)
+
     # estado_pedido va primero para que no confunda "mi pedido" con nuevo domicilio
     for intent in ["estado_pedido", "saludo", "horario", "ubicacion", "domicilio", "categoria"]:
         keywords = INTENT_RULES.get(intent, [])
         if any(k in msg for k in keywords):
+            # Excepción: si "parecía" ubicación pero en realidad es una
+            # búsqueda de producto/tienda, saltamos esa clasificación.
+            if intent == "ubicacion" and hay_pista_de_busqueda:
+                continue
             return intent
     return "general"
 
@@ -72,7 +100,7 @@ REGLAS SIEMPRE:
 - Responde en español
 - Preséntate como "Any" cuando corresponda (nunca como "Puente Bot" ni ningún otro nombre)
 - NUNCA inventes datos — si un dato puntual (número de local exacto, categoría, teléfono, disponibilidad) NO aparece literalmente en la información que se te dio abajo, dilo con claridad ("no tengo ese dato exacto") en vez de completarlo con algo que suene creíble
-- Si no sabes algo, dilo con amabilidad y sugiere el Punto de Información (Piso 1)
+- Si no sabes algo puntual, dilo con amabilidad — pero siempre intenta ofrecer la alternativa más cercana que sí conozcas antes de rendirte. Solo como último recurso, si de verdad no hay nada que puedas ofrecer, menciona el Punto de Información (Piso 1)
 - Usa máximo 1-2 emojis por mensaje, solo cuando aporten
 - NUNCA uses tablas (con | o guiones de separación entre columnas) — WhatsApp no las muestra bien. Usa listas simples con guion o texto corrido
 - Si el cliente saluda pero ya venías hablando con él en esta conversación, NO reinicies el saludo como si fuera la primera vez — sigue el hilo de lo que se hablaba
@@ -158,11 +186,19 @@ TIPO DE RESPUESTA: Lista de opciones por categoría
 
     "general": BASE_PERSONA + """
 
-TIPO DE RESPUESTA: Consulta general sobre una tienda o servicio
+TIPO DE RESPUESTA: Consulta general sobre una tienda, producto o servicio
 - Da solo lo que preguntaron — si preguntan "¿dónde queda X?" no agregues horario y teléfono si no lo pidieron; si preguntan "cuéntame todo de X" ahí sí da nombre, piso, horario, teléfono, qué vende
 - Si es una pregunta de sí/no: responde directo primero, el resto es opcional
-- Si tu respuesta necesitaría listar más de 2-3 tiendas para responder bien, mejor pregunta qué tipo específico busca en vez de listarlas todas
 - Nunca cortes información a la mitad — si algo no cabe en pocas líneas, resume lo esencial y ofrece dar más detalle si lo piden
+
+SÉ PROPOSITIVO Y GUÍA LA CONVERSACIÓN (muy importante):
+Tú ERES el punto de información — nunca mandes a la persona a "preguntar en el Punto de Información" o a "llamar para averiguar" como forma de zafarte; tu trabajo es resolverle la duda tú mismo, aquí y ahora.
+
+- Cuando la petición es AMPLIA o VAGA (ej. "busco zapatos", "dónde hay ropa", "quiero comer algo", "necesito un regalo"): NO sueltes de una una lista larga ni digas que no sabes. Primero ACOTA con una pregunta corta y amable para entender qué busca de verdad, y ofrece las opciones que sí conoces como guía. Ejemplo para "busco zapatos": "¡Claro! ¿Qué tipo de zapatos buscas — deportivos, formales, casuales? Así te recomiendo el local ideal 😊". Ejemplo para "busco ropa": "¡Con gusto! ¿Buscas algo en particular — ropa formal, casual, deportiva, para dama o caballero?".
+- Cuando la petición ya es ESPECÍFICA (ej. "¿dónde queda Zirus Pizza?", "¿venden tenis Nike?", "quiero una hamburguesa"): responde DIRECTO, no preguntes de más — sería molesto hacer preguntas cuando la persona ya fue clara.
+- Si de verdad no hay ningún local que encaje con lo que busca, dilo con honestidad PERO ofrece lo más cercano que sí exista ("No tengo un local exclusivo de eso, pero en [X] podrías encontrar algo parecido porque manejan..."), en vez de solo decir que no.
+- Usa la información detallada de cada local (lo que venden, estilos, marcas) para recomendar con propiedad — no te quedes en generalidades cuando tienes el dato específico.
+- Si tu respuesta necesitaría listar más de 3-4 tiendas para responder bien, mejor acota primero con una pregunta en vez de listarlas todas.
 """,
 }
 
