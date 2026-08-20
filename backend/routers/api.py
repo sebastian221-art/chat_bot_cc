@@ -1307,6 +1307,47 @@ def get_flujo_bot(db: Session = Depends(get_db)):
         "promociones": db.query(Marketing).count(),
     }
 
+    # Rutas directas — respuestas que NO usan la IA ni los prompts, sino
+    # que se arman en el código. Describen la parte "mecánica" del bot.
+    rutas_directas = [
+        {
+            "nombre": "Número de una tienda",
+            "cuando": "El cliente pide el teléfono/contacto de un local (ej. \"pásame el número de Zirus Pizza\").",
+            "archivo": "services/store_transfer.py",
+            "que_hace": "Responde con el número, el link directo de WhatsApp y una pregunta de seguimiento — texto armado en el código, sin IA.",
+        },
+        {
+            "nombre": "Cartelera de cine",
+            "cuando": "Preguntan por películas, cartelera, funciones o estrenos.",
+            "archivo": "services/cine.py",
+            "que_hace": "Busca la tienda del cine y lista sus películas activas con horarios, directamente desde la base de datos. Si nombran una película puntual, da solo esa con su póster.",
+        },
+        {
+            "nombre": "Gestión de domicilio",
+            "cuando": "El cliente pide ayuda para hacer un pedido a domicilio, o ya está en medio de una gestión.",
+            "archivo": "services/store_transfer.py + delivery_management.py",
+            "que_hace": "Valida horario, muestra la carta, recolecta los datos (nombre, celular, dirección, pedido, pago), detecta cancelaciones y arma el pedido final — un flujo paso a paso sin prompts conversacionales.",
+        },
+        {
+            "nombre": "Búsqueda justa por categoría",
+            "cuando": "Preguntan por un TIPO de producto (ej. \"hamburguesas\", \"zapatos formales\") sin nombrar una tienda.",
+            "archivo": "services/category_search.py + rag.py",
+            "que_hace": "Lista TODOS los locales de esa categoría en orden alfabético neutral, sin destacar a ninguno — equidad comercial garantizada, sin IA.",
+        },
+        {
+            "nombre": "Ubicación del mall",
+            "cuando": "Preguntan dónde queda el centro comercial en sí (no una tienda).",
+            "archivo": "routers/webhook.py",
+            "que_hace": "Adjunta el pin de ubicación real (GPS) del mall junto con la respuesta.",
+        },
+        {
+            "nombre": "Navegación por QR",
+            "cuando": "El cliente escanea un código QR de una zona del mall.",
+            "archivo": "services/navigation.py",
+            "que_hace": "Reconoce la zona escaneada y orienta al cliente desde ese punto.",
+        },
+    ]
+
     return {
         "persona_base": BASE_PERSONA,
         "intenciones": [
@@ -1318,6 +1359,7 @@ def get_flujo_bot(db: Session = Depends(get_db)):
             }
             for intent in ["saludo", "horario", "ubicacion", "estado_pedido", "domicilio", "categoria", "general"]
         ],
+        "rutas_directas": rutas_directas,
         "busqueda_categoria": {
             "palabras_intencion": INTENCION_BUSQUEDA,
             "categorias": [

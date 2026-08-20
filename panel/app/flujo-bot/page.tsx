@@ -2,7 +2,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { getFlujoBot } from '@/lib/api'
-import { Bot, MessageSquare, Search, Database, GitBranch, ChevronDown, ChevronRight, Layers, Zap, FileText } from 'lucide-react'
+import { Bot, MessageSquare, Search, Database, GitBranch, ChevronDown, ChevronRight, Layers, Zap, FileText, Terminal, GitFork } from 'lucide-react'
 
 interface Intencion {
   nombre: string
@@ -10,9 +10,16 @@ interface Intencion {
   palabras_clave: string[]
   prompt_especifico: string
 }
+interface RutaDirecta {
+  nombre: string
+  cuando: string
+  archivo: string
+  que_hace: string
+}
 interface FlujoData {
   persona_base: string
   intenciones: Intencion[]
+  rutas_directas: RutaDirecta[]
   busqueda_categoria: {
     palabras_intencion: string[]
     categorias: { nombre: string; terminos: string[] }[]
@@ -69,6 +76,78 @@ export default function FlujoBotPage() {
               <div>
                 <p className="text-white text-sm font-medium">{paso.t}</p>
                 <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{paso.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Flujograma visual ── */}
+      <section className="mb-8">
+        <h2 className="text-xs uppercase tracking-wider text-zinc-500 font-semibold mb-3">Flujograma del sistema</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 overflow-x-auto">
+          <div className="min-w-[280px] flex flex-col items-center gap-0 text-center">
+
+            {/* Inicio */}
+            <FlowBox color="sky" icon={MessageSquare} title="Cliente escribe por WhatsApp" />
+            <FlowArrow />
+
+            {/* Guardar + historial */}
+            <FlowBox color="zinc" title="Se guarda el mensaje y se recupera el historial reciente" />
+            <FlowArrow />
+
+            {/* Decisión: ruta directa */}
+            <FlowDiamond title="¿Aplica una ruta directa?" sub="número · cine · domicilio · categoría · ubicación · QR" />
+
+            {/* Dos ramas */}
+            <div className="w-full grid grid-cols-2 gap-4 mt-2">
+              {/* Rama SÍ */}
+              <div className="flex flex-col items-center">
+                <span className="text-emerald-400 text-xs font-bold mb-2">SÍ</span>
+                <FlowBox color="emerald" icon={Terminal} title="Responde el CÓDIGO directamente" sub="sin IA, sin prompts" small />
+                <FlowArrow />
+                <FlowBox color="zinc" title="Texto armado desde services/*.py" small />
+              </div>
+
+              {/* Rama NO */}
+              <div className="flex flex-col items-center">
+                <span className="text-fuchsia-400 text-xs font-bold mb-2">NO</span>
+                <FlowBox color="amber" icon={Zap} title="Se clasifica la intención" sub="1 de 7 tipos" small />
+                <FlowArrow />
+                <FlowBox color="emerald" icon={Search} title="Se busca info (RAG + BD)" small />
+                <FlowArrow />
+                <FlowBox color="fuchsia" icon={Bot} title="La IA redacta la respuesta" sub="persona + prompt + info + historial" small />
+              </div>
+            </div>
+
+            {/* Convergen */}
+            <div className="w-full flex justify-center mt-1">
+              <div className="w-1/2 border-b-2 border-l-2 border-r-2 border-zinc-700 h-4 rounded-b-xl" />
+            </div>
+            <FlowBox color="rose" icon={FileText} title="Se limpia, se deciden fotos y se envía al cliente" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Rutas directas (sin IA) — el aviso de honestidad ── */}
+      <section className="mb-8">
+        <h2 className="text-xs uppercase tracking-wider text-zinc-500 font-semibold mb-3">Rutas directas — respuestas sin IA</h2>
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 mb-3">
+          <p className="text-amber-200/90 text-xs leading-relaxed">
+            <strong>Importante:</strong> los 7 prompts de arriba son los que usa la IA para redactar respuestas <strong>conversacionales</strong>. Pero Any también da respuestas <strong>sin usar la IA ni esos prompts</strong> — se arman directamente en el código. Estas son esas "rutas directas". Juntas, las dos partes forman el comportamiento completo del bot: lo que ves en los prompts no es el 100%.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {data.rutas_directas.map((ruta, i) => (
+            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <div className="flex items-start gap-2.5">
+                <Terminal size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-white text-sm font-semibold">{ruta.nombre}</p>
+                  <p className="text-zinc-500 text-xs mt-1"><span className="text-zinc-400 font-medium">Cuándo:</span> {ruta.cuando}</p>
+                  <p className="text-zinc-500 text-xs mt-1">{ruta.que_hace}</p>
+                  <p className="text-zinc-600 text-[11px] mt-1.5 font-mono">{ruta.archivo}</p>
+                </div>
               </div>
             </div>
           ))}
@@ -168,6 +247,46 @@ export default function FlujoBotPage() {
           )}
         </div>
       </section>
+    </div>
+  )
+}
+
+// ── Componentes del flujograma ────────────────────────────────────
+const FLOW_COLORS: Record<string, string> = {
+  sky: 'border-sky-500/40 bg-sky-500/5 text-sky-300',
+  zinc: 'border-zinc-700 bg-zinc-800/40 text-zinc-300',
+  emerald: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-300',
+  amber: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
+  fuchsia: 'border-fuchsia-500/40 bg-fuchsia-500/5 text-fuchsia-300',
+  rose: 'border-rose-500/40 bg-rose-500/5 text-rose-300',
+}
+
+function FlowBox({ color = 'zinc', icon: Icon, title, sub, small }: {
+  color?: string; icon?: any; title: string; sub?: string; small?: boolean
+}) {
+  return (
+    <div className={`w-full border rounded-xl px-3 ${small ? 'py-2' : 'py-2.5'} ${FLOW_COLORS[color]}`}>
+      <div className="flex items-center justify-center gap-1.5">
+        {Icon && <Icon size={small ? 13 : 15} className="shrink-0" />}
+        <span className={`font-medium ${small ? 'text-[11px]' : 'text-xs'} leading-tight`}>{title}</span>
+      </div>
+      {sub && <p className="text-[10px] opacity-70 mt-0.5 leading-tight">{sub}</p>}
+    </div>
+  )
+}
+
+function FlowArrow() {
+  return <div className="w-px h-4 bg-zinc-700 my-0.5" />
+}
+
+function FlowDiamond({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="w-full border border-violet-500/40 bg-violet-500/5 rounded-xl px-3 py-2.5 text-center">
+      <div className="flex items-center justify-center gap-1.5">
+        <GitFork size={15} className="text-violet-300 shrink-0" />
+        <span className="text-violet-300 font-semibold text-xs">{title}</span>
+      </div>
+      {sub && <p className="text-[10px] text-violet-300/60 mt-0.5 leading-tight">{sub}</p>}
     </div>
   )
 }
