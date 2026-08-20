@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Store, MessageSquare, CalendarDays,
   BarChart2, ShoppingBag, FileText, ChevronRight,
-  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift, Megaphone,
+  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift, Megaphone, GitBranch,
 } from 'lucide-react'
 import { getUser, clearAuth, getRoleLabel, type AuthUser } from '@/lib/auth'
 
@@ -28,6 +28,7 @@ const TOP_LINKS = [
   { href: '/analytics',      label: 'Analytics',        icon: BarChart2,       roles: ['admin'] },
   { href: '/reportes',       label: 'Reportes',         icon: FileText,        roles: ['admin'] },
   { href: '/usuarios',       label: 'Usuarios',         icon: Users,           roles: ['admin'] },
+  { href: '/flujo-bot',      label: 'Flujo del Bot',    icon: GitBranch,       roles: ['admin'], onlyUser: 'admin' },
 ]
 
 export default function Sidebar() {
@@ -42,14 +43,22 @@ export default function Sidebar() {
   function handleLogout() {
     clearAuth()
     // Limpiar cookies también
-    ;['cc_token', 'cc_role', 'cc_store_type', 'cc_store_id'].forEach(name => {
+    ;['cc_token', 'cc_role', 'cc_username', 'cc_store_type', 'cc_store_id'].forEach(name => {
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
     })
     router.replace('/login')
   }
 
   const role = user?.role || 'admin'
-  const visibleTopLinks = TOP_LINKS.filter(l => l.roles.includes(role))
+  const username = user?.username || ''
+  const visibleTopLinks = TOP_LINKS.filter(l => {
+    if (!l.roles.includes(role)) return false
+    // Enlaces exclusivos de una cuenta específica (ej. "Flujo del Bot"
+    // solo para el desarrollador) — se ocultan para cualquier otro
+    // usuario, aunque tenga el rol correcto.
+    if ((l as any).onlyUser && username !== (l as any).onlyUser) return false
+    return true
+  })
 
   return (
     <aside className="w-64 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col">

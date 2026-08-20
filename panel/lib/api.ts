@@ -110,6 +110,9 @@ export const importEvents = (file: File) => uploadFile('/events/import', file)
 
 // ── Marketing (promociones de tiendas, del cine, o generales) ────
 export const getMarketing    = ()                               => req('/marketing')
+
+// ── Flujo del Bot (solo lectura — visualización del funcionamiento) ──
+export const getFlujoBot = () => req('/flujo-bot')
 export const createMarketing = (d: MarketingPayload)            => req('/marketing', { method: 'POST', body: JSON.stringify(d) })
 export const updateMarketing = (i: number, d: MarketingPayload) => req(`/marketing/${i}`, { method: 'PUT', body: JSON.stringify(d) })
 export const deleteMarketing = (i: number)                      => req(`/marketing/${i}`, { method: 'DELETE' })

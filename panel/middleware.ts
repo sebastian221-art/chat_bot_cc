@@ -30,11 +30,12 @@ export function middleware(request: NextRequest) {
 
   // Leer rol de cookie (guardada al hacer login)
   const role      = request.cookies.get('cc_role')?.value      || ''
+  const username  = request.cookies.get('cc_username')?.value  || ''
   const storeType = request.cookies.get('cc_store_type')?.value || ''
   const storeId   = request.cookies.get('cc_store_id')?.value   || ''
 
   // Verificar permisos según ruta
-  const unauthorized = _checkAccess(pathname, role, storeType, storeId)
+  const unauthorized = _checkAccess(pathname, role, username, storeType, storeId)
   if (unauthorized) {
     return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
@@ -45,10 +46,18 @@ export function middleware(request: NextRequest) {
 function _checkAccess(
   pathname: string,
   role: string,
+  username: string,
   storeType: string,
   storeId: string,
 ): boolean {
-  // admin ve todo
+  // "Flujo del Bot" es una página EXCLUSIVA del desarrollador — solo
+  // la cuenta 'admin' puede entrar, sin importar el rol. Cualquier
+  // otra cuenta (aunque sea admin de otro username) queda bloqueada.
+  if (pathname.startsWith('/flujo-bot')) {
+    return username !== 'admin'   // true = bloqueado
+  }
+
+  // admin ve todo lo demás
   if (role === 'admin') return false
 
   // supervisor: solo estas rutas

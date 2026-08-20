@@ -1259,3 +1259,71 @@ def delete_entity_photo(entity_type: str, entity_id: int, photo_id: int, db: Ses
     db.commit()
     _reindex(db)
     return {"ok": True}
+
+# ══════════════════════════════════════════════════════════════════
+# FLUJO DEL BOT  (solo lectura — para el panel de visualización)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/flujo-bot")
+def get_flujo_bot(db: Session = Depends(get_db)):
+    """
+    Expone (SOLO LECTURA) toda la estructura real de cómo responde el
+    bot: los prompts, las intenciones y sus palabras clave, las
+    categorías de búsqueda justa, y un conteo de la información que
+    alimenta al bot. Sirve para el panel 'Flujo del Bot' — no modifica
+    nada, solo hace visible lo que ya existe en el código.
+    """
+    from services.ai import BASE_PERSONA, PROMPTS, INTENT_RULES
+    from services.category_search import CATEGORIAS_BUSQUEDA, INTENCION_BUSQUEDA
+    from models.store import Store
+    from models.knowledge import KnowledgeEntry
+    from models.event import Event
+    from models.raffle import Raffle
+    from models.marketing import Marketing
+
+    # Los prompts, sin repetir BASE_PERSONA en cada uno (se muestra aparte)
+    prompts_limpios = {}
+    for intent, texto in PROMPTS.items():
+        especifico = texto.replace(BASE_PERSONA, "").strip()
+        prompts_limpios[intent] = especifico
+
+    # Descripción legible de qué hace cada intención
+    descripcion_intents = {
+        "saludo": "Cuando el cliente saluda. Distingue si es conversación nueva o continuación (ventana de 4 horas).",
+        "horario": "Preguntas sobre horarios de apertura/cierre del mall o locales.",
+        "ubicacion": "Ubicación del CENTRO COMERCIAL en sí (manda el pin real). No se activa si preguntan por dónde comprar algo.",
+        "estado_pedido": "Preguntas sobre el estado de un pedido ya hecho (redirige al local).",
+        "domicilio": "Prompt sin uso actual — el sistema de domicilios lo maneja store_transfer.py.",
+        "categoria": "Prompt de respaldo para listas por categoría (la búsqueda justa por categoría lo cubre antes).",
+        "general": "Todo lo demás: consultas sobre tiendas, productos, servicios. Aquí vive el comportamiento propositivo.",
+    }
+
+    # Conteo de la información que alimenta al bot
+    conteo_datos = {
+        "tiendas": db.query(Store).count(),
+        "base_conocimiento": db.query(KnowledgeEntry).count(),
+        "eventos": db.query(Event).count(),
+        "sorteos": db.query(Raffle).count(),
+        "promociones": db.query(Marketing).count(),
+    }
+
+    return {
+        "persona_base": BASE_PERSONA,
+        "intenciones": [
+            {
+                "nombre": intent,
+                "descripcion": descripcion_intents.get(intent, ""),
+                "palabras_clave": INTENT_RULES.get(intent, []),
+                "prompt_especifico": prompts_limpios.get(intent, ""),
+            }
+            for intent in ["saludo", "horario", "ubicacion", "estado_pedido", "domicilio", "categoria", "general"]
+        ],
+        "busqueda_categoria": {
+            "palabras_intencion": INTENCION_BUSQUEDA,
+            "categorias": [
+                {"nombre": nombre, "terminos": terminos}
+                for nombre, terminos in CATEGORIAS_BUSQUEDA.items()
+            ],
+        },
+        "conteo_datos": conteo_datos,
+    }

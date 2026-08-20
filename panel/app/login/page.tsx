@@ -26,6 +26,7 @@ export default function LoginPage() {
       // Guardar en cookies para que middleware.ts pueda leerlas
       _setCookie('cc_token',      data.token,                 7)
       _setCookie('cc_role',       data.user.role,             7)
+      _setCookie('cc_username',   data.user.username || '',   7)
       _setCookie('cc_store_type', data.user.store_type || '', 7)
       _setCookie('cc_store_id',   data.user.store_id   || '', 7)
 
