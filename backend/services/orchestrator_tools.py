@@ -26,10 +26,11 @@ HERRAMIENTAS = [
         "categoria": "Seguridad",
         "descripcion": "Cuando el cliente reporta una emergencia real: niño perdido, robo, alguien herido o desmayado, incendio, o cualquier situación de peligro. Máxima prioridad.",
         "palabras_clave": [
-            "se perdió", "se me perdió", "perdí a mi", "no encuentro a mi",
-            "me robaron", "robo", "ladrón", "asalto",
-            "desmayó", "desmayo", "se cayó", "accidente", "herido", "sangre",
-            "incendio", "fuego", "humo", "emergencia", "ayuda urgente", "auxilio",
+            "se perdió", "se me perdió", "perdí a mi", "no encuentro a mi", "perdí mi hijo",
+            "me robaron", "me robó", "me robo", "acaban de robar", "me atracaron", "atraco", "atraco",
+            "ladrón", "ladron", "asalto", "asaltaron", "me hurtaron", "hurto",
+            "desmayó", "desmayo", "se cayó", "accidente", "herido", "sangre", "convulsion",
+            "incendio", "fuego", "humo", "emergencia", "ayuda urgente", "auxilio", "socorro",
         ],
     },
     {

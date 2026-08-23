@@ -98,35 +98,48 @@ async def _decidir_por_ia(mensaje: str, traza: Traza) -> str:
     Si la IA falla o elige algo inválido, cae a 'conversacion_general'
     (el fallback seguro).
     """
-    from services.ai import _get_groq_client, settings
+    from services.ai import _get_groq_client, settings, _strip_thinking_tags
     client = _get_groq_client()
 
     lista_tools = "\n".join(
         f"- {h['nombre']}: {h['descripcion']}"
         for h in HERRAMIENTAS
     )
-    prompt = f"""Eres el enrutador de un asistente de centro comercial. Tu única tarea es elegir QUÉ HERRAMIENTA debe manejar el mensaje del cliente.
+    prompt = f"""Eres el enrutador de un asistente de centro comercial (Centro Comercial El Puente). Tu ÚNICA tarea es elegir qué herramienta debe manejar el mensaje del cliente. NO respondas al cliente, solo clasifica.
 
 Herramientas disponibles:
 {lista_tools}
 
 Mensaje del cliente: "{mensaje}"
 
-Responde ÚNICAMENTE con el nombre exacto de la herramienta más adecuada (una sola palabra, sin explicación, sin puntuación). Si ninguna encaja claramente, responde: conversacion_general"""
+Reglas de decisión:
+- Si el cliente busca/pregunta por un producto, comida, tienda o servicio → la herramienta de información que corresponda.
+- Si es un saludo, charla casual, agradecimiento, o algo que NO es del centro comercial (preguntas generales, trivia, temas personales) → conversacion_general.
+- Si expresa molestia, reclamo o inconformidad → queja.
+- Si es una situación de peligro o urgencia → emergencia.
+
+Responde SOLO con el nombre exacto de una herramienta de la lista (una palabra). Nada más."""
 
     try:
         completion = await client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
+            max_tokens=200,   # antes 20 — muy poco: el modelo razona internamente y no alcanzaba a escribir el nombre
             temperature=0.0,
         )
-        eleccion = (completion.choices[0].message.content or "").strip().lower()
-        # Validar que sea una herramienta real
-        if herramienta_por_nombre(eleccion):
-            traza.paso("decision_ia", f"La IA eligió la herramienta '{eleccion}' para este mensaje")
+        raw = completion.choices[0].message.content or ""
+        limpio = _strip_thinking_tags(raw).strip().lower()
+        # El modelo a veces devuelve el nombre dentro de una frase — buscamos
+        # cuál de las herramientas reales aparece en su respuesta.
+        eleccion = None
+        for h in HERRAMIENTAS:
+            if h["nombre"] in limpio:
+                eleccion = h["nombre"]
+                break
+        if eleccion:
+            traza.paso("decision_ia", f"La IA eligió la herramienta '{eleccion}' (respuesta cruda: '{limpio[:40]}')")
             return eleccion
-        traza.paso("decision_ia", f"La IA respondió '{eleccion}' (no válida) → se usa conversacion_general")
+        traza.paso("decision_ia", f"La IA no dio una herramienta clara ('{limpio[:40]}') → se usa conversacion_general")
         return "conversacion_general"
     except Exception as e:
         traza.paso("decision_ia_error", f"Error al consultar la IA: {str(e)} → se usa conversacion_general")
