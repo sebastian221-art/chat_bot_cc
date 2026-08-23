@@ -2,7 +2,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { getOrquestadorMapa, getOrquestadorTrazas, setOrquestadorSwitch } from '@/lib/api'
-import { Cpu, Wrench, Activity, ChevronDown, ChevronRight, Clock, Zap, Bot, Power, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Cpu, Wrench, Activity, ChevronDown, ChevronRight, Clock, Zap, Bot, Power, RefreshCw, AlertTriangle, Download } from 'lucide-react'
 
 interface Herramienta { nombre: string; categoria: string; descripcion: string; palabras_clave: string[] }
 interface Paso { paso: string; detalle: string; ms: number }
@@ -43,6 +43,46 @@ export default function OrquestadorPage() {
   const cargarTrazas = async () => {
     const d = await getOrquestadorTrazas('prueba')
     setTrazas(d)
+  }
+
+  // Exporta las trazas a un archivo de texto legible — pensado para
+  // revisar fácil y compartir. Incluye, por cada conversación: el
+  // mensaje del cliente, qué herramienta eligió y cómo, el paso a paso,
+  // y la respuesta exacta que dio el bot.
+  const exportarTrazas = () => {
+    if (trazas.length === 0) { alert('No hay trazas para exportar.'); return }
+    const lineas: string[] = []
+    lineas.push('═'.repeat(60))
+    lineas.push('TRAZAS DEL ORQUESTADOR — Any (Centro Comercial El Puente)')
+    lineas.push(`Exportado: ${new Date().toLocaleString('es-CO')}`)
+    lineas.push(`Total de conversaciones: ${trazas.length}`)
+    lineas.push('═'.repeat(60))
+    lineas.push('')
+    trazas.forEach((t, i) => {
+      lineas.push(`${'─'.repeat(60)}`)
+      lineas.push(`#${i + 1}  [${t.modo}]  ${t.created_at || ''}`)
+      lineas.push('')
+      lineas.push(`CLIENTE PREGUNTÓ: "${t.mensaje_usuario}"`)
+      lineas.push('')
+      lineas.push(`HERRAMIENTA ELEGIDA: ${t.herramienta_elegida}`)
+      lineas.push(`MÉTODO DE DECISIÓN: ${t.metodo_decision}`)
+      lineas.push(`POR QUÉ: ${t.razon_decision || '(no registrado)'}`)
+      lineas.push('')
+      lineas.push(`PASO A PASO (${t.pasos.length} pasos, ${t.tiempo_total_ms}ms total):`)
+      t.pasos.forEach(p => lineas.push(`   [${p.ms}ms] ${p.paso}: ${p.detalle}`))
+      lineas.push('')
+      lineas.push(`ANY RESPONDIÓ:`)
+      lineas.push(`"${t.respuesta_bot}"`)
+      lineas.push(`   (${t.fotos_enviadas} fotos, ${t.ubicacion_enviada === 'si' ? 'con ubicación' : 'sin ubicación'})`)
+      lineas.push('')
+    })
+    const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `trazas_orquestador_${new Date().toISOString().slice(0, 10)}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -139,7 +179,12 @@ export default function OrquestadorPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <p className="text-zinc-500 text-xs">Últimas conversaciones procesadas por el orquestador (solo pruebas). Haz clic para ver el paso a paso.</p>
-            <button onClick={cargarTrazas} className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg"><RefreshCw size={14} /></button>
+            <div className="flex gap-2">
+              <button onClick={exportarTrazas} className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-all">
+                <Download size={14} /> Exportar
+              </button>
+              <button onClick={cargarTrazas} className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg"><RefreshCw size={14} /></button>
+            </div>
           </div>
           {trazas.length === 0 ? (
             <div className="text-zinc-500 text-center py-12 bg-zinc-900 rounded-2xl border border-zinc-800">
