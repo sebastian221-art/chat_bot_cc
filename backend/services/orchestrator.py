@@ -199,11 +199,153 @@ async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> di
     return {"text": texto, "image_urls": [], "location": None}
 
 
+# ══════════════════════════════════════════════════════════════════
+# HERRAMIENTAS conectadas a la lógica que YA existe (no se reescribe)
+# ══════════════════════════════════════════════════════════════════
+
+async def _ejecutar_queja(db, phone_number, mensaje, traza) -> dict:
+    """
+    Herramienta de QUEJA — recoge la inconformidad con empatía y la
+    escala al contacto del mall. NO usa IA, para que siempre responda
+    con el mismo criterio de servicio (empatía + canal correcto).
+    """
+    traza.paso("ejecucion", "Ejecutando herramienta de queja — respuesta empática con canal de escalamiento")
+    texto = (
+        "Lamento mucho lo que pasó, y gracias por tomarte el tiempo de contarnos — "
+        "tu comentario es importante para el centro comercial. 🙏\n\n"
+        "Para que tu queja quede registrada formalmente y le den seguimiento, te recomiendo "
+        f"comunicarte con la administración al *{CONTACTO_MALL}*, o acercarte al *Punto de "
+        "Información* (Piso 1). Ahí podrán ayudarte de manera directa.\n\n"
+        "¿Hay algo más en lo que te pueda apoyar mientras tanto?"
+    )
+    return {"text": texto, "image_urls": [], "location": None}
+
+
+async def _ejecutar_numero_tienda(db, phone_number, mensaje, traza) -> dict:
+    """Reutiliza la lógica del flujo viejo: buscar tienda + armar su info de contacto."""
+    from services.store_transfer import find_store_by_message, build_phone_info_message
+    from routers.webhook import _pick_store_photo, _wrap
+
+    store = find_store_by_message(db, mensaje)
+    if store:
+        traza.paso("ejecucion", f"Tienda encontrada: '{store.name}' → se arma su número + link (lógica existente)")
+        return {
+            "text": build_phone_info_message(store),
+            "image_urls": _wrap([_pick_store_photo(store, mensaje)]),
+            "location": None,
+        }
+    traza.paso("ejecucion", "No se identificó una tienda puntual → cae a conversación general")
+    return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
+
+
+async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
+    """Reutiliza services/cine.py — la misma cartelera determinística del flujo viejo."""
+    from services.cine import find_cine_store, find_cine_funcion_by_message, build_cartelera_message, build_funcion_especifica_message
+    from routers.webhook import _wrap
+
+    cine_store = find_cine_store(db)
+    if not cine_store:
+        traza.paso("ejecucion", "No hay tienda de cine registrada")
+        return {"text": build_cartelera_message(None), "image_urls": [], "location": None}
+
+    funcion = find_cine_funcion_by_message(db, cine_store.id, mensaje)
+    if funcion:
+        traza.paso("ejecucion", f"Película puntual: '{funcion.title}'")
+        from models.entity_photo import get_entity_photo
+        poster = get_entity_photo(db, "cine_funcion", funcion.id, "poster")
+        return {"text": build_funcion_especifica_message(funcion, cine_store), "image_urls": _wrap([poster]), "location": None}
+
+    traza.paso("ejecucion", f"Cartelera completa de '{cine_store.name}'")
+    from models.entity_photo import get_entity_photo
+    posters = []
+    for f in cine_store.cine_funciones:
+        if f.active and len(posters) < 2:
+            p = get_entity_photo(db, "cine_funcion", f.id, "poster")
+            if p:
+                posters.append(p)
+    return {"text": build_cartelera_message(cine_store), "image_urls": posters, "location": None}
+
+
+async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict:
+    """Reutiliza category_search + rag — la búsqueda justa que lista TODOS los locales."""
+    from services.category_search import detectar_categoria, construir_lista_locales
+    from services.rag import find_all_stores_by_category
+
+    cat = detectar_categoria(mensaje)
+    if cat:
+        nombre_cat, terminos = cat
+        locales = find_all_stores_by_category(db, terminos)
+        traza.paso("ejecucion", f"Categoría '{nombre_cat}' → {len(locales)} locales (búsqueda justa)")
+        if len(locales) >= 2:
+            return {"text": construir_lista_locales(locales, nombre_cat), "image_urls": [], "location": None}
+    traza.paso("ejecucion", "No se detectó categoría con 2+ locales → cae a conversación general")
+    return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
+
+
+async def _ejecutar_ubicacion_mall(db, phone_number, mensaje, traza) -> dict:
+    """Manda el pin real del mall — misma lógica del flujo viejo."""
+    from models.mall_info import MallInfo
+
+    mall_info = db.query(MallInfo).filter(MallInfo.id == 1).first()
+    if mall_info and mall_info.latitude and mall_info.longitude:
+        try:
+            location = {
+                "latitude": float(mall_info.latitude),
+                "longitude": float(mall_info.longitude),
+                "name": mall_info.name,
+                "address": mall_info.address or "",
+            }
+            traza.paso("ejecucion", f"Ubicación del mall → pin real ({location['latitude']}, {location['longitude']})")
+            texto = f"📍 {mall_info.name} está ubicado en {mall_info.address or 'el centro de la ciudad'}. Te comparto la ubicación exacta 😊"
+            return {"text": texto, "image_urls": [], "location": location}
+        except ValueError:
+            pass
+    traza.paso("ejecucion", "Sin coordenadas del mall → cae a conversación general")
+    return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
+
+
+async def _ejecutar_gestion_domicilio(db, phone_number, mensaje, traza) -> dict:
+    """
+    La gestión de domicilio del flujo viejo tiene varios pasos
+    entrelazados (identificar la tienda, validar horario, recolectar
+    datos, detectar cancelaciones). En vez de reimplementar eso —donde
+    es fácil introducir bugs— delegamos en _route_message del flujo
+    viejo, que ya orquesta todo el domicilio correctamente. Reutilización
+    pura: el orquestador decide "esto es domicilio", y deja que la
+    maquinaria probada lo maneje.
+    """
+    traza.paso("ejecucion", "Gestión de domicilio → delega en el flujo probado (_route_message) para no romper el paso a paso")
+    from routers.webhook import _route_message
+    resultado = await _route_message(db, phone_number, "", mensaje)
+    return {
+        "text": resultado.get("text", ""),
+        "image_urls": resultado.get("image_urls", []),
+        "location": resultado.get("location"),
+    }
+
+
+async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
+    """
+    Torre médica — por ahora reutiliza la conversación general, que ya
+    busca en las tiendas/base de conocimiento (donde se cargará la torre
+    médica vía Excel). Cuando esos datos estén, responderá con ellos.
+    """
+    traza.paso("ejecucion", "Consulta de servicios médicos → conversación general (busca en la info cargada)")
+    return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
+
+
 # Mapa de nombre de herramienta → función que la ejecuta.
-# En el esqueleto solo 2 están conectadas de verdad; las demás caen al
-# general por ahora, y se irán conectando una a una.
+# Ahora TODAS las herramientas están conectadas, reutilizando la lógica
+# que ya funcionaba en el flujo viejo (no se reescribió nada).
 EJECUTORES = {
     "emergencia": _ejecutar_emergencia,
+    "queja": _ejecutar_queja,
+    "numero_tienda": _ejecutar_numero_tienda,
+    "cartelera_cine": _ejecutar_cartelera_cine,
+    "busqueda_categoria": _ejecutar_busqueda_categoria,
+    "ubicacion_mall": _ejecutar_ubicacion_mall,
+    "gestion_domicilio": _ejecutar_gestion_domicilio,
+    "torre_medica": _ejecutar_torre_medica,
     "conversacion_general": _ejecutar_conversacion_general,
 }
 
