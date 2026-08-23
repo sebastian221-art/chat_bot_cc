@@ -192,23 +192,50 @@ async def _ejecutar_emergencia(db, phone_number, mensaje, traza) -> dict:
 
 async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> dict:
     """
-    Herramienta GENERAL / piloteo — por ahora, en el esqueleto, delega
-    en la lógica conversacional que YA existe (generate_response), para
-    demostrar que el orquestador puede reutilizar lo viejo sin
-    reescribirlo. Aquí es donde luego vivirá el comportamiento
-    propositivo y el manejo de lo fuera de tema.
+    Herramienta GENERAL / piloteo — delega en generate_response (la
+    lógica conversacional existente), pero con DOS redes de seguridad
+    para que el cliente NUNCA reciba una respuesta vacía:
+      1. Si generate_response devuelve vacío, se reintenta una vez.
+      2. Si aún así queda vacío, se responde con un mensaje de respaldo
+         amable — jamás un mensaje en blanco.
     """
     traza.paso("ejecucion", "Ejecutando conversación general — reutiliza generate_response() del flujo existente")
     from services.ai import generate_response
 
-    texto, tienda_id, evento_id, sorteo_id, marketing_id = await generate_response(
-        user_message=mensaje,
-        user_name="",
-        conversation_history=[],
-        db=db,
-        phone_number=phone_number,
-    )
-    traza.paso("resultado_ia", f"generate_response devolvió {len(texto)} caracteres")
+    async def _intentar():
+        texto, *_ = await generate_response(
+            user_message=mensaje,
+            user_name="",
+            conversation_history=[],
+            db=db,
+            phone_number=phone_number,
+        )
+        return (texto or "").strip()
+
+    texto = ""
+    try:
+        texto = await _intentar()
+    except Exception as e:
+        traza.paso("resultado_ia_error", f"generate_response falló: {str(e)}")
+
+    # Red de seguridad 1: reintento si vino vacío
+    if not texto:
+        traza.paso("reintento", "generate_response devolvió vacío → se reintenta una vez")
+        try:
+            texto = await _intentar()
+        except Exception as e:
+            traza.paso("reintento_error", f"El reintento también falló: {str(e)}")
+
+    # Red de seguridad 2: respaldo amable si sigue vacío
+    if not texto:
+        traza.paso("respaldo", "Sigue vacío → se usa mensaje de respaldo (nunca se manda vacío al cliente)")
+        texto = (
+            "¡Hola! Soy Any 🛍️, tu asistente del Centro Comercial El Puente. "
+            "¿En qué te puedo ayudar? Puedo orientarte con tiendas, comida, horarios, "
+            "servicios o cualquier cosa del centro comercial 😊"
+        )
+
+    traza.paso("resultado_ia", f"Respuesta final: {len(texto)} caracteres")
     return {"text": texto, "image_urls": [], "location": None}
 
 
@@ -389,6 +416,16 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
         ejecutor = EJECUTORES["conversacion_general"]
 
     resultado = await ejecutor(db, phone_number, mensaje, traza)
+
+    # Red de seguridad GLOBAL: si CUALQUIER herramienta devolvió texto
+    # vacío (por el motivo que sea), nunca lo mandamos así al cliente —
+    # ponemos un respaldo amable. Es la última barrera antes del cliente.
+    if not (resultado.get("text") or "").strip():
+        traza.paso("respaldo_global", "La herramienta devolvió texto vacío → respaldo global (el cliente nunca recibe vacío)")
+        resultado["text"] = (
+            "¡Hola! Soy Any 🛍️, tu asistente del Centro Comercial El Puente. "
+            "Cuéntame en qué te puedo ayudar — tiendas, comida, horarios, servicios o lo que necesites 😊"
+        )
 
     # 3. Registrar el resultado en la traza
     traza.respuesta = resultado.get("text", "")
