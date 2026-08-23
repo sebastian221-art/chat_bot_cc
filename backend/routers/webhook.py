@@ -701,7 +701,17 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     if escalated:
         response_text = build_handoff_message(user_name)
     else:
-        result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
+        # ── SWITCH: ¿flujo nuevo (orquestador) o viejo? ──────────────
+        # Por defecto (switch en "off") usa el flujo viejo de siempre.
+        # Solo si el switch está activado para este número, usa el
+        # orquestador. El flujo viejo queda 100% intacto como respaldo.
+        from services.orchestrator_switch import debe_usar_orquestador
+        if debe_usar_orquestador(db, phone_number):
+            from services.orchestrator import procesar_con_orquestador
+            modo_orq = "produccion" if not phone_number.startswith(("test_", "htest_")) else "prueba"
+            result = await procesar_con_orquestador(db, phone_number, message_text, modo=modo_orq)
+        else:
+            result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
         response_text = result["text"]
         image_urls = result["image_urls"]
         location_data = result["location"]
@@ -875,7 +885,12 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
             import contextlib
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
+                from services.orchestrator_switch import debe_usar_orquestador
+                if debe_usar_orquestador(db, phone_number):
+                    from services.orchestrator import procesar_con_orquestador
+                    result = await procesar_con_orquestador(db, phone_number, message_text, modo="prueba")
+                else:
+                    result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
             debug_log = buf.getvalue()
             print(debug_log, end="")  # igual lo mandamos a los logs reales de Railway
             response_text = result["text"]

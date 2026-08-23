@@ -113,6 +113,12 @@ export const getMarketing    = ()                               => req('/marketi
 
 // ── Flujo del Bot (solo lectura — visualización del funcionamiento) ──
 export const getFlujoBot = () => req('/flujo-bot')
+
+// ── Orquestador (mapa de herramientas, trazas, switch) ──────────────
+export const getOrquestadorMapa   = ()                    => req('/orquestador/mapa')
+export const getOrquestadorTrazas = (modo = 'prueba')     => req(`/orquestador/trazas?modo=${modo}`)
+export const setOrquestadorSwitch = (modo: string, telefonos_prueba?: string) =>
+  req('/orquestador/switch', { method: 'POST', body: JSON.stringify({ modo, telefonos_prueba }) })
 export const createMarketing = (d: MarketingPayload)            => req('/marketing', { method: 'POST', body: JSON.stringify(d) })
 export const updateMarketing = (i: number, d: MarketingPayload) => req(`/marketing/${i}`, { method: 'PUT', body: JSON.stringify(d) })
 export const deleteMarketing = (i: number)                      => req(`/marketing/${i}`, { method: 'DELETE' })

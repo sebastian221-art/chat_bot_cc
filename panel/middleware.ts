@@ -56,6 +56,9 @@ function _checkAccess(
   if (pathname.startsWith('/flujo-bot')) {
     return username !== 'admin'   // true = bloqueado
   }
+  if (pathname.startsWith('/orquestador')) {
+    return username !== 'admin'   // true = bloqueado
+  }
 
   // admin ve todo lo demás
   if (role === 'admin') return false

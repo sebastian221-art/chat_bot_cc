@@ -1369,3 +1369,49 @@ def get_flujo_bot(db: Session = Depends(get_db)):
         },
         "conteo_datos": conteo_datos,
     }
+
+# ══════════════════════════════════════════════════════════════════
+# ORQUESTADOR  (mapa de herramientas, trazas, y control del switch)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/orquestador/mapa")
+def get_orquestador_mapa(db: Session = Depends(get_db)):
+    """Expone el registro de herramientas + el estado del switch — para la vista 'mapa' del panel."""
+    from services.orchestrator_tools import HERRAMIENTAS
+    from services.orchestrator_switch import get_config
+    return {
+        "herramientas": HERRAMIENTAS,
+        "switch": get_config(db),
+    }
+
+
+@router.get("/orquestador/trazas")
+def get_orquestador_trazas(limit: int = 30, modo: str = None, db: Session = Depends(get_db)):
+    """
+    Últimas trazas del orquestador — para la vista 'trazas en vivo'.
+    En modo prueba el panel pide modo='prueba' (solo las del desarrollador);
+    en producción puede pedir todas.
+    """
+    from models.orchestrator_trace import OrchestratorTrace
+    q = db.query(OrchestratorTrace)
+    if modo:
+        q = q.filter(OrchestratorTrace.modo == modo)
+    trazas = q.order_by(OrchestratorTrace.created_at.desc()).limit(min(limit, 100)).all()
+    return [t.to_dict() for t in trazas]
+
+
+class SwitchIn(BaseModel):
+    modo: str
+    telefonos_prueba: Optional[str] = None
+
+
+@router.post("/orquestador/switch")
+def set_orquestador_switch(body: SwitchIn, db: Session = Depends(get_db)):
+    """Cambia el modo del switch (off / solo_yo / produccion)."""
+    from services.orchestrator_switch import set_modo
+    try:
+        cfg = set_modo(db, body.modo, body.telefonos_prueba)
+        print(f"  🔀  Switch del orquestador → {cfg['modo']}")
+        return {"ok": True, "switch": cfg}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

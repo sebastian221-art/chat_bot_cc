@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Store, MessageSquare, CalendarDays,
   BarChart2, ShoppingBag, FileText, ChevronRight,
-  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift, Megaphone, GitBranch,
+  Building2, LogOut, Users, Shield, BookOpen, QrCode, Gift, Megaphone, GitBranch, Cpu,
 } from 'lucide-react'
 import { getUser, clearAuth, getRoleLabel, type AuthUser } from '@/lib/auth'
 
@@ -29,6 +29,7 @@ const TOP_LINKS = [
   { href: '/reportes',       label: 'Reportes',         icon: FileText,        roles: ['admin'] },
   { href: '/usuarios',       label: 'Usuarios',         icon: Users,           roles: ['admin'] },
   { href: '/flujo-bot',      label: 'Flujo del Bot',    icon: GitBranch,       roles: ['admin'], onlyUser: 'admin' },
+  { href: '/orquestador',    label: 'Orquestador',      icon: Cpu,             roles: ['admin'], onlyUser: 'admin' },
 ]
 
 export default function Sidebar() {
