@@ -395,12 +395,55 @@ async def _ejecutar_gestion_domicilio(db, phone_number, mensaje, traza) -> dict:
 
 async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     """
-    Torre médica — por ahora reutiliza la conversación general, que ya
-    busca en las tiendas/base de conocimiento (donde se cargará la torre
-    médica vía Excel). Cuando esos datos estén, responderá con ellos.
+    Torre médica / servicios de salud. Busca en la base de conocimiento
+    (donde se cargará la info de la torre médica). Si encuentra algo
+    relevante, responde con eso. Si NO hay datos cargados, da una
+    respuesta HONESTA y CONSISTENTE — sin inventar ubicaciones, y SIN
+    adjuntar fotos ni el pin del mall de relleno (que era justo el bug:
+    mandaba la foto de la última hamburguesa y el mapa sin venir al
+    caso). Cuando cargues los datos de la torre médica, responderá con
+    el consultorio exacto.
     """
-    traza.paso("ejecucion", "Consulta de servicios médicos → conversación general (busca en la info cargada)")
-    return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
+    from services.rag import search_knowledge_and_events
+
+    traza.paso("ejecucion", "Consulta de servicios médicos → busca en la base de conocimiento")
+
+    # Buscar en la base de conocimiento algo sobre torre médica/servicios
+    try:
+        docs = search_knowledge_and_events(mensaje, n_results=3)
+    except Exception:
+        docs = []
+
+    # Filtrar a lo que de verdad hable de salud/torre médica
+    relevantes = [d for d in docs if any(
+        k in d.lower() for k in ("médic", "medic", "salud", "torre", "consultorio", "clínic", "clinic", "radiograf", "laboratorio")
+    )]
+
+    if relevantes:
+        traza.paso("resultado", f"Encontró {len(relevantes)} entrada(s) relevante(s) en la base de conocimiento")
+        from services.ai import generate_response
+        # Usamos la IA solo para redactar con base en lo encontrado, pero
+        # SIN la maquinaria de fotos del flujo viejo.
+        contexto = "\n".join(relevantes[:2])
+        texto, *_ = await generate_response(
+            user_message=mensaje,
+            user_name="",
+            conversation_history=[{"role": "system", "content": f"Información disponible sobre servicios médicos del centro comercial:\n{contexto}"}],
+            db=db,
+            phone_number=phone_number,
+        )
+        if (texto or "").strip():
+            return {"text": texto.strip(), "image_urls": [], "location": None}
+
+    # Sin datos → respuesta honesta, consistente, sin fotos ni pin de relleno
+    traza.paso("respaldo_honesto", "Sin datos de torre médica cargados → respuesta honesta y consistente (sin foto ni ubicación de relleno)")
+    texto = (
+        "El Centro Comercial El Puente cuenta con una *Torre Médica y Empresarial* donde hay varios "
+        "consultorios y servicios de salud. Para orientarte al consultorio exacto que necesitas, te "
+        "recomiendo acercarte al *Punto de Información* (Piso 1) o llamar a la administración al "
+        f"*{CONTACTO_MALL}* — con gusto te indican dónde dirigirte. 😊"
+    )
+    return {"text": texto, "image_urls": [], "location": None}
 
 
 # Mapa de nombre de herramienta → función que la ejecuta.
