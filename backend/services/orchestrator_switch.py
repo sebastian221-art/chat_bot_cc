@@ -80,9 +80,10 @@ def debe_usar_orquestador(db: Session, phone_number: str) -> bool:
     if modo == "produccion":
         return True
 
-    # modo == "solo_yo": solo pruebas y teléfonos autorizados
-    if phone_number.startswith("htest_") or phone_number.startswith("test_"):
-        return True
+    # modo == "solo_yo": EXCLUSIVAMENTE los números autorizados en el
+    # panel (tu línea privada de pruebas). Nada más pasa por el
+    # orquestador en este modo — ni siquiera los mensajes del script de
+    # prueba, si su número no está en la lista autorizada.
     cfg = get_config(db)
     autorizados = [t.strip() for t in (cfg.get("telefonos_prueba") or "").split(",") if t.strip()]
     return phone_number in autorizados

@@ -705,10 +705,14 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
         # Por defecto (switch en "off") usa el flujo viejo de siempre.
         # Solo si el switch está activado para este número, usa el
         # orquestador. El flujo viejo queda 100% intacto como respaldo.
-        from services.orchestrator_switch import debe_usar_orquestador
+        from services.orchestrator_switch import debe_usar_orquestador, get_modo
         if debe_usar_orquestador(db, phone_number):
             from services.orchestrator import procesar_con_orquestador
-            modo_orq = "produccion" if not phone_number.startswith(("test_", "htest_")) else "prueba"
+            # En modo "solo_yo" TODO lo que pasa es prueba tuya → se marca
+            # como "prueba" para que aparezca en el panel de trazas. Solo
+            # "produccion" se marca como producción.
+            modo_switch = get_modo(db)
+            modo_orq = "produccion" if modo_switch == "produccion" else "prueba"
             result = await procesar_con_orquestador(db, phone_number, message_text, modo=modo_orq)
         else:
             result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)

@@ -30,6 +30,7 @@ export default function OrquestadorPage() {
   const [tab, setTab] = useState<'mapa' | 'trazas'>('mapa')
   const [herramientas, setHerramientas] = useState<Herramienta[]>([])
   const [switchModo, setSwitchModo] = useState('off')
+  const [telefonosPrueba, setTelefonosPrueba] = useState('573154559242')  // tu número por defecto
   const [trazas, setTrazas] = useState<Traza[]>([])
   const [openTraza, setOpenTraza] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -39,6 +40,8 @@ export default function OrquestadorPage() {
     const d = await getOrquestadorMapa()
     setHerramientas(d.herramientas)
     setSwitchModo(d.switch.modo)
+    // Si ya hay números guardados, úsalos; si no, deja el tuyo por defecto
+    if (d.switch.telefonos_prueba) setTelefonosPrueba(d.switch.telefonos_prueba)
   }
   const cargarTrazas = async () => {
     const d = await getOrquestadorTrazas('prueba')
@@ -93,8 +96,20 @@ export default function OrquestadorPage() {
     if (modo === 'produccion' && !confirm('¿Seguro? Esto hará que TODOS los clientes reales pasen por el orquestador nuevo.')) return
     setSaving(true)
     try {
-      await setOrquestadorSwitch(modo)
+      // Al activar "Solo pruebas", guardamos también el número autorizado
+      // (el tuyo por defecto) para que quede listo de una vez.
+      await setOrquestadorSwitch(modo, modo === 'solo_yo' ? telefonosPrueba : undefined)
       setSwitchModo(modo)
+    } catch (e: any) {
+      alert('Error: ' + e.message)
+    } finally { setSaving(false) }
+  }
+
+  const guardarTelefonos = async () => {
+    setSaving(true)
+    try {
+      await setOrquestadorSwitch(switchModo, telefonosPrueba)
+      alert('Número de prueba guardado ✓')
     } catch (e: any) {
       alert('Error: ' + e.message)
     } finally { setSaving(false) }
@@ -133,6 +148,32 @@ export default function OrquestadorPage() {
         {switchModo === 'produccion' && (
           <div className="flex items-center gap-2 mt-3 text-amber-400 text-xs">
             <AlertTriangle size={14} /> El orquestador está atendiendo a clientes reales.
+          </div>
+        )}
+        {switchModo === 'solo_yo' && (
+          <div className="mt-4 pt-4 border-t border-zinc-800">
+            <label className="text-zinc-300 text-xs font-medium block mb-2">
+              Tu número de WhatsApp de prueba (el ÚNICO que pasa por el orquestador en este modo)
+            </label>
+            <p className="text-zinc-500 text-[11px] mb-2">
+              Con código de país, sin espacios ni símbolos. Ej: 573154559242. Para varios, sepáralos con coma.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={telefonosPrueba}
+                onChange={e => setTelefonosPrueba(e.target.value)}
+                placeholder="573154559242"
+                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-violet-500 focus:outline-none"
+              />
+              <button
+                onClick={guardarTelefonos}
+                disabled={saving}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
+              >
+                Guardar
+              </button>
+            </div>
           </div>
         )}
       </div>
