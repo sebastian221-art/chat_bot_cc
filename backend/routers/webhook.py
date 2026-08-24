@@ -351,12 +351,25 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
         return {"text": build_transfer_message(store), "image_urls": _wrap([_pick_store_photo(store, message_text)]), "location": None, "mentioned_store_id": store.id}
 
     # ── Ubicación del mall en sí (no de una tienda puntual) ──────────
-    # Si preguntan "dónde queda" sin mencionar una tienda específica,
-    # asumimos que preguntan por el mall — mandamos texto + pin real.
+    # El pin de ubicación SOLO se manda cuando preguntan explícitamente
+    # por la ubicación del CENTRO COMERCIAL en sí ("¿dónde queda el
+    # centro comercial?", "¿cómo llego al mall?"). NO se manda para
+    # "¿dónde están los baños?", "¿dónde queda tal tienda?", etc. —
+    # esos "dónde" son internos y el pin del mall no viene al caso (se
+    # veía mal mandarlo de relleno).
     location_data = None
     intent = classify_intent(message_text)
     _trace(phone_number, f"Intención clasificada por la IA (para elegir el prompt): '{intent}'")
-    if intent == "ubicacion" and not store:
+    msg_lower = message_text.lower()
+    # Debe mencionar el mall/centro comercial explícitamente para el pin
+    MENCIONA_MALL = any(p in msg_lower for p in [
+        "centro comercial", "el puente", "el mall", "al mall", "del mall",
+        "cómo llego", "como llego", "cómo llegar", "como llegar",
+        "la dirección", "direccion del", "ubicación del centro", "ubicacion del centro",
+        "queda el centro", "queda el mall", "dónde está el centro", "donde esta el centro",
+        "dónde queda ubicado", "cómo llegar al centro",
+    ])
+    if intent == "ubicacion" and not store and MENCIONA_MALL:
         mall_info = db.query(MallInfo).filter(MallInfo.id == 1).first()
         if mall_info and mall_info.latitude and mall_info.longitude:
             try:
