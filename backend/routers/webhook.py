@@ -112,12 +112,27 @@ PREMIO_KEYWORDS = ["premio", "qué me gano", "que me gano", "qué es el premio",
 
 
 def _pick_store_photo(store, message_text: str) -> str | None:
-    """Decide cuál foto de la galería de una tienda mandar: carta si preguntan por el menú, portada en cualquier otro caso."""
+    """
+    Decide cuál foto de la galería de una tienda mandar. SIEMPRE de la
+    MISMA tienda — nunca de otra. Orden:
+      1. Si preguntan por el menú/carta → la foto 'carta'.
+      2. Si no, la 'portada'.
+      3. Si la etiqueta ideal no existe pero la tienda SÍ tiene otra
+         foto (carta, galería, etc.), se manda esa — porque sigue siendo
+         de la misma tienda, y es mejor mostrar algo de ella que nada.
+      4. Si la tienda no tiene ninguna foto → None (no se manda nada; el
+         sistema jamás sustituye por la foto de algo diferente).
+    """
     if not store:
         return None
     msg = message_text.lower()
-    if any(k in msg for k in CARTA_KEYWORDS):
-        return store.get_photo_by_label("carta")
+    prefiere_carta = any(k in msg for k in CARTA_KEYWORDS)
+
+    if prefiere_carta:
+        # Preguntan por el menú → intentar 'carta' primero, luego lo que haya
+        url = store.get_photo_by_label("carta")
+        return url  # get_photo_by_label ya cae a portada / cualquier foto de ESTA tienda
+    # Caso normal → portada (y get_photo_by_label ya cae a otra foto de la misma tienda si no hay portada)
     return store.get_photo_by_label("portada")
 
 
@@ -551,19 +566,32 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
             if _agregar_foto("marketing", marketing_ia.title, url):
                 _trace(phone_number, f"Respaldo (IA identificó marketing por ID): '{marketing_ia.title}' (ID {marketing_id_ia}) → foto: {url}")
 
-    # ── 3) Último recurso — buscar en el historial de la conversación ─
-    # Solo si NADA de lo anterior encontró una tienda (ni el mensaje
-    # actual, ni la IA por ID) — típicamente cuando el mensaje es un
-    # seguimiento puro como "¿tienes una foto?" sin mencionar nada.
-    # Se deja para el final a propósito: si corriera primero, una
-    # tienda VIEJA de horas atrás en la misma conversación podría
-    # "ganarle el turno" a la información fresca de este mensaje.
-    if "store" not in tipos_cubiertos:
+    # ── (ELIMINADO) Último recurso por historial ──────────────────────
+    # ANTES: si no había foto de tienda, se agarraba la última tienda
+    # mencionada en el historial y se pegaba SU foto. Eso causaba que
+    # apareciera, por ejemplo, la foto de una hamburguesería en una
+    # respuesta sobre eventos, la factura o los baños — fotos de relleno
+    # que no venían al caso y hacían ver mal al sistema.
+    #
+    # NUEVA REGLA (estricta): cada cosa manda ÚNICAMENTE su propia foto.
+    #
+    # ÚNICA excepción segura: si el cliente pide EXPLÍCITAMENTE una foto
+    # ("¿tienes una foto?", "muéstrame la foto", "mándame la imagen") y
+    # NO nombró una tienda en este mensaje, usamos la tienda que la IA
+    # marcó en su ÚLTIMO mensaje (mentioned_store_id) — es un seguimiento
+    # legítimo sobre esa misma tienda. Aquí la foto SIGUE siendo de la
+    # tienda de la que se venía hablando, nunca de algo distinto.
+    PIDE_FOTO_EXPLICITA = any(p in message_text.lower() for p in [
+        "foto", "imagen", "muéstrame", "muestrame", "muéstra", "muestra",
+        "ver el local", "cómo se ve", "como se ve", "cómo es", "como es",
+    ])
+    if "store" not in tipos_cubiertos and PIDE_FOTO_EXPLICITA:
         photo_store = _find_recently_discussed_store(db, phone_number, None)
         if photo_store:
             url = _pick_store_photo(photo_store, message_text)
-            _trace(phone_number, f"Último recurso — tienda recordada del historial: '{photo_store.name}' → {'encontrada: ' + url if url else 'sin foto con esa etiqueta'}")
-            _agregar_foto("store", photo_store.name, url)
+            if url:
+                _trace(phone_number, f"Seguimiento de foto explícito → foto de la tienda en contexto: '{photo_store.name}'")
+                _agregar_foto("store", photo_store.name, url)
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | fotos: {len(image_urls)} | ubicación: {'SÍ' if location_data else 'NO'}")
     return {"text": text, "image_urls": image_urls, "location": location_data, "mentioned_store_id": tienda_id_ia}
