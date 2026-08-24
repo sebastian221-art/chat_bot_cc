@@ -27,3 +27,7 @@ pydantic-settings==2.5.2
 # Auth  ← NUEVOS
 PyJWT==2.9.0
 bcrypt==4.2.0
+
+# Procesamiento de imágenes — convierte cualquier foto subida (webp, gif,
+# etc.) a JPG, porque WhatsApp solo acepta JPG/PNG por link
+Pillow==10.4.0
