@@ -34,7 +34,7 @@ CATEGORIAS_BUSQUEDA = {
     "helados": ["helado", "helados", "heladería"],
     "café": ["café", "cafetería", "cafeteria", "tinto"],
     "sushi": ["sushi", "japonesa", "oriental"],
-    "comida": ["restaurante", "comida"],  # genérico — usar solo si no hubo match más específico
+    "comida": ["restaurante", "comida", "comer", "almorzar", "almuerzo", "cenar", "cena", "desayunar", "desayuno", "hambre"],  # genérico — usar solo si no hubo match más específico
 
     # ── Ropa ──
     "ropa": ["ropa", "vestuario", "prendas"],
@@ -109,6 +109,23 @@ def detectar_categoria(mensaje: str) -> tuple[str, list[str]] | None:
 
     if not coincidencias:
         return None
+
+    # PRIORIDAD DE COMIDA: si el mensaje tiene señales claras de que el
+    # cliente quiere COMER (no comprar ropa), la comida gana — aunque
+    # también mencione "niños"/"familia" (que dispararían "ropa
+    # infantil"). Evita el error de mandar a alguien que busca almorzar
+    # con la familia a tiendas de ropa infantil.
+    SEÑALES_COMER = ["comer", "comida", "almorzar", "almuerzo", "cenar", "desayunar",
+                     "hambre", "restaurante", "plazoleta", "comidas"]
+    if any(s in msg for s in SEÑALES_COMER):
+        comida_cats = [c for c in coincidencias if c[0] in (
+            "comida", "hamburguesas", "pizza", "tacos", "pollo", "comida rápida",
+            "almuerzos", "postres", "helados", "café", "sushi",
+        )]
+        if comida_cats:
+            # devolvemos la categoría de comida más específica
+            comida_cats.sort(key=lambda c: -len(c[0]))
+            return comida_cats[0]
 
     # La más específica = la de nombre más largo
     coincidencias.sort(key=lambda c: -len(c[0]))

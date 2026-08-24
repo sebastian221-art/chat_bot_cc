@@ -74,7 +74,7 @@ HERRAMIENTAS = [
     {
         "nombre": "busqueda_categoria",
         "categoria": "Información",
-        "descripcion": "Cuando preguntan por un TIPO de producto o comida sin nombrar una tienda (ej. 'dónde comer hamburguesas', 'tiendas de zapatos'). Lista TODOS los locales de esa categoría, para equidad comercial.",
+        "descripcion": "Cuando preguntan por un TIPO de PRODUCTO o COMIDA que quieren comprar/comer y qué locales lo tienen (ej. 'dónde comer hamburguesas', 'tiendas de zapatos', 'quiero comprar ropa'). El foco es el producto/comida que el cliente quiere obtener. IMPORTANTE: si alguien busca 'dónde comer' o 'un lugar para comer', es COMIDA, aunque mencione que va con niños o familia — nunca lo confundas con ropa infantil.",
         "palabras_clave": [],  # se detecta con category_search.detectar_categoria (más preciso)
     },
     {

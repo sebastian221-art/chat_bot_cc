@@ -192,51 +192,55 @@ async def _ejecutar_emergencia(db, phone_number, mensaje, traza) -> dict:
 
 async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> dict:
     """
-    Herramienta GENERAL / piloteo — delega en generate_response (la
-    lógica conversacional existente), pero con DOS redes de seguridad
-    para que el cliente NUNCA reciba una respuesta vacía:
-      1. Si generate_response devuelve vacío, se reintenta una vez.
-      2. Si aún así queda vacío, se responde con un mensaje de respaldo
-         amable — jamás un mensaje en blanco.
+    Herramienta GENERAL / piloteo. Delega en _route_message (el flujo
+    viejo probado) porque este NO solo genera el texto — también adjunta
+    automáticamente las FOTOS de la tienda/evento/sorteo/marketing que
+    se haya mencionado (toda esa lógica ya existe y funciona ahí). Si
+    llamáramos a generate_response directo, perderíamos las fotos.
+
+    Mantiene las 2 redes de seguridad: si _route_message devuelve texto
+    vacío, se reintenta; si sigue vacío, respaldo amable.
     """
-    traza.paso("ejecucion", "Ejecutando conversación general — reutiliza generate_response() del flujo existente")
-    from services.ai import generate_response
+    traza.paso("ejecucion", "Conversación general → delega en _route_message (incluye fotos de tienda/evento/sorteo)")
+    from routers.webhook import _route_message
 
     async def _intentar():
-        texto, *_ = await generate_response(
-            user_message=mensaje,
-            user_name="",
-            conversation_history=[],
-            db=db,
-            phone_number=phone_number,
-        )
-        return (texto or "").strip()
+        r = await _route_message(db, phone_number, "", mensaje)
+        return r
 
-    texto = ""
+    resultado = None
     try:
-        texto = await _intentar()
+        resultado = await _intentar()
     except Exception as e:
-        traza.paso("resultado_ia_error", f"generate_response falló: {str(e)}")
+        traza.paso("error", f"_route_message falló: {str(e)}")
 
-    # Red de seguridad 1: reintento si vino vacío
-    if not texto:
-        traza.paso("reintento", "generate_response devolvió vacío → se reintenta una vez")
+    # Red 1: reintento si vino vacío
+    if not resultado or not (resultado.get("text") or "").strip():
+        traza.paso("reintento", "_route_message devolvió vacío → se reintenta una vez")
         try:
-            texto = await _intentar()
+            resultado = await _intentar()
         except Exception as e:
-            traza.paso("reintento_error", f"El reintento también falló: {str(e)}")
+            traza.paso("reintento_error", f"El reintento falló: {str(e)}")
 
-    # Red de seguridad 2: respaldo amable si sigue vacío
-    if not texto:
-        traza.paso("respaldo", "Sigue vacío → se usa mensaje de respaldo (nunca se manda vacío al cliente)")
-        texto = (
-            "¡Hola! Soy Any 🛍️, tu asistente del Centro Comercial El Puente. "
-            "¿En qué te puedo ayudar? Puedo orientarte con tiendas, comida, horarios, "
-            "servicios o cualquier cosa del centro comercial 😊"
-        )
+    # Red 2: respaldo amable si sigue vacío
+    if not resultado or not (resultado.get("text") or "").strip():
+        traza.paso("respaldo", "Sigue vacío → mensaje de respaldo")
+        return {
+            "text": (
+                "¡Hola! Soy Any 🛍️, tu asistente del Centro Comercial El Puente. "
+                "¿En qué te puedo ayudar? Puedo orientarte con tiendas, comida, horarios, "
+                "servicios o cualquier cosa del centro comercial 😊"
+            ),
+            "image_urls": [], "location": None,
+        }
 
-    traza.paso("resultado_ia", f"Respuesta final: {len(texto)} caracteres")
-    return {"text": texto, "image_urls": [], "location": None}
+    fotos = len(resultado.get("image_urls") or [])
+    traza.paso("resultado_ia", f"Respuesta final: {len((resultado.get('text') or ''))} caracteres, {fotos} foto(s)")
+    return {
+        "text": resultado.get("text", ""),
+        "image_urls": resultado.get("image_urls", []),
+        "location": resultado.get("location"),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -307,17 +311,42 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
 
 
 async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict:
-    """Reutiliza category_search + rag — la búsqueda justa que lista TODOS los locales."""
+    """
+    Búsqueda justa por categoría. Con un matiz de CALIDAD para no soltar
+    "chorreros":
+      - Si la categoría tiene MUCHOS locales (>8, ej. "ropa"→24,
+        "zapatos"→16) y la petición es amplia, primero PREGUNTA para
+        acotar (qué estilo/tipo busca), en vez de listar 24 de corrido.
+      - Si son pocos (2-8, ej. "hamburguesas"→6), lista directo — ahí
+        la lista completa sí es útil y no abruma.
+      - Con 0-1, cae a conversación general (que pilotea/pregunta).
+    """
     from services.category_search import detectar_categoria, construir_lista_locales
     from services.rag import find_all_stores_by_category
+
+    UMBRAL_ACOTAR = 8  # más locales que esto → mejor preguntar primero
 
     cat = detectar_categoria(mensaje)
     if cat:
         nombre_cat, terminos = cat
         locales = find_all_stores_by_category(db, terminos)
         traza.paso("ejecucion", f"Categoría '{nombre_cat}' → {len(locales)} locales (búsqueda justa)")
+
+        if len(locales) > UMBRAL_ACOTAR:
+            # Demasiados para listar de golpe → acotar con una pregunta,
+            # manteniendo la personalidad y ofreciendo orientar.
+            traza.paso("acotar", f"{len(locales)} locales es mucho → se pregunta para acotar en vez de soltar la lista")
+            texto = (
+                f"¡Tenemos bastantes opciones de {nombre_cat} en el centro comercial! 😊 "
+                f"Para recomendarte la ideal y no abrumarte con toda la lista, cuéntame un poco más: "
+                f"¿qué estás buscando en particular — algún estilo, marca, rango de precio o para quién es? "
+                f"Con esa pista te digo el local perfecto. Y si prefieres verlos todos, dime \"muéstrame todos\" y te paso la lista completa."
+            )
+            return {"text": texto, "image_urls": [], "location": None}
+
         if len(locales) >= 2:
             return {"text": construir_lista_locales(locales, nombre_cat), "image_urls": [], "location": None}
+
     traza.paso("ejecucion", "No se detectó categoría con 2+ locales → cae a conversación general")
     return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
 
