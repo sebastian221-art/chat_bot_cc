@@ -34,6 +34,8 @@ class OrchestratorTrace(Base):
     # Resultado
     respuesta_bot   = Column(Text, nullable=True)
     fotos_enviadas  = Column(Integer, default=0)
+    fotos_urls      = Column(Text, nullable=True)             # JSON: lista de links de las fotos enviadas
+    contenido_extra = Column(Text, nullable=True)             # JSON: qué evento/promo/sorteo/tienda se agregó
     ubicacion_enviada = Column(String(5), default="no")       # "si" | "no"
 
     # Detalle completo del razonamiento (JSON serializado)
@@ -53,6 +55,14 @@ class OrchestratorTrace(Base):
             pasos = json.loads(self.pasos) if self.pasos else []
         except Exception:
             pasos = []
+        try:
+            fotos_urls = json.loads(self.fotos_urls) if self.fotos_urls else []
+        except Exception:
+            fotos_urls = []
+        try:
+            contenido_extra = json.loads(self.contenido_extra) if self.contenido_extra else []
+        except Exception:
+            contenido_extra = []
         return {
             "id": self.id,
             "phone_number": self.phone_number,
@@ -62,6 +72,8 @@ class OrchestratorTrace(Base):
             "razon_decision": self.razon_decision,
             "respuesta_bot": self.respuesta_bot,
             "fotos_enviadas": self.fotos_enviadas,
+            "fotos_urls": fotos_urls,
+            "contenido_extra": contenido_extra,
             "ubicacion_enviada": self.ubicacion_enviada,
             "pasos": pasos,
             "tiempo_total_ms": self.tiempo_total_ms,

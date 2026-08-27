@@ -1,8 +1,8 @@
 // 📄 ARCHIVO: panel/app/orquestador/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
-import { getOrquestadorMapa, getOrquestadorTrazas, setOrquestadorSwitch } from '@/lib/api'
-import { Cpu, Wrench, Activity, ChevronDown, ChevronRight, Clock, Zap, Bot, Power, RefreshCw, AlertTriangle, Download } from 'lucide-react'
+import { getOrquestadorMapa, getOrquestadorTrazas, getOrquestadorFechas, limpiarOrquestadorTrazas, setOrquestadorSwitch } from '@/lib/api'
+import { Cpu, Wrench, Activity, ChevronDown, ChevronRight, Clock, Zap, Bot, Power, RefreshCw, AlertTriangle, Download, Trash2, Calendar, Image as ImageIcon, MapPin } from 'lucide-react'
 
 interface Herramienta { nombre: string; categoria: string; descripcion: string; palabras_clave: string[] }
 interface Paso { paso: string; detalle: string; ms: number }
@@ -10,6 +10,7 @@ interface Traza {
   id: number; phone_number: string; mensaje_usuario: string
   herramienta_elegida: string; metodo_decision: string; razon_decision: string
   respuesta_bot: string; fotos_enviadas: number; ubicacion_enviada: string
+  fotos_urls?: string[]; contenido_extra?: { tipo: string; detalle: string }[]
   pasos: Paso[]; tiempo_total_ms: number; modo: string; created_at: string
 }
 
@@ -35,6 +36,8 @@ export default function OrquestadorPage() {
   const [openTraza, setOpenTraza] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [fechas, setFechas] = useState<string[]>([])
+  const [fechaSel, setFechaSel] = useState<string>('')  // '' = todas las recientes
 
   const cargarMapa = async () => {
     const d = await getOrquestadorMapa()
@@ -43,9 +46,41 @@ export default function OrquestadorPage() {
     // Si ya hay números guardados, úsalos; si no, deja el tuyo por defecto
     if (d.switch.telefonos_prueba) setTelefonosPrueba(d.switch.telefonos_prueba)
   }
-  const cargarTrazas = async () => {
-    const d = await getOrquestadorTrazas('prueba')
+  const cargarTrazas = async (fecha?: string) => {
+    const d = await getOrquestadorTrazas('prueba', fecha !== undefined ? fecha : fechaSel)
     setTrazas(d)
+  }
+  const cargarFechas = async () => {
+    try {
+      const f = await getOrquestadorFechas('prueba')
+      setFechas(f)
+    } catch { setFechas([]) }
+  }
+
+  const limpiarDia = async (fecha: string) => {
+    if (!confirm(`¿Borrar todas las trazas del día ${fecha}? Esto no se puede deshacer.`)) return
+    setSaving(true)
+    try {
+      const r = await limpiarOrquestadorTrazas({ fecha })
+      alert(`Se borraron ${r.borradas} trazas del ${fecha}`)
+      await cargarFechas()
+      await cargarTrazas('')
+      setFechaSel('')
+    } catch (e: any) { alert('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  const limpiarTodo = async () => {
+    if (!confirm('¿Borrar TODAS las trazas de todos los días? Esto libera memoria pero no se puede deshacer.')) return
+    setSaving(true)
+    try {
+      const r = await limpiarOrquestadorTrazas({ todo: true })
+      alert(`Se borraron ${r.borradas} trazas en total`)
+      await cargarFechas()
+      await cargarTrazas('')
+      setFechaSel('')
+    } catch (e: any) { alert('Error: ' + e.message) }
+    finally { setSaving(false) }
   }
 
   // Exporta las trazas a un archivo de texto legible — pensado para
@@ -77,6 +112,14 @@ export default function OrquestadorPage() {
       lineas.push(`ANY RESPONDIÓ:`)
       lineas.push(`"${t.respuesta_bot}"`)
       lineas.push(`   (${t.fotos_enviadas} fotos, ${t.ubicacion_enviada === 'si' ? 'con ubicación' : 'sin ubicación'})`)
+      if (t.fotos_urls && t.fotos_urls.length > 0) {
+        lineas.push(`   FOTOS ENVIADAS:`)
+        t.fotos_urls.forEach(u => lineas.push(`      - ${u}`))
+      }
+      if (t.contenido_extra && t.contenido_extra.length > 0) {
+        lineas.push(`   CONTENIDO AGREGADO:`)
+        t.contenido_extra.forEach(c => lineas.push(`      - [${c.tipo}] ${c.detalle}`))
+      }
       lineas.push('')
     })
     const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8' })
@@ -89,7 +132,7 @@ export default function OrquestadorPage() {
   }
 
   useEffect(() => {
-    Promise.all([cargarMapa(), cargarTrazas()]).finally(() => setLoading(false))
+    Promise.all([cargarMapa(), cargarTrazas(), cargarFechas()]).finally(() => setLoading(false))
   }, [])
 
   const cambiarModo = async (modo: string) => {
@@ -183,7 +226,7 @@ export default function OrquestadorPage() {
         <button onClick={() => setTab('mapa')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'mapa' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
           <Wrench size={15} /> Mapa de herramientas
         </button>
-        <button onClick={() => { setTab('trazas'); cargarTrazas() }} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'trazas' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+        <button onClick={() => { setTab('trazas'); cargarTrazas(); cargarFechas() }} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'trazas' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
           <Activity size={15} /> Trazas en vivo
         </button>
       </div>
@@ -218,18 +261,44 @@ export default function OrquestadorPage() {
       {/* Vista B — Trazas en vivo */}
       {tab === 'trazas' && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-zinc-500 text-xs">Últimas conversaciones procesadas por el orquestador (solo pruebas). Haz clic para ver el paso a paso.</p>
-            <div className="flex gap-2">
-              <button onClick={exportarTrazas} className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-all">
-                <Download size={14} /> Exportar
+          <div className="mb-3">
+            <p className="text-zinc-500 text-xs mb-2">Conversaciones procesadas por el orquestador (solo pruebas). Haz clic para ver el paso a paso, las fotos enviadas y lo que se agregó.</p>
+            {/* Barra de filtros y acciones */}
+            <div className="flex items-center gap-2 flex-wrap bg-zinc-900 border border-zinc-800 rounded-xl p-2">
+              <div className="flex items-center gap-1.5">
+                <Calendar size={14} className="text-zinc-500" />
+                <select
+                  value={fechaSel}
+                  onChange={e => { setFechaSel(e.target.value); cargarTrazas(e.target.value) }}
+                  className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none"
+                >
+                  <option value="">Todas las recientes</option>
+                  {fechas.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <button onClick={exportarTrazas} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-all">
+                <Download size={13} /> Exportar
               </button>
-              <button onClick={cargarTrazas} className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg"><RefreshCw size={14} /></button>
+              <button onClick={() => cargarTrazas()} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs rounded-lg">
+                <RefreshCw size={13} /> Refrescar
+              </button>
+              <div className="flex-1" />
+              {fechaSel && (
+                <button onClick={() => limpiarDia(fechaSel)} disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 text-xs rounded-lg border border-amber-600/30">
+                  <Trash2 size={13} /> Borrar día {fechaSel}
+                </button>
+              )}
+              <button onClick={limpiarTodo} disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-xs rounded-lg border border-rose-600/30">
+                <Trash2 size={13} /> Borrar todo
+              </button>
             </div>
+            <p className="text-zinc-600 text-[11px] mt-1.5">💡 Tip: borra los días viejos para ahorrar memoria. Si no eliges día, se borran los anteriores a hoy.</p>
           </div>
           {trazas.length === 0 ? (
             <div className="text-zinc-500 text-center py-12 bg-zinc-900 rounded-2xl border border-zinc-800">
-              Sin trazas todavía. Activa el switch en "Solo pruebas" y manda mensajes de prueba para verlas aquí.
+              Sin trazas para mostrar. Activa el switch en "Solo pruebas" y manda mensajes de prueba para verlas aquí.
             </div>
           ) : (
             <div className="space-y-2">
@@ -273,10 +342,48 @@ export default function OrquestadorPage() {
                         <p className="text-zinc-500 text-[11px] font-semibold mb-1">RESPUESTA AL CLIENTE</p>
                         <p className="text-zinc-300 text-xs bg-zinc-950 rounded-lg p-3 whitespace-pre-wrap">{t.respuesta_bot}</p>
                         <div className="flex gap-3 mt-1.5 text-[11px] text-zinc-600">
-                          <span>📷 {t.fotos_enviadas} fotos</span>
+                          <span>📷 {t.fotos_enviadas} foto(s)</span>
                           <span>📍 {t.ubicacion_enviada === 'si' ? 'con ubicación' : 'sin ubicación'}</span>
                         </div>
                       </div>
+
+                      {/* FOTOS ENVIADAS — con miniatura y link */}
+                      {t.fotos_urls && t.fotos_urls.length > 0 && (
+                        <div>
+                          <p className="text-zinc-500 text-[11px] font-semibold mb-1.5 flex items-center gap-1">
+                            <ImageIcon size={12} /> FOTOS ENVIADAS ({t.fotos_urls.length})
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {t.fotos_urls.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                className="block bg-zinc-950 rounded-lg p-1.5 border border-zinc-800 hover:border-violet-500 transition-colors">
+                                <img src={url} alt={`foto ${i + 1}`} className="w-24 h-24 object-cover rounded" />
+                                <p className="text-[9px] text-zinc-600 mt-1 max-w-24 truncate">{url.split('/').pop()}</p>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CONTENIDO AGREGADO — qué se añadió a la respuesta */}
+                      {t.contenido_extra && t.contenido_extra.length > 0 && (
+                        <div>
+                          <p className="text-zinc-500 text-[11px] font-semibold mb-1.5">CONTENIDO AGREGADO A LA RESPUESTA</p>
+                          <div className="space-y-1">
+                            {t.contenido_extra.map((c, i) => (
+                              <div key={i} className="flex items-start gap-2 bg-zinc-950 rounded-lg px-2.5 py-1.5 text-[11px]">
+                                <span className="shrink-0">
+                                  {c.tipo === 'foto' ? '📷' : c.tipo === 'ubicacion' ? '📍' : c.tipo === 'evento' ? '🎉' : c.tipo === 'sorteo' ? '🎁' : c.tipo === 'promocion' ? '🛍️' : '📎'}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="text-violet-300 font-medium">{c.tipo}</span>
+                                  <span className="text-zinc-500 ml-1.5 break-all">{c.detalle}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -116,7 +116,15 @@ export const getFlujoBot = () => req('/flujo-bot')
 
 // ── Orquestador (mapa de herramientas, trazas, switch) ──────────────
 export const getOrquestadorMapa   = ()                    => req('/orquestador/mapa')
-export const getOrquestadorTrazas = (modo = 'prueba')     => req(`/orquestador/trazas?modo=${modo}`)
+export const getOrquestadorTrazas = (modo = 'prueba', fecha?: string) =>
+  req(`/orquestador/trazas?modo=${modo}${fecha ? `&fecha=${fecha}` : ''}`)
+export const getOrquestadorFechas = (modo = 'prueba')     => req(`/orquestador/trazas/fechas?modo=${modo}`)
+export const limpiarOrquestadorTrazas = (opts: { fecha?: string; todo?: boolean } = {}) => {
+  const params = new URLSearchParams()
+  if (opts.fecha) params.set('fecha', opts.fecha)
+  if (opts.todo) params.set('todo', 'true')
+  return req(`/orquestador/trazas?${params.toString()}`, { method: 'DELETE' })
+}
 export const setOrquestadorSwitch = (modo: string, telefonos_prueba?: string) =>
   req('/orquestador/switch', { method: 'POST', body: JSON.stringify({ modo, telefonos_prueba }) })
 export const createMarketing = (d: MarketingPayload)            => req('/marketing', { method: 'POST', body: JSON.stringify(d) })

@@ -41,6 +41,8 @@ class Traza:
         self.razon_decision = None
         self.respuesta = None
         self.fotos = 0
+        self.fotos_urls = []       # links de las fotos enviadas (para verlas en el panel)
+        self.contenido_extra = []  # qué evento/promo/sorteo/tienda se agregó
         self.ubicacion = "no"
 
     def paso(self, nombre: str, detalle: str):
@@ -56,6 +58,8 @@ class Traza:
             razon_decision=self.razon_decision,
             respuesta_bot=self.respuesta,
             fotos_enviadas=self.fotos,
+            fotos_urls=json.dumps(self.fotos_urls, ensure_ascii=False),
+            contenido_extra=json.dumps(self.contenido_extra, ensure_ascii=False),
             ubicacion_enviada=self.ubicacion,
             pasos=json.dumps(self.pasos, ensure_ascii=False),
             tiempo_total_ms=round((time.time() - self.inicio) * 1000, 1),
@@ -647,8 +651,17 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
 
     # 3. Registrar el resultado en la traza
     traza.respuesta = resultado.get("text", "")
-    traza.fotos = len(resultado.get("image_urls", []))
-    traza.ubicacion = "si" if resultado.get("location") else "no"
+    fotos_list = resultado.get("image_urls", []) or []
+    traza.fotos = len(fotos_list)
+    traza.fotos_urls = fotos_list  # guardar los LINKS de las fotos para verlos en el panel
+    loc = resultado.get("location")
+    traza.ubicacion = "si" if loc else "no"
+    # Registrar detalle de la ubicación en contenido_extra si la hay
+    if loc:
+        traza.contenido_extra.append({"tipo": "ubicacion", "detalle": loc.get("name", "ubicación del mall")})
+    # Registrar cada foto como contenido agregado (para la vista detallada)
+    for url in fotos_list:
+        traza.contenido_extra.append({"tipo": "foto", "detalle": url})
     traza.paso("fin", f"Respuesta lista ({len(traza.respuesta)} caracteres, {traza.fotos} fotos)")
 
     # 4. Guardar la traza (esto es lo que hace todo visible en el panel)

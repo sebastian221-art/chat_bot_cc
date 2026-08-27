@@ -1386,18 +1386,62 @@ def get_orquestador_mapa(db: Session = Depends(get_db)):
 
 
 @router.get("/orquestador/trazas")
-def get_orquestador_trazas(limit: int = 30, modo: str = None, db: Session = Depends(get_db)):
+def get_orquestador_trazas(limit: int = 50, modo: str = None, fecha: str = None, db: Session = Depends(get_db)):
     """
-    Últimas trazas del orquestador — para la vista 'trazas en vivo'.
-    En modo prueba el panel pide modo='prueba' (solo las del desarrollador);
-    en producción puede pedir todas.
+    Trazas del orquestador — para la vista 'trazas en vivo'.
+    - modo: filtra 'prueba' o 'produccion'
+    - fecha: filtra por día (formato YYYY-MM-DD). Si no se da, trae las más recientes.
     """
     from models.orchestrator_trace import OrchestratorTrace
+    from sqlalchemy import func as sqlfunc
     q = db.query(OrchestratorTrace)
     if modo:
         q = q.filter(OrchestratorTrace.modo == modo)
-    trazas = q.order_by(OrchestratorTrace.created_at.desc()).limit(min(limit, 100)).all()
+    if fecha:
+        # Filtrar por el día indicado (comparando solo la parte de fecha)
+        try:
+            q = q.filter(sqlfunc.date(OrchestratorTrace.created_at) == fecha)
+        except Exception:
+            pass
+    trazas = q.order_by(OrchestratorTrace.created_at.desc()).limit(min(limit, 200)).all()
     return [t.to_dict() for t in trazas]
+
+
+@router.get("/orquestador/trazas/fechas")
+def get_orquestador_trazas_fechas(modo: str = None, db: Session = Depends(get_db)):
+    """Devuelve las fechas (días) que tienen trazas, para el selector de fecha del panel."""
+    from models.orchestrator_trace import OrchestratorTrace
+    from sqlalchemy import func as sqlfunc
+    q = db.query(sqlfunc.date(OrchestratorTrace.created_at).label("dia"))
+    if modo:
+        q = q.filter(OrchestratorTrace.modo == modo)
+    fechas = q.distinct().order_by(sqlfunc.date(OrchestratorTrace.created_at).desc()).all()
+    return [str(f.dia) for f in fechas if f.dia]
+
+
+@router.delete("/orquestador/trazas")
+def limpiar_orquestador_trazas(fecha: str = None, todo: bool = False, db: Session = Depends(get_db)):
+    """
+    Limpia trazas para liberar memoria.
+    - Si 'todo=true': borra TODAS las trazas.
+    - Si 'fecha=YYYY-MM-DD': borra solo las de ESE día.
+    - Si no se da nada: borra las de días ANTERIORES a hoy (deja solo hoy).
+    """
+    from models.orchestrator_trace import OrchestratorTrace
+    from sqlalchemy import func as sqlfunc
+    from datetime import date
+    q = db.query(OrchestratorTrace)
+    if todo:
+        borradas = q.delete(synchronize_session=False)
+    elif fecha:
+        borradas = q.filter(sqlfunc.date(OrchestratorTrace.created_at) == fecha).delete(synchronize_session=False)
+    else:
+        # Borra todo lo anterior a hoy (deja solo el día actual)
+        hoy = str(date.today())
+        borradas = q.filter(sqlfunc.date(OrchestratorTrace.created_at) < hoy).delete(synchronize_session=False)
+    db.commit()
+    print(f"  🧹  Trazas limpiadas: {borradas}")
+    return {"ok": True, "borradas": borradas}
 
 
 class SwitchIn(BaseModel):
