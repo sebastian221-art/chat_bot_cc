@@ -576,21 +576,23 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     # NUEVA REGLA (estricta): cada cosa manda ÚNICAMENTE su propia foto.
     #
     # ÚNICA excepción segura: si el cliente pide EXPLÍCITAMENTE una foto
-    # ("¿tienes una foto?", "muéstrame la foto", "mándame la imagen") y
-    # NO nombró una tienda en este mensaje, usamos la tienda que la IA
-    # marcó en su ÚLTIMO mensaje (mentioned_store_id) — es un seguimiento
-    # legítimo sobre esa misma tienda. Aquí la foto SIGUE siendo de la
-    # tienda de la que se venía hablando, nunca de algo distinto.
+    # ("¿tienes una foto?") Y en esta respuesta NO se mandó NINGUNA otra
+    # foto (ni de promo, ni evento, ni sorteo, ni tienda). Solo en ese
+    # caso usamos la tienda que se venía discutiendo. Si la respuesta ya
+    # trae una foto (ej. la del sorteo o la promo que la IA identificó),
+    # NO se agrega nada más — así se evita el bug de mandar la promo de
+    # Zirus + la hamburguesa de 12B Burguer juntas.
     PIDE_FOTO_EXPLICITA = any(p in message_text.lower() for p in [
         "foto", "imagen", "muéstrame", "muestrame", "muéstra", "muestra",
         "ver el local", "cómo se ve", "como se ve", "cómo es", "como es",
     ])
-    if "store" not in tipos_cubiertos and PIDE_FOTO_EXPLICITA:
+    if PIDE_FOTO_EXPLICITA and len(image_urls) == 0:
+        # Nadie más puso foto y el cliente la pidió → buscar la tienda en contexto
         photo_store = _find_recently_discussed_store(db, phone_number, None)
         if photo_store:
             url = _pick_store_photo(photo_store, message_text)
             if url:
-                _trace(phone_number, f"Seguimiento de foto explícito → foto de la tienda en contexto: '{photo_store.name}'")
+                _trace(phone_number, f"Seguimiento de foto explícito (sin otra foto en la respuesta) → foto de la tienda en contexto: '{photo_store.name}'")
                 _agregar_foto("store", photo_store.name, url)
 
     _trace(phone_number, f"Respuesta final — texto: {len(text)} caracteres | fotos: {len(image_urls)} | ubicación: {'SÍ' if location_data else 'NO'}")
