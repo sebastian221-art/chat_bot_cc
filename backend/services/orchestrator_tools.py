@@ -94,6 +94,24 @@ HERRAMIENTAS = [
         ],
     },
     {
+        "nombre": "eventos",
+        "categoria": "Información",
+        "descripcion": "Cuando preguntan por los EVENTOS del centro comercial (actividades, ferias, shows, celebraciones, festivales). Ej: '¿qué eventos hay?', '¿hay alguna actividad?'.",
+        "palabras_clave": ["evento", "eventos", "actividad", "actividades", "feria", "festival", "show", "celebración", "celebracion"],
+    },
+    {
+        "nombre": "sorteos",
+        "categoria": "Información",
+        "descripcion": "Cuando preguntan por los SORTEOS, rifas o premios del centro comercial. Ej: '¿qué están sorteando?', '¿hay algún sorteo?', '¿cómo participo en el sorteo?'.",
+        "palabras_clave": ["sorteo", "sorteos", "rifa", "rifas", "premio", "premios", "sortear", "sorteando", "me gano", "ganar un"],
+    },
+    {
+        "nombre": "promociones",
+        "categoria": "Información",
+        "descripcion": "Cuando preguntan por PROMOCIONES, ofertas o descuentos de las tiendas del centro comercial. Ej: '¿hay promociones?', '¿alguna oferta?', '¿hay descuentos?'.",
+        "palabras_clave": ["promoción", "promocion", "promociones", "oferta", "ofertas", "descuento", "descuentos", "rebaja", "rebajas", "2x1", "promo"],
+    },
+    {
         "nombre": "conversacion_general",
         "categoria": "Conversación",
         "descripcion": "El caso por defecto: consultas generales sobre tiendas, horarios, servicios, o cualquier cosa que no encaje en las herramientas anteriores. Aquí vive el comportamiento propositivo y el piloteo de lo inesperado (redirige con gracia lo que no es del mall).",

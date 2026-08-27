@@ -446,6 +446,149 @@ async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     return {"text": texto, "image_urls": [], "location": None}
 
 
+# ══════════════════════════════════════════════════════════════════
+# HERRAMIENTAS DEDICADAS: EVENTOS, SORTEOS, PROMOCIONES
+# Cada una trae SU información específica y manda SU foto directamente
+# (sin depender de que la IA adivine el ID). Así nunca se mezclan ni
+# mandan fotos equivocadas.
+# ══════════════════════════════════════════════════════════════════
+
+def _foto_de_entidad(db, tipo, entidad):
+    """Busca la foto de un evento/sorteo/promo: primero en entity_photo,
+    y si no, en el campo photo_url del propio modelo. Devuelve None si no
+    hay ninguna — nunca una foto de algo diferente."""
+    from models.entity_photo import get_entity_photo
+    # 1) tabla entity_photo (galería con etiquetas)
+    url = get_entity_photo(db, tipo, entidad.id, "portada")
+    if url:
+        return url
+    # 2) campo directo del modelo (donde a veces se carga la foto)
+    return getattr(entidad, "photo_url", None) or None
+
+
+async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
+    """Lista los eventos activos. Si hay pocos sorteos, los menciona
+    también (para promocionar sin saturar). Manda la foto del evento de
+    mayor prioridad."""
+    from models.event import Event
+    from models.raffle import Raffle
+
+    eventos = db.query(Event).order_by(Event.priority.desc()).all()
+    if not eventos:
+        traza.paso("ejecucion", "No hay eventos cargados → respuesta honesta")
+        return {"text": "Por ahora no tenemos eventos programados, pero te invito a estar pendiente 😊. "
+                        "¿Te ayudo con algo más del centro comercial?", "image_urls": [], "location": None}
+
+    traza.paso("ejecucion", f"Eventos activos: {len(eventos)} → se listan y se manda la foto del principal")
+    lineas = ["¡Estos son los eventos del Centro Comercial El Puente! 🎉\n"]
+    for e in eventos[:4]:
+        linea = f"*{e.name}*"
+        if e.date:
+            linea += f"\n📅 {e.date}" + (f" · {e.time}" if e.time else "")
+        if e.location:
+            linea += f"\n📍 {e.location}"
+        if e.description:
+            linea += f"\n{e.description}"
+        lineas.append(linea)
+
+    # Promocionar sorteos también, si hay pocos (para no saturar)
+    sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    if sorteos and len(sorteos) <= 2:
+        nombres = ", ".join(f"*{s.name}*" for s in sorteos)
+        lineas.append(f"\nY no te pierdas nuestro sorteo: {nombres} 🎁 — pregúntame por él si quieres los detalles.")
+
+    # Foto del evento principal (mayor prioridad)
+    foto = _foto_de_entidad(db, "event", eventos[0])
+    fotos = [foto] if foto else []
+    if foto:
+        traza.paso("foto", f"Foto del evento '{eventos[0].name}' adjuntada")
+    else:
+        traza.paso("foto", f"El evento '{eventos[0].name}' no tiene foto cargada → no se manda ninguna (nunca de relleno)")
+
+    return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+
+
+async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
+    """Lista los sorteos activos. Si hay pocos eventos, los menciona
+    también. Manda la foto del sorteo principal."""
+    from models.raffle import Raffle
+    from models.event import Event
+
+    sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    if not sorteos:
+        traza.paso("ejecucion", "No hay sorteos activos → respuesta honesta")
+        return {"text": "Por ahora no tenemos sorteos activos, pero mantente atento porque siempre hay novedades 😊. "
+                        "¿Te ayudo con algo más?", "image_urls": [], "location": None}
+
+    traza.paso("ejecucion", f"Sorteos activos: {len(sorteos)} → se listan y se manda la foto del principal")
+    lineas = ["¡Participa en nuestros sorteos! 🎁\n"]
+    for s in sorteos[:4]:
+        linea = f"*{s.name}*"
+        if s.prize:
+            linea += f"\n🏆 Premio: {s.prize}"
+        if s.requirements:
+            linea += f"\n📋 Cómo participar: {s.requirements}"
+        if s.end_date:
+            linea += f"\n📅 Hasta: {s.end_date}"
+        if s.location:
+            linea += f"\n📍 {s.location}"
+        lineas.append(linea)
+
+    # Promocionar eventos también, si hay pocos
+    eventos = db.query(Event).order_by(Event.priority.desc()).all()
+    if eventos and len(eventos) <= 2:
+        nombres = ", ".join(f"*{e.name}*" for e in eventos)
+        lineas.append(f"\nAdemás tenemos el evento {nombres} 🎉 — pregúntame si quieres saber más.")
+
+    foto = _foto_de_entidad(db, "raffle", sorteos[0])
+    fotos = [foto] if foto else []
+    if foto:
+        traza.paso("foto", f"Foto del sorteo '{sorteos[0].name}' adjuntada")
+    else:
+        traza.paso("foto", f"El sorteo '{sorteos[0].name}' no tiene foto → no se manda ninguna")
+
+    return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+
+
+async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
+    """Lista las promociones de marketing activas. Manda la foto de la
+    promo principal. Si no hay promos puras, menciona eventos/sorteos
+    como actividades, con honestidad."""
+    from models.marketing import Marketing
+    from models.event import Event
+    from models.raffle import Raffle
+
+    promos = db.query(Marketing).filter(Marketing.active == True).order_by(Marketing.priority.desc()).all()
+
+    if promos:
+        traza.paso("ejecucion", f"Promociones activas: {len(promos)} → se listan y se manda la foto de la principal")
+        lineas = ["¡Estas son nuestras promociones! 🛍️\n"]
+        for p in promos[:4]:
+            linea = f"*{p.title}*"
+            if p.description:
+                linea += f"\n{p.description}"
+            if p.valid_until:
+                linea += f"\n📅 Válida hasta: {p.valid_until}"
+            lineas.append(linea)
+        foto = _foto_de_entidad(db, "marketing", promos[0])
+        fotos = [foto] if foto else []
+        if foto:
+            traza.paso("foto", f"Foto de la promo '{promos[0].title}' adjuntada")
+        return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+
+    # Sin promos puras → mencionar honestamente eventos/sorteos como actividades
+    traza.paso("ejecucion", "No hay promociones de marketing puras → se mencionan eventos/sorteos como actividades")
+    eventos = db.query(Event).order_by(Event.priority.desc()).all()
+    sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    partes = ["En este momento no tengo una promoción comercial puntual, pero sí tenemos estas actividades: 😊\n"]
+    if eventos:
+        partes.append(f"🎉 Evento: *{eventos[0].name}*" + (f" — {eventos[0].date}" if eventos[0].date else ""))
+    if sorteos:
+        partes.append(f"🎁 Sorteo: *{sorteos[0].name}*" + (f" — hasta {sorteos[0].end_date}" if sorteos[0].end_date else ""))
+    partes.append("\nPara ofertas puntuales de las tiendas, te recomiendo pasar por el Punto de Información (Piso 1). 😊")
+    return {"text": "\n".join(partes), "image_urls": [], "location": None}
+
+
 # Mapa de nombre de herramienta → función que la ejecuta.
 # Ahora TODAS las herramientas están conectadas, reutilizando la lógica
 # que ya funcionaba en el flujo viejo (no se reescribió nada).
@@ -458,6 +601,9 @@ EJECUTORES = {
     "ubicacion_mall": _ejecutar_ubicacion_mall,
     "gestion_domicilio": _ejecutar_gestion_domicilio,
     "torre_medica": _ejecutar_torre_medica,
+    "eventos": _ejecutar_eventos,
+    "sorteos": _ejecutar_sorteos,
+    "promociones": _ejecutar_promociones,
     "conversacion_general": _ejecutar_conversacion_general,
 }
 
