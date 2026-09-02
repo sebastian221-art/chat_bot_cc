@@ -507,6 +507,47 @@ def _foto_de_entidad(db, tipo, entidad):
     return getattr(entidad, "photo_url", None) or None
 
 
+async def _redactar_creativo(datos_fijos: str, tipo_contenido: str, traza) -> str | None:
+    """
+    Toma los datos EXACTOS (fechas, premios, requisitos, etc.) y le pide
+    a la IA que redacte una invitación cálida y atractiva alrededor de
+    ellos — SIN cambiar ni inventar ningún dato. Es la "creatividad
+    seria": decora la plantilla, no altera la información.
+
+    Devuelve el texto redactado, o None si algo falla (en cuyo caso el
+    llamador usa su plantilla fija como respaldo — nunca se queda sin
+    respuesta).
+    """
+    from services.ai import _get_groq_client, settings, _strip_thinking_tags
+    prompt = f"""Eres Any, la asistente cálida del Centro Comercial El Puente. Escribe un mensaje corto, alegre y natural para invitar a un cliente a este {tipo_contenido}, usando EXACTAMENTE estos datos (no cambies fechas, nombres, premios ni requisitos, no inventes nada que no esté aquí):
+
+{datos_fijos}
+
+Reglas:
+- Tono cálido, entusiasta y cercano (colombiano natural), sin exagerar ni sonar falso.
+- Usa máximo 2 emojis, donde aporten.
+- Menciona TODOS los datos dados (fecha, lugar, premio, cómo participar, etc.) pero de forma fluida, no como una lista de campos rígida.
+- Máximo 5-6 líneas. Directo y atractivo.
+- NO inventes precios, requisitos ni fechas que no estén arriba.
+- No agregues despedidas largas ni "pasa por el Punto de Información".
+Responde SOLO con el mensaje para el cliente, nada más."""
+    try:
+        client = _get_groq_client()
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
+            temperature=0.85,  # alto para creatividad; los datos van fijos en el prompt
+        )
+        texto = _strip_thinking_tags(completion.choices[0].message.content or "").strip()
+        if texto and len(texto) > 20:
+            traza.paso("creatividad", f"Texto redactado con IA (creatividad seria) para {tipo_contenido}")
+            return texto
+    except Exception as e:
+        traza.paso("creatividad_error", f"No se pudo redactar creativo ({e}) → se usa plantilla fija")
+    return None
+
+
 async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
     """Lista los eventos activos. Si hay pocos sorteos, los menciona
     también (para promocionar sin saturar). Manda la foto del evento de
@@ -521,28 +562,45 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
                         "¿Te ayudo con algo más del centro comercial?", "image_urls": [], "location": None}
 
     traza.paso("ejecucion", f"Eventos activos: {len(eventos)} → se listan y se manda la foto del principal")
-    import random as _rnd
-    _intro_ev = _rnd.choice([
-        "¡Estos son los eventos del Centro Comercial El Puente! 🎉\n",
-        "¡Tenemos planes que no te puedes perder! 🎉 Estos son los eventos del centro comercial:\n",
-        "¡Prepárate, porque vienen cosas buenas! 🎉 Estos son nuestros eventos:\n",
-    ])
-    lineas = [_intro_ev]
-    for e in eventos[:4]:
-        linea = f"*{e.name}*"
-        if e.date:
-            linea += f"\n📅 {e.date}" + (f" · {e.time}" if e.time else "")
-        if e.location:
-            linea += f"\n📍 {e.location}"
-        if e.description:
-            linea += f"\n{e.description}"
-        lineas.append(linea)
 
-    # Promocionar sorteos también, si hay pocos (para no saturar)
+    # Datos EXACTOS de los eventos (para la redacción creativa)
+    datos = []
+    for e in eventos[:4]:
+        d = f"Evento: {e.name}"
+        if e.date: d += f". Fecha: {e.date}" + (f" a las {e.time}" if e.time else "")
+        if e.location: d += f". Lugar: {e.location}"
+        if e.description: d += f". Descripción: {e.description}"
+        datos.append(d)
     sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
     if sorteos and len(sorteos) <= 2:
-        nombres = ", ".join(f"*{s.name}*" for s in sorteos)
-        lineas.append(f"\nY no te pierdas nuestro sorteo: {nombres} 🎁 — pregúntame por él si quieres los detalles.")
+        datos.append("Además, menciona brevemente que también hay un sorteo activo (" +
+                     ", ".join(s.name for s in sorteos) + ") por si quiere preguntar por él.")
+
+    # CREATIVIDAD SERIA: la IA redacta la invitación con esos datos exactos
+    texto = await _redactar_creativo("\n".join(datos), "evento", traza)
+
+    # Respaldo: plantilla fija si la IA falló (nunca quedar sin respuesta)
+    if not texto:
+        import random as _rnd
+        _intro_ev = _rnd.choice([
+            "¡Estos son los eventos del Centro Comercial El Puente! 🎉\n",
+            "¡Tenemos planes que no te puedes perder! 🎉 Estos son los eventos del centro comercial:\n",
+            "¡Prepárate, porque vienen cosas buenas! 🎉 Estos son nuestros eventos:\n",
+        ])
+        lineas = [_intro_ev]
+        for e in eventos[:4]:
+            linea = f"*{e.name}*"
+            if e.date:
+                linea += f"\n📅 {e.date}" + (f" · {e.time}" if e.time else "")
+            if e.location:
+                linea += f"\n📍 {e.location}"
+            if e.description:
+                linea += f"\n{e.description}"
+            lineas.append(linea)
+        if sorteos and len(sorteos) <= 2:
+            nombres = ", ".join(f"*{s.name}*" for s in sorteos)
+            lineas.append(f"\nY no te pierdas nuestro sorteo: {nombres} 🎁 — pregúntame por él si quieres los detalles.")
+        texto = "\n\n".join(lineas)
 
     # Foto del evento principal (mayor prioridad)
     foto = _foto_de_entidad(db, "event", eventos[0])
@@ -552,7 +610,7 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
     else:
         traza.paso("foto", f"El evento '{eventos[0].name}' no tiene foto cargada → no se manda ninguna (nunca de relleno)")
 
-    return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+    return {"text": texto, "image_urls": fotos, "location": None}
 
 
 async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
@@ -568,30 +626,46 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
                         "¿Te ayudo con algo más?", "image_urls": [], "location": None}
 
     traza.paso("ejecucion", f"Sorteos activos: {len(sorteos)} → se listan y se manda la foto del principal")
-    import random as _rnd
-    _intro_so = _rnd.choice([
-        "¡Participa en nuestros sorteos! 🎁\n",
-        "¡Tenemos premios esperándote! 🎁 Estos son los sorteos activos:\n",
-        "¡Anímate a participar y llévate algo increíble! 🎁\n",
-    ])
-    lineas = [_intro_so]
-    for s in sorteos[:4]:
-        linea = f"*{s.name}*"
-        if s.prize:
-            linea += f"\n🏆 Premio: {s.prize}"
-        if s.requirements:
-            linea += f"\n📋 Cómo participar: {s.requirements}"
-        if s.end_date:
-            linea += f"\n📅 Hasta: {s.end_date}"
-        if s.location:
-            linea += f"\n📍 {s.location}"
-        lineas.append(linea)
 
-    # Promocionar eventos también, si hay pocos
+    # Datos EXACTOS de los sorteos
+    datos = []
+    for s in sorteos[:4]:
+        d = f"Sorteo: {s.name}"
+        if s.prize: d += f". Premio: {s.prize}"
+        if s.requirements: d += f". Cómo participar: {s.requirements}"
+        if s.end_date: d += f". Fecha límite: {s.end_date}"
+        if s.location: d += f". Lugar: {s.location}"
+        datos.append(d)
     eventos = db.query(Event).order_by(Event.priority.desc()).all()
     if eventos and len(eventos) <= 2:
-        nombres = ", ".join(f"*{e.name}*" for e in eventos)
-        lineas.append(f"\nAdemás tenemos el evento {nombres} 🎉 — pregúntame si quieres saber más.")
+        datos.append("Además, menciona brevemente que también hay un evento (" +
+                     ", ".join(e.name for e in eventos) + ") por si quiere saber más.")
+
+    texto = await _redactar_creativo("\n".join(datos), "sorteo", traza)
+
+    if not texto:
+        import random as _rnd
+        _intro_so = _rnd.choice([
+            "¡Participa en nuestros sorteos! 🎁\n",
+            "¡Tenemos premios esperándote! 🎁 Estos son los sorteos activos:\n",
+            "¡Anímate a participar y llévate algo increíble! 🎁\n",
+        ])
+        lineas = [_intro_so]
+        for s in sorteos[:4]:
+            linea = f"*{s.name}*"
+            if s.prize:
+                linea += f"\n🏆 Premio: {s.prize}"
+            if s.requirements:
+                linea += f"\n📋 Cómo participar: {s.requirements}"
+            if s.end_date:
+                linea += f"\n📅 Hasta: {s.end_date}"
+            if s.location:
+                linea += f"\n📍 {s.location}"
+            lineas.append(linea)
+        if eventos and len(eventos) <= 2:
+            nombres = ", ".join(f"*{e.name}*" for e in eventos)
+            lineas.append(f"\nAdemás tenemos el evento {nombres} 🎉 — pregúntame si quieres saber más.")
+        texto = "\n\n".join(lineas)
 
     foto = _foto_de_entidad(db, "raffle", sorteos[0])
     fotos = [foto] if foto else []
@@ -615,25 +689,39 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
 
     if promos:
         traza.paso("ejecucion", f"Promociones activas: {len(promos)} → se listan y se manda la foto de la principal")
-        import random as _rnd
-        _intro_pr = _rnd.choice([
-            "¡Estas son nuestras promociones! 🛍️\n",
-            "¡Aprovecha estas promociones del centro comercial! 🛍️\n",
-            "¡Tenemos ofertas que te van a encantar! 🛍️\n",
-        ])
-        lineas = [_intro_pr]
+
+        # Datos EXACTOS de las promos
+        datos = []
         for p in promos[:4]:
-            linea = f"*{p.title}*"
-            if p.description:
-                linea += f"\n{p.description}"
-            if p.valid_until:
-                linea += f"\n📅 Válida hasta: {p.valid_until}"
-            lineas.append(linea)
+            d = f"Promoción: {p.title}"
+            if p.description: d += f". Detalle: {p.description}"
+            if p.valid_until: d += f". Válida hasta: {p.valid_until}"
+            datos.append(d)
+
+        texto = await _redactar_creativo("\n".join(datos), "promoción", traza)
+
+        if not texto:
+            import random as _rnd
+            _intro_pr = _rnd.choice([
+                "¡Estas son nuestras promociones! 🛍️\n",
+                "¡Aprovecha estas promociones del centro comercial! 🛍️\n",
+                "¡Tenemos ofertas que te van a encantar! 🛍️\n",
+            ])
+            lineas = [_intro_pr]
+            for p in promos[:4]:
+                linea = f"*{p.title}*"
+                if p.description:
+                    linea += f"\n{p.description}"
+                if p.valid_until:
+                    linea += f"\n📅 Válida hasta: {p.valid_until}"
+                lineas.append(linea)
+            texto = "\n\n".join(lineas)
+
         foto = _foto_de_entidad(db, "marketing", promos[0])
         fotos = [foto] if foto else []
         if foto:
             traza.paso("foto", f"Foto de la promo '{promos[0].title}' adjuntada")
-        return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+        return {"text": texto, "image_urls": fotos, "location": None}
 
     # Sin promos puras → mencionar honestamente eventos/sorteos como actividades
     traza.paso("ejecucion", "No hay promociones de marketing puras → se mencionan eventos/sorteos como actividades")
