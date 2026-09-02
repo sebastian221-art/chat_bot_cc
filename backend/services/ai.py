@@ -402,7 +402,38 @@ async def generate_response(
     for i, doc in enumerate(rag_docs[:8], 1):
         print(f"       {i}. {doc[:120]}{'...' if len(doc) > 120 else ''}")
 
+    # ── Inyección directa de la ficha de la tienda en contexto ────────
+    # El RAG semántico a veces no prioriza la ficha correcta cuando el
+    # mensaje es un seguimiento corto ("¿a qué hora abre?", "¿tienen
+    # carta?"). Para que la IA SIEMPRE tenga los datos exactos (horario,
+    # teléfono, link) de la tienda de la que se está hablando, buscamos
+    # esa tienda —por el mensaje actual o por el historial reciente— y
+    # metemos su ficha completa al frente del contexto. Así no depende
+    # de la suerte de la búsqueda semántica.
+    ficha_tienda_directa = ""
+    if db and phone_number:
+        try:
+            from services.store_transfer import find_store_by_message
+            from routers.webhook import _find_recently_discussed_store
+            tienda_ctx = find_store_by_message(db, user_message)
+            if not tienda_ctx:
+                tienda_ctx = _find_recently_discussed_store(db, phone_number, None)
+            if tienda_ctx:
+                ficha_tienda_directa = tienda_ctx.to_rag_text()
+                print(f"    🔍 TRAZA IA — ficha directa inyectada: '{tienda_ctx.name}' (incluye horario/teléfono/link si existen)")
+        except Exception as e:
+            print(f"    🔍 TRAZA IA — no se pudo inyectar ficha directa: {e}")
+
     system_content = PROMPTS.get(intent, PROMPTS["general"])
+
+    if ficha_tienda_directa:
+        system_content += (
+            "\n\n--- FICHA DE LA TIENDA EN CONTEXTO (datos EXACTOS, úsalos con prioridad) ---\n"
+            f"{ficha_tienda_directa}\n"
+            "Si el cliente pregunta por el horario, teléfono, ubicación o carta de esta tienda y el dato "
+            "aparece aquí arriba, DALO directamente — no digas que no lo tienes. Si el dato puntual NO "
+            "aparece aquí, ofrece el link de WhatsApp del local para que pregunte directo.\n---"
+        )
 
     # Para el saludo: decidir si es "primera vez" o "ya veníamos
     # hablando" según la SESIÓN, no según si existe cualquier mensaje
