@@ -324,19 +324,44 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
                 ya_mostradas = {(t, i) for t, i in mostradas_query}
                 restantes = MAX_PROMOS_PER_SESSION - len(ya_mostradas)
 
-                # FRECUENCIA: promocionar ~1 de cada 3 mensajes (no en cada uno,
-                # para que no sature ni se vea forzado). Contamos los mensajes
-                # del cliente en la sesión; solo ofrecemos promo cuando el
-                # conteo es múltiplo de 3 (mensaje 3, 6, 9...).
+                # FRECUENCIA: promocionar de forma espaciada, ~1 de cada 3
+                # respuestas, SIN depender de contar todos los mensajes (que
+                # se desincronizaba porque muchas preguntas van por
+                # herramientas dedicadas que no pasan por aquí). En vez de
+                # eso: miramos cuándo fue la última promo mostrada. Si aún no
+                # han pasado al menos 2 respuestas del bot desde entonces, no
+                # promocionamos todavía. Así queda espaciado de verdad.
                 from models.conversation import Conversation as _Conv
-                msgs_cliente = (
-                    db.query(_Conv)
-                    .filter(_Conv.phone_number == phone_number, _Conv.role == "user",
-                            _Conv.timestamp >= session_start)
-                    .count()
-                )
-                if msgs_cliente % 3 != 0:
-                    restantes = 0  # este mensaje no toca promo
+                if ya_mostradas:
+                    ultima_promo = (
+                        db.query(PromotionShown)
+                        .filter(PromotionShown.phone_number == phone_number,
+                                PromotionShown.shown_at >= session_start)
+                        .order_by(PromotionShown.shown_at.desc())
+                        .first()
+                    )
+                    if ultima_promo:
+                        respuestas_desde = (
+                            db.query(_Conv)
+                            .filter(_Conv.phone_number == phone_number,
+                                    _Conv.role == "assistant",
+                                    _Conv.timestamp > ultima_promo.shown_at)
+                            .count()
+                        )
+                        if respuestas_desde < 2:
+                            restantes = 0  # aún muy pronto para otra promo
+                else:
+                    # Primera promo de la sesión: espera al menos 2 respuestas
+                    # previas del bot (para no promocionar en el primer saludo)
+                    respuestas_previas = (
+                        db.query(_Conv)
+                        .filter(_Conv.phone_number == phone_number,
+                                _Conv.role == "assistant",
+                                _Conv.timestamp >= session_start)
+                        .count()
+                    )
+                    if respuestas_previas < 2:
+                        restantes = 0
 
         if restantes > 0:
             high_priority_events = db.query(Event).filter(Event.priority >= 4).all()
@@ -716,11 +741,12 @@ Mensaje nuevo del cliente: "{message}"
 
 Devuelve SOLO un objeto JSON con estas claves exactas: nombre, celular, direccion, pedido, forma_pago, cancela, relacionado.
 Reglas para los datos del pedido:
-- Si un dato aparece en el mensaje nuevo, úsalo (actualiza el campo).
+- Si un dato aparece en el mensaje nuevo, úsalo (actualiza el campo). Sé GENEROSO al interpretar: los datos pueden venir sueltos, sin etiquetas, todos juntos en una frase natural. Por ejemplo "soy Juan, vivo en la calle 10 #5-20, quiero dos hamburguesas y pago en efectivo" contiene los 4 datos aunque no diga "nombre:", "dirección:", etc. Extrae cada uno.
+- Reconoce datos implícitos: un número de 10 dígitos es el celular; una frase con "calle/carrera/avenida/barrio/apto/casa" es la dirección; lo que quiere comer/comprar es el pedido; "efectivo"/"en efectivo"/"transferencia"/"tarjeta" es la forma de pago; un nombre propio al inicio suele ser el nombre.
 - Si no aparece en el mensaje nuevo pero ya estaba recolectado antes, mantén el valor anterior.
 - Si nunca ha aparecido en ningún mensaje, pon null.
 - forma_pago debe ser "efectivo" o "transferencia" si se puede inferir con claridad, si no null.
-- No inventes ningún dato que no esté explícito.
+- No inventes ningún dato que no esté explícito ni razonablemente implícito.
 
 Reglas para "cancela" (true/false):
 - true SOLO si el cliente dice explícitamente que ya no quiere seguir con el pedido/domicilio (ej. "ya no quiero", "olvídalo", "cancela", "déjalo así", "no gracias")

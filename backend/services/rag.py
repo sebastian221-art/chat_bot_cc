@@ -206,6 +206,36 @@ def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]
     return stores
 
 
+def _expandir_sinonimos(query: str) -> str:
+    """
+    Añade sinónimos comunes a la consulta para que la búsqueda encuentre
+    la información aunque el cliente use una palabra distinta a la que
+    está guardada. Ej: si la base dice "mascotas" y el cliente dice
+    "perro", igual la encuentra. Es aditivo — solo agrega palabras, no
+    quita nada de la consulta original.
+    """
+    q = query.lower()
+    SINONIMOS = {
+        "mascota": ["perro", "gato", "perrito", "cachorro", "animal", "peludo"],
+        "wifi": ["internet", "wi-fi", "conexión", "conexion", "red", "wifi"],
+        "parqueadero": ["parqueo", "estacionamiento", "carro", "vehículo", "vehiculo", "parquear"],
+        "baño": ["baños", "sanitario", "servicios", "tocador", "wc"],
+        "factura": ["facturas", "compra", "recibo", "tiquete", "registrar"],
+        "horario": ["hora", "abren", "cierran", "atienden", "abierto"],
+    }
+    extra = []
+    for base, sins in SINONIMOS.items():
+        # Si el cliente usó CUALQUIER sinónimo, agregamos la palabra base
+        # y los demás sinónimos, para que la búsqueda tenga más de dónde
+        # agarrar.
+        if base in q or any(s in q for s in sins):
+            extra.append(base)
+            extra.extend(sins)
+    if extra:
+        return query + " " + " ".join(set(extra))
+    return query
+
+
 def search_knowledge_and_events(query: str, n_results: int = 4) -> List[str]:
     """
     Busca SOLO entre Base de Conocimiento, Eventos y Sorteos — filtrando
@@ -222,6 +252,8 @@ def search_knowledge_and_events(query: str, n_results: int = 4) -> List[str]:
 
     if collection.count() == 0:
         return []
+
+    query = _expandir_sinonimos(query)  # perro→mascota, internet→wifi, etc.
 
     try:
         results = collection.query(

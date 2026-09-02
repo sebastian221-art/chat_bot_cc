@@ -92,6 +92,15 @@ def detectar_categoria(mensaje: str) -> tuple[str, list[str]] | None:
     """
     msg = msg_limpio = mensaje.lower()
 
+    # EXCEPCIÓN: si preguntan por la UBICACIÓN de la zona de comidas /
+    # plazoleta (no por comida en sí), NO es una búsqueda de categoría —
+    # es una consulta de ubicación/zona que maneja la conversación
+    # general. Ej: "¿dónde está la zona de comidas?", "¿dónde queda la
+    # plazoleta?". Sin esto, "comidas" activaba la lista de restaurantes.
+    if any(z in msg for z in ["zona de comida", "zona de comidas", "plazoleta de comida",
+                               "plazoleta de comidas", "zona de restaurante"]):
+        return None
+
     # ¿Hay al menos una señal de que quieren BUSCAR algo?
     hay_intencion = any(p in msg for p in INTENCION_BUSQUEDA)
     if not hay_intencion:
