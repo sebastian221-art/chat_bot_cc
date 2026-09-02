@@ -246,7 +246,7 @@ def _build_mall_info_block(db) -> str:
 
 
 SESSION_GAP_HOURS = 4  # más de esto sin escribir = cuenta como sesión nueva (punto de partida razonable, fácil de ajustar)
-MAX_PROMOS_PER_SESSION = 1
+MAX_PROMOS_PER_SESSION = 3
 
 
 def _get_session_start(db, phone_number: str):
@@ -340,16 +340,17 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
             if candidatos:
                 promo_texts = [c[3] for c in candidatos]
                 parts.append(
-                    "PROMOCIÓN DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real — "
-                    "busca un momento natural en tu respuesta para mencionarlo, variando cómo lo dices "
-                    "cada vez, sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO de cómo lo "
-                    "mencionas al tipo de cosa que es — un sorteo de un carro se menciona con emoción y "
-                    "urgencia ('¡no te lo pierdas!'), una promoción de ropa con un tono más de moda y "
-                    "estilo, un evento familiar con calidez. Menciona SOLO esta, no mezcles con otras "
-                    "promociones en el mismo mensaje. SOBRE EL FORMATO: escríbelo como una invitación "
-                    "natural y breve (2-3 líneas, nunca un bloque de datos tipo ficha técnica) — separa "
-                    "la respuesta principal del anuncio promocional con un salto de línea en blanco, y "
-                    "usa como máximo 1 emoji para todo el anuncio, no varios seguidos ni uno por dato):\n" +
+                    "PROMOCIÓN DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real. "
+                    "Salvo que sea una emergencia, queja o un momento serio, INCLÚYELA al final de tu "
+                    "respuesta como un cierre natural — primero respondes lo que el cliente preguntó, y "
+                    "luego, tras un salto de línea, deslizas la invitación. Varía cómo lo dices cada vez, "
+                    "sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO al tipo de cosa que es — "
+                    "un sorteo de un carro con emoción y urgencia ('¡y de paso, no te pierdas...!'), una "
+                    "promoción de ropa con tono de moda, un evento familiar con calidez. Menciona SOLO "
+                    "esta, no mezcles con otras. SOBRE EL FORMATO: escríbelo como una invitación natural y "
+                    "breve (1-2 líneas, nunca un bloque de datos tipo ficha técnica), separada de la "
+                    "respuesta principal por un salto de línea en blanco, con máximo 1 emoji. Si de verdad "
+                    "no encaja de ninguna forma natural, puedes omitirla — pero por defecto, inclúyela):\n" +
                     "\n".join(f"🎯 {t}" for t in promo_texts)
                 )
     except Exception as e:

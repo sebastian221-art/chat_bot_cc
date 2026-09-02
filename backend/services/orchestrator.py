@@ -527,7 +527,7 @@ Reglas:
 - Tono cálido, entusiasta y cercano (colombiano natural), sin exagerar ni sonar falso.
 - Usa máximo 2 emojis, donde aporten.
 - Menciona TODOS los datos dados (fecha, lugar, premio, cómo participar, etc.) pero de forma fluida, no como una lista de campos rígida.
-- Máximo 5-6 líneas. Directo y atractivo.
+- Extensión: entre 3 y 6 líneas. Ni muy corto (no vale un saludo de una línea), ni muy largo.
 - NO inventes precios, requisitos ni fechas que no estén arriba.
 - No agregues despedidas largas ni "pasa por el Punto de Información".
 Responde SOLO con el mensaje para el cliente, nada más."""
@@ -540,7 +540,7 @@ Responde SOLO con el mensaje para el cliente, nada más."""
             temperature=0.85,  # alto para creatividad; los datos van fijos en el prompt
         )
         texto = _strip_thinking_tags(completion.choices[0].message.content or "").strip()
-        if texto and len(texto) > 20:
+        if texto and len(texto) > 60:  # mínimo real, para que no salga un saludo corto sin datos
             traza.paso("creatividad", f"Texto redactado con IA (creatividad seria) para {tipo_contenido}")
             return texto
     except Exception as e:
