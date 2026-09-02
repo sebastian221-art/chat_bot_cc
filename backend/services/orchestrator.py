@@ -180,18 +180,35 @@ CONTACTO_MALL = "317 432 0138"
 async def _ejecutar_emergencia(db, phone_number, mensaje, traza) -> dict:
     """
     Herramienta de EMERGENCIA — respuesta inmediata, calmada y con la
-    ruta correcta. NO usa IA (para que sea instantánea y siempre
-    consistente en un momento crítico). Máxima prioridad.
+    ruta correcta. NO usa IA (para que sea instantánea). Tiene 3
+    variantes que rotan para que no suene idéntica cada vez, pero TODAS
+    dan siempre la misma información crítica: Punto de Información +
+    seguridad + contacto del mall. Consistente en lo importante, con un
+    toque humano en la forma.
     """
+    import random
     traza.paso("ejecucion", "Ejecutando herramienta de emergencia — respuesta directa con contacto de seguridad")
-    texto = (
-        "🚨 Entiendo que es una situación urgente. Por favor, dirígete de inmediato al *Punto de "
-        "Información* (Piso 1) o busca al personal de *seguridad* más cercano — ellos pueden actuar "
-        "al instante.\n\n"
-        f"También puedes llamar directamente a la administración del centro comercial al *{CONTACTO_MALL}*.\n\n"
-        "Estamos para ayudarte."
-    )
-    return {"text": texto, "image_urls": [], "location": None}
+    variantes = [
+        (
+            "🚨 Entiendo que es una situación urgente. Por favor, dirígete de inmediato al *Punto de "
+            "Información* (Piso 1) o busca al personal de *seguridad* más cercano — ellos pueden actuar "
+            "al instante.\n\n"
+            f"También puedes llamar directamente a la administración del centro comercial al *{CONTACTO_MALL}*.\n\n"
+            "Estamos para ayudarte."
+        ),
+        (
+            "🚨 Lo primero es mantener la calma — estamos aquí para ayudarte. Acércate lo más rápido "
+            "posible al *Punto de Información* (Piso 1) o busca al *personal de seguridad*, que está "
+            "capacitado para atender este tipo de situaciones de inmediato.\n\n"
+            f"Si lo prefieres, llama directo a la administración al *{CONTACTO_MALL}*. No estás solo en esto."
+        ),
+        (
+            "🚨 Entiendo la urgencia y vamos a ayudarte. Dirígete ya al *Punto de Información* (Piso 1) "
+            "o al *personal de seguridad* más cercano — ellos pueden actuar en el momento.\n\n"
+            f"También tienes la línea directa de la administración: *{CONTACTO_MALL}*. Cuenta con nosotros."
+        ),
+    ]
+    return {"text": random.choice(variantes), "image_urls": [], "location": None}
 
 
 async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> dict:
@@ -254,18 +271,38 @@ async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> di
 async def _ejecutar_queja(db, phone_number, mensaje, traza) -> dict:
     """
     Herramienta de QUEJA — recoge la inconformidad con empatía y la
-    escala al contacto del mall. NO usa IA, para que siempre responda
-    con el mismo criterio de servicio (empatía + canal correcto).
+    escala al contacto del mall. NO usa IA. Tiene 3 variantes que rotan
+    para sonar más humana, pero todas mantienen la empatía y el canal
+    correcto (administración + Punto de Información).
     """
+    import random
     traza.paso("ejecucion", "Ejecutando herramienta de queja — respuesta empática con canal de escalamiento")
-    texto = (
-        "Lamento mucho lo que pasó, y gracias por tomarte el tiempo de contarnos — "
-        "tu comentario es importante para el centro comercial. 🙏\n\n"
-        "Para que tu queja quede registrada formalmente y le den seguimiento, te recomiendo "
-        f"comunicarte con la administración al *{CONTACTO_MALL}*, o acercarte al *Punto de "
-        "Información* (Piso 1). Ahí podrán ayudarte de manera directa.\n\n"
-        "¿Hay algo más en lo que te pueda apoyar mientras tanto?"
-    )
+    variantes = [
+        (
+            "Lamento mucho lo que pasó, y gracias por tomarte el tiempo de contarnos — "
+            "tu comentario es importante para el centro comercial. 🙏\n\n"
+            "Para que tu queja quede registrada formalmente y le den seguimiento, te recomiendo "
+            f"comunicarte con la administración al *{CONTACTO_MALL}*, o acercarte al *Punto de "
+            "Información* (Piso 1). Ahí podrán ayudarte de manera directa.\n\n"
+            "¿Hay algo más en lo que te pueda apoyar mientras tanto?"
+        ),
+        (
+            "Siento mucho que hayas vivido esa experiencia, y de verdad agradezco que nos lo cuentes — "
+            "así el centro comercial puede mejorar. 🙏\n\n"
+            "Para que tu caso quede registrado y le hagan seguimiento, lo mejor es que te comuniques con "
+            f"la administración al *{CONTACTO_MALL}* o pases por el *Punto de Información* (Piso 1), donde "
+            "te atenderán directamente.\n\n"
+            "¿Puedo ayudarte con algo más mientras tanto?"
+        ),
+        (
+            "Lamento lo sucedido y te agradezco la confianza de contárnoslo. Tu opinión nos ayuda a "
+            "mejorar la experiencia en el centro comercial. 🙏\n\n"
+            f"Para darle trámite formal a tu queja, comunícate con la administración al *{CONTACTO_MALL}* "
+            "o acércate al *Punto de Información* (Piso 1); ellos podrán gestionarla como corresponde.\n\n"
+            "Quedo atenta por si necesitas algo más."
+        ),
+    ]
+    texto = random.choice(variantes)
     return {"text": texto, "image_urls": [], "location": None}
 
 
@@ -484,7 +521,13 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
                         "¿Te ayudo con algo más del centro comercial?", "image_urls": [], "location": None}
 
     traza.paso("ejecucion", f"Eventos activos: {len(eventos)} → se listan y se manda la foto del principal")
-    lineas = ["¡Estos son los eventos del Centro Comercial El Puente! 🎉\n"]
+    import random as _rnd
+    _intro_ev = _rnd.choice([
+        "¡Estos son los eventos del Centro Comercial El Puente! 🎉\n",
+        "¡Tenemos planes que no te puedes perder! 🎉 Estos son los eventos del centro comercial:\n",
+        "¡Prepárate, porque vienen cosas buenas! 🎉 Estos son nuestros eventos:\n",
+    ])
+    lineas = [_intro_ev]
     for e in eventos[:4]:
         linea = f"*{e.name}*"
         if e.date:
@@ -525,7 +568,13 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
                         "¿Te ayudo con algo más?", "image_urls": [], "location": None}
 
     traza.paso("ejecucion", f"Sorteos activos: {len(sorteos)} → se listan y se manda la foto del principal")
-    lineas = ["¡Participa en nuestros sorteos! 🎁\n"]
+    import random as _rnd
+    _intro_so = _rnd.choice([
+        "¡Participa en nuestros sorteos! 🎁\n",
+        "¡Tenemos premios esperándote! 🎁 Estos son los sorteos activos:\n",
+        "¡Anímate a participar y llévate algo increíble! 🎁\n",
+    ])
+    lineas = [_intro_so]
     for s in sorteos[:4]:
         linea = f"*{s.name}*"
         if s.prize:
@@ -566,7 +615,13 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
 
     if promos:
         traza.paso("ejecucion", f"Promociones activas: {len(promos)} → se listan y se manda la foto de la principal")
-        lineas = ["¡Estas son nuestras promociones! 🛍️\n"]
+        import random as _rnd
+        _intro_pr = _rnd.choice([
+            "¡Estas son nuestras promociones! 🛍️\n",
+            "¡Aprovecha estas promociones del centro comercial! 🛍️\n",
+            "¡Tenemos ofertas que te van a encantar! 🛍️\n",
+        ])
+        lineas = [_intro_pr]
         for p in promos[:4]:
             linea = f"*{p.title}*"
             if p.description:

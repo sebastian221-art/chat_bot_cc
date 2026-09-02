@@ -38,6 +38,7 @@ export default function OrquestadorPage() {
   const [saving, setSaving] = useState(false)
   const [fechas, setFechas] = useState<string[]>([])
   const [fechaSel, setFechaSel] = useState<string>('')  // '' = todas las recientes
+  const [modoVista, setModoVista] = useState<string>('todas')  // 'prueba' | 'produccion' | 'todas'
 
   const cargarMapa = async () => {
     const d = await getOrquestadorMapa()
@@ -46,13 +47,17 @@ export default function OrquestadorPage() {
     // Si ya hay números guardados, úsalos; si no, deja el tuyo por defecto
     if (d.switch.telefonos_prueba) setTelefonosPrueba(d.switch.telefonos_prueba)
   }
-  const cargarTrazas = async (fecha?: string) => {
-    const d = await getOrquestadorTrazas('prueba', fecha !== undefined ? fecha : fechaSel)
+  const cargarTrazas = async (fecha?: string, modo?: string) => {
+    const m = modo !== undefined ? modo : modoVista
+    const modoParam = m === 'todas' ? '' : m
+    const d = await getOrquestadorTrazas(modoParam, fecha !== undefined ? fecha : fechaSel)
     setTrazas(d)
   }
-  const cargarFechas = async () => {
+  const cargarFechas = async (modo?: string) => {
     try {
-      const f = await getOrquestadorFechas('prueba')
+      const m = modo !== undefined ? modo : modoVista
+      const modoParam = m === 'todas' ? '' : m
+      const f = await getOrquestadorFechas(modoParam)
       setFechas(f)
     } catch { setFechas([]) }
   }
@@ -265,6 +270,18 @@ export default function OrquestadorPage() {
             <p className="text-zinc-500 text-xs mb-2">Conversaciones procesadas por el orquestador (solo pruebas). Haz clic para ver el paso a paso, las fotos enviadas y lo que se agregó.</p>
             {/* Barra de filtros y acciones */}
             <div className="flex items-center gap-2 flex-wrap bg-zinc-900 border border-zinc-800 rounded-xl p-2">
+              <div className="flex items-center gap-1.5">
+                <Activity size={14} className="text-zinc-500" />
+                <select
+                  value={modoVista}
+                  onChange={e => { setModoVista(e.target.value); cargarTrazas(fechaSel, e.target.value); cargarFechas(e.target.value) }}
+                  className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none"
+                >
+                  <option value="todas">Todas</option>
+                  <option value="prueba">Solo pruebas</option>
+                  <option value="produccion">Solo producción</option>
+                </select>
+              </div>
               <div className="flex items-center gap-1.5">
                 <Calendar size={14} className="text-zinc-500" />
                 <select

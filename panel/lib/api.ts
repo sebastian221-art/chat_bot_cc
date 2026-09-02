@@ -116,9 +116,19 @@ export const getFlujoBot = () => req('/flujo-bot')
 
 // ── Orquestador (mapa de herramientas, trazas, switch) ──────────────
 export const getOrquestadorMapa   = ()                    => req('/orquestador/mapa')
-export const getOrquestadorTrazas = (modo = 'prueba', fecha?: string) =>
-  req(`/orquestador/trazas?modo=${modo}${fecha ? `&fecha=${fecha}` : ''}`)
-export const getOrquestadorFechas = (modo = 'prueba')     => req(`/orquestador/trazas/fechas?modo=${modo}`)
+export const getOrquestadorTrazas = (modo = '', fecha?: string) => {
+  const p = new URLSearchParams()
+  if (modo) p.set('modo', modo)
+  if (fecha) p.set('fecha', fecha)
+  const qs = p.toString()
+  return req(`/orquestador/trazas${qs ? `?${qs}` : ''}`)
+}
+export const getOrquestadorFechas = (modo = '') => {
+  const p = new URLSearchParams()
+  if (modo) p.set('modo', modo)
+  const qs = p.toString()
+  return req(`/orquestador/trazas/fechas${qs ? `?${qs}` : ''}`)
+}
 export const limpiarOrquestadorTrazas = (opts: { fecha?: string; todo?: boolean } = {}) => {
   const params = new URLSearchParams()
   if (opts.fecha) params.set('fecha', opts.fecha)
