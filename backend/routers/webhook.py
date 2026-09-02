@@ -585,6 +585,9 @@ async def _route_message(db: Session, phone_number: str, user_name: str, message
     PIDE_FOTO_EXPLICITA = any(p in message_text.lower() for p in [
         "foto", "imagen", "muéstrame", "muestrame", "muéstra", "muestra",
         "ver el local", "cómo se ve", "como se ve", "cómo es", "como es",
+        # También cuando piden la carta/menú: la respuesta es justamente
+        # la foto de la carta de esa tienda (coherente con CARTA_KEYWORDS).
+        "carta", "menú", "menu", "qué venden", "que venden", "qué tienen", "que tienen",
     ])
     if PIDE_FOTO_EXPLICITA and len(image_urls) == 0:
         # Nadie más puso foto y el cliente la pidió → buscar la tienda en contexto
