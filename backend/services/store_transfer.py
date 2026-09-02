@@ -18,8 +18,11 @@ STOPWORDS_ES = {"la", "el", "los", "las", "de", "del", "y", "un", "una", "en", "
 
 def _significant_words(name: str) -> list[str]:
     """Palabras 'distintivas' de un nombre — sin artículos ni palabras muy cortas."""
-    words = re.findall(r"[a-záéíóúñü']+", name.lower())
-    return [w for w in words if len(w) > 2 and w not in STOPWORDS_ES]
+    # Incluye dígitos: "12B" es la parte distintiva de "12B Burguer Angus".
+    # Antes el patrón solo tomaba letras y "12B" se convertía en "b" (se
+    # descartaba), por eso "cuéntame de 12B" no encontraba la tienda.
+    words = re.findall(r"[a-z0-9áéíóúñü']+", name.lower())
+    return [w for w in words if (len(w) > 2 or any(c.isdigit() for c in w)) and w not in STOPWORDS_ES]
 
 
 def _contains_word(message: str, word: str) -> bool:
@@ -37,6 +40,8 @@ def find_store_by_message(db: Session, message: str) -> Store | None:
     varias (ambiguo), devuelve None — mejor preguntar que adivinar mal.
     """
     msg = message.lower()
+    # Normalizar "12 b" → "12b" (la gente escribe el nombre con espacio)
+    msg = re.sub(r"(\d)\s+([a-z])\b", r"\1\2", msg)
     stores = db.query(Store).filter(Store.active == True).all()
 
     # 1) Coincidencia por nombre completo — la más confiable, se revisa primero

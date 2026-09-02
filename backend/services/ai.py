@@ -134,7 +134,10 @@ puede adjuntar la imagen (incluida la foto de la carta) automáticamente
 aunque tú no sepas si existe. Responde algo neutral como "te comparto lo que
 tengo de su carta 👇" o simplemente da la información sin negar la existencia
 de la imagen. Es contradictorio y queda mal decir "no tengo la carta" y que
-el sistema igual adjunte la foto de la carta."""
+el sistema igual adjunte la foto de la carta. Tampoco escribas notas
+narrando la imagen, como "(la imagen se muestra a continuación)" o "(foto
+adjunta)" — el cliente ve la foto por sí sola si la hay; tú solo responde
+con naturalidad."""
 
 # ── Prompts por intención ─────────────────────────────────────────
 
@@ -357,13 +360,15 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
             if candidatos:
                 promo_texts = [c[3] for c in candidatos]
                 parts.append(
-                    "PROMOCIÓN DISPONIBLE (puedes mencionarla al final de tu respuesta, como un cierre "
-                    "natural y tranquilo, SOLO si encaja bien con el tema — nunca si es una emergencia, "
-                    "queja o momento serio. Primero respondes lo que el cliente preguntó; luego, si fluye, "
-                    "tras un salto de línea deslizas UNA invitación breve y relajada. Que suene natural, "
-                    "no como publicidad forzada. Varía cómo lo dices. FORMATO: 1-2 líneas máximo, tono "
-                    "calmado, máximo 1 emoji, separada por un salto de línea. Si no encaja de forma "
-                    "natural, simplemente omítela — vale más una respuesta limpia que una promo forzada):\n" +
+                    "PROMOCIÓN PARA ESTE MENSAJE (el sistema ya decidió que en este turno toca "
+                    "promocionar — no lo hace en todos, así que INCLÚYELA, salvo que el mensaje sea una "
+                    "emergencia, una queja o un momento serio). Cómo: primero respondes completo lo que "
+                    "el cliente preguntó; luego dejas UNA línea en blanco y deslizas la invitación en 1-2 "
+                    "líneas, con tono cálido y tranquilo, como quien comenta algo de pasada — nunca como "
+                    "publicidad forzada. Menciona los datos clave (qué es, cuándo/dónde o cómo participar) "
+                    "de forma fluida. Máximo 1 emoji. Varía la forma de decirlo. NO uses separadores como "
+                    "'---' ni títulos; solo el salto de línea. Y marca su ID al final en la línea "
+                    "[EVENTO:]/[SORTEO:]/[MARKETING:] correspondiente para que el sistema adjunte su foto:\n" +
                     "\n".join(f"🎯 {t}" for t in promo_texts)
                 )
     except Exception as e:
@@ -567,6 +572,13 @@ async def generate_response(
         raw = completion.choices[0].message.content or ""
         limpio = _strip_thinking_tags(raw)
         limpio, tienda_id, evento_id, sorteo_id, marketing_id = _extract_entity_markers(limpio)
+        # Limpieza de forma: separadores '---' sueltos (al final o solos)
+        # y notas tipo "(la imagen se muestra a continuación)" que la IA a
+        # veces cuela — quedan feos en WhatsApp.
+        limpio = re.sub(r"\n\s*-{3,}\s*$", "", limpio).rstrip()
+        limpio = re.sub(r"\n\s*-{3,}\s*\n", "\n\n", limpio)
+        limpio = re.sub(r"\n?\s*[\*_]*\s*\(\s*(la )?(imagen|foto)[^)]*\)\s*[\*_]*\s*\n?", "\n", limpio, flags=re.IGNORECASE)
+        limpio = re.sub(r"\n{3,}", "\n\n", limpio).strip()
         # Si la IA no marcó ninguna tienda pero SÍ había una tienda en
         # contexto (la de la ficha directa), usamos ESE id — así la foto
         # de la tienda (portada/carta) se adjunta igual, aunque la IA se

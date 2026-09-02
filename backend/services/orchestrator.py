@@ -261,6 +261,7 @@ async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> di
         "text": resultado.get("text", ""),
         "image_urls": resultado.get("image_urls", []),
         "location": resultado.get("location"),
+        "mentioned_store_id": resultado.get("mentioned_store_id"),  # memoria de contexto
     }
 
 
@@ -318,6 +319,7 @@ async def _ejecutar_numero_tienda(db, phone_number, mensaje, traza) -> dict:
             "text": build_phone_info_message(store),
             "image_urls": _wrap([_pick_store_photo(store, mensaje)]),
             "location": None,
+            "mentioned_store_id": store.id,
         }
     traza.paso("ejecucion", "No se identificó una tienda puntual → cae a conversación general")
     return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
@@ -431,6 +433,7 @@ async def _ejecutar_gestion_domicilio(db, phone_number, mensaje, traza) -> dict:
         "text": resultado.get("text", ""),
         "image_urls": resultado.get("image_urls", []),
         "location": resultado.get("location"),
+        "mentioned_store_id": resultado.get("mentioned_store_id"),
     }
 
 
@@ -791,6 +794,24 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
             "¡Hola! Soy Any 🛍️, tu asistente del Centro Comercial El Puente. "
             "Cuéntame en qué te puedo ayudar — tiendas, comida, horarios, servicios o lo que necesites 😊"
         )
+
+    # MEMORIA DE CONTEXTO: el webhook guarda `mentioned_store_id` en la
+    # conversación para que los seguimientos ("¿tienen carta?", "¿a qué
+    # hora abre?") sepan de qué tienda se venía hablando. Si la
+    # herramienta no lo marcó pero el mensaje nombra una tienda, lo
+    # ponemos aquí. Sin esto, en modo orquestador el bot "olvidaba" la
+    # tienda entre mensajes — causa raíz de la foto de la carta que no
+    # llegaba.
+    if not resultado.get("mentioned_store_id"):
+        try:
+            from services.store_transfer import find_store_by_message
+            st = find_store_by_message(db, mensaje)
+            if st:
+                resultado["mentioned_store_id"] = st.id
+        except Exception:
+            pass
+    if resultado.get("mentioned_store_id"):
+        traza.paso("contexto", f"Tienda en contexto guardada para seguimientos (ID {resultado['mentioned_store_id']})")
 
     # 3. Registrar el resultado en la traza
     traza.respuesta = resultado.get("text", "")
