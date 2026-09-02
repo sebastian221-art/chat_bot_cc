@@ -805,9 +805,14 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
     if not resultado.get("mentioned_store_id"):
         try:
             from services.store_transfer import find_store_by_message
-            st = find_store_by_message(db, mensaje)
-            if st:
-                resultado["mentioned_store_id"] = st.id
+            from services.category_search import detectar_categoria
+            # Solo guardar tienda de contexto si el mensaje la NOMBRA y NO
+            # es una búsqueda por categoría (para no arrastrar una tienda
+            # a preguntas de "zapatos", "ropa", "comida", etc.)
+            if not detectar_categoria(mensaje):
+                st = find_store_by_message(db, mensaje)
+                if st:
+                    resultado["mentioned_store_id"] = st.id
         except Exception:
             pass
     if resultado.get("mentioned_store_id"):

@@ -435,13 +435,37 @@ async def generate_response(
         try:
             from services.store_transfer import find_store_by_message
             from routers.webhook import _find_recently_discussed_store
+            from services.category_search import detectar_categoria
+
+            # REGLA ESTRICTA para no arrastrar la tienda equivocada:
+            # 1) Si el mensaje ACTUAL nombra una tienda → esa (siempre bien).
+            # 2) Si NO nombra tienda, solo usamos la del historial cuando
+            #    el mensaje es claramente un SEGUIMIENTO sobre esa tienda
+            #    (corto, del tipo "¿tienen carta?", "¿y el horario?") y
+            #    NO es una búsqueda por categoría (zapatos, ropa, comida).
+            #    Así "quiero zapatos" ya NO arrastra la foto de 12B.
             tienda_ctx = find_store_by_message(db, user_message)
             if not tienda_ctx:
-                tienda_ctx = _find_recently_discussed_store(db, phone_number, None)
+                es_categoria = detectar_categoria(user_message) is not None
+                msg_corto = len(user_message.split()) <= 5
+                señales_seguimiento = any(p in user_message.lower() for p in [
+                    "carta", "menú", "menu", "horario", "hora", "abre", "cierra",
+                    "teléfono", "telefono", "número", "numero", "foto", "imagen",
+                    "ubicad", "piso",
+                ])
+                # Temas GENERALES del mall (no de una tienda puntual) — nunca
+                # arrastran una tienda de contexto.
+                temas_generales = any(p in user_message.lower() for p in [
+                    "baño", "cajero", "parqueader", "wifi", "wi-fi", "centro comercial",
+                    "el puente", "el mall", "factura", "mascota", "perro", "evento",
+                    "sorteo", "promoci", "cine", "película", "pelicula",
+                ])
+                if not es_categoria and not temas_generales and msg_corto and señales_seguimiento:
+                    tienda_ctx = _find_recently_discussed_store(db, phone_number, None)
             if tienda_ctx:
                 ficha_tienda_directa = tienda_ctx.to_rag_text()
                 tienda_ctx_id = tienda_ctx.id
-                print(f"    🔍 TRAZA IA — ficha directa inyectada: '{tienda_ctx.name}' (incluye horario/teléfono/link si existen)")
+                print(f"    🔍 TRAZA IA — ficha directa inyectada: '{tienda_ctx.name}' (mensaje actual o seguimiento claro)")
         except Exception as e:
             print(f"    🔍 TRAZA IA — no se pudo inyectar ficha directa: {e}")
 
@@ -451,9 +475,13 @@ async def generate_response(
         system_content += (
             "\n\n--- FICHA DE LA TIENDA EN CONTEXTO (datos EXACTOS, úsalos con prioridad) ---\n"
             f"{ficha_tienda_directa}\n"
-            "Si el cliente pregunta por el horario, teléfono, ubicación o carta de esta tienda y el dato "
-            "aparece aquí arriba, DALO directamente — no digas que no lo tienes. Si el dato puntual NO "
-            "aparece aquí, ofrece el link de WhatsApp del local para que pregunte directo.\n---"
+            "Si el cliente pregunta por el horario, teléfono, ubicación o datos de esta tienda y aparecen "
+            "aquí arriba, DALO directamente — no digas que no lo tienes. Si un dato puntual NO aparece, "
+            "ofrece el link de WhatsApp del local para que pregunte directo.\n"
+            "SOBRE LA FOTO: si se adjunta una imagen, NO afirmes qué tipo de foto es (no digas 'te adjunto "
+            "la carta' ni 'esta es la fachada'); di algo neutro como 'te comparto una imagen del local 👇' "
+            "— salvo que el cliente haya pedido explícitamente la CARTA/MENÚ, en cuyo caso sí puedes decir "
+            "que le compartes la carta.\n---"
         )
 
     # Para el saludo: decidir si es "primera vez" o "ya veníamos
