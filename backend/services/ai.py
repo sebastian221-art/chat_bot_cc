@@ -411,6 +411,7 @@ async def generate_response(
     # metemos su ficha completa al frente del contexto. Así no depende
     # de la suerte de la búsqueda semántica.
     ficha_tienda_directa = ""
+    tienda_ctx_id = None  # ID de la tienda de la ficha directa, para respaldo de foto
     if db and phone_number:
         try:
             from services.store_transfer import find_store_by_message
@@ -420,6 +421,7 @@ async def generate_response(
                 tienda_ctx = _find_recently_discussed_store(db, phone_number, None)
             if tienda_ctx:
                 ficha_tienda_directa = tienda_ctx.to_rag_text()
+                tienda_ctx_id = tienda_ctx.id
                 print(f"    🔍 TRAZA IA — ficha directa inyectada: '{tienda_ctx.name}' (incluye horario/teléfono/link si existen)")
         except Exception as e:
             print(f"    🔍 TRAZA IA — no se pudo inyectar ficha directa: {e}")
@@ -551,6 +553,15 @@ async def generate_response(
         raw = completion.choices[0].message.content or ""
         limpio = _strip_thinking_tags(raw)
         limpio, tienda_id, evento_id, sorteo_id, marketing_id = _extract_entity_markers(limpio)
+        # Si la IA no marcó ninguna tienda pero SÍ había una tienda en
+        # contexto (la de la ficha directa), usamos ESE id — así la foto
+        # de la tienda (portada/carta) se adjunta igual, aunque la IA se
+        # haya "olvidado" de poner la marca [TIENDA:X]. Esto arregla el
+        # caso donde "¿tienen carta?" respondía bien el texto pero no
+        # mandaba la foto de la carta.
+        if not tienda_id and tienda_ctx_id:
+            tienda_id = tienda_ctx_id
+            print(f"    🔍 TRAZA IA — la IA no marcó tienda, se usa la de la ficha directa (ID {tienda_ctx_id}) para la foto")
         print(f"    🔍 TRAZA IA — respuesta recibida de Groq: {len(raw)} caracteres crudos → {len(limpio)} después de limpiar | tienda: {tienda_id or 'ninguna'} | evento: {evento_id or 'ninguno'} | sorteo: {sorteo_id or 'ninguno'} | marketing: {marketing_id or 'ninguno'}")
         return limpio, tienda_id, evento_id, sorteo_id, marketing_id
 
