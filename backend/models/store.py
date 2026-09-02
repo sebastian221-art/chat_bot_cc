@@ -79,6 +79,9 @@ class Store(Base):
             parts.append(f"Horario: {self.schedule}")
         if self.phone:
             parts.append(f"Teléfono: {self.phone}")
+            link = self.whatsapp_link()
+            if link:
+                parts.append(f"Link de WhatsApp del local (úsalo si el cliente quiere contactarlo directo): {link}")
         if self.location_hint:
             parts.append(f"Ubicación: {self.location_hint}")
         if self.tags:
