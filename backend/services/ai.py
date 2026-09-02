@@ -123,6 +123,7 @@ promoción de marketing del que trató tu respuesta — o NINGUNA si no aplica:
 [MARKETING:<id o NINGUNA>]
 Ejemplo si hablaste de una tienda: [TIENDA:42] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA] / [MARKETING:NINGUNA]
 Ejemplo si hablaste de una promoción: [TIENDA:NINGUNA] / [EVENTO:NINGUNA] / [SORTEO:NINGUNA] / [MARKETING:9]
+IMPORTANTE: si al final de tu respuesta mencionaste o promocionaste un evento, sorteo o promoción (por ejemplo el que venía en "PROMOCIÓN DISPONIBLE"), DEBES marcar su ID en la línea correspondiente — así el sistema adjunta su foto automáticamente. Si promocionaste Festipatitas, pon su ID en [EVENTO:X]; si promocionaste un sorteo, en [SORTEO:X], etc.
 Estas marcas se eliminan automáticamente antes de que el cliente vea el
 mensaje — van SIEMPRE, las 4, sin excepción, como las últimas líneas.
 
@@ -320,6 +321,20 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
                 ya_mostradas = {(t, i) for t, i in mostradas_query}
                 restantes = MAX_PROMOS_PER_SESSION - len(ya_mostradas)
 
+                # FRECUENCIA: promocionar ~1 de cada 3 mensajes (no en cada uno,
+                # para que no sature ni se vea forzado). Contamos los mensajes
+                # del cliente en la sesión; solo ofrecemos promo cuando el
+                # conteo es múltiplo de 3 (mensaje 3, 6, 9...).
+                from models.conversation import Conversation as _Conv
+                msgs_cliente = (
+                    db.query(_Conv)
+                    .filter(_Conv.phone_number == phone_number, _Conv.role == "user",
+                            _Conv.timestamp >= session_start)
+                    .count()
+                )
+                if msgs_cliente % 3 != 0:
+                    restantes = 0  # este mensaje no toca promo
+
         if restantes > 0:
             high_priority_events = db.query(Event).filter(Event.priority >= 4).all()
             high_priority_raffles = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
@@ -331,26 +346,24 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
 
             # Solo las que NO se han mostrado ya en esta sesión
             candidatos = [c for c in candidatos if (c[0], c[1]) not in ya_mostradas]
-            # La de mayor prioridad primero, y solo UNA a la vez —
-            # nunca varias juntas, para no mezclar 2 promociones en un
-            # mismo mensaje
-            candidatos.sort(key=lambda c: -c[2])
-            candidatos = candidatos[:1]
+            # VARIEDAD: en vez de mostrar SIEMPRE el de mayor prioridad
+            # (que hacía que apareciera siempre el mismo, ej. Festipatitas),
+            # elegimos UNO al azar entre los disponibles. Así rota entre
+            # eventos, sorteos y promos distintos en cada oportunidad.
+            import random as _rnd
+            if candidatos:
+                candidatos = [_rnd.choice(candidatos)]
 
             if candidatos:
                 promo_texts = [c[3] for c in candidatos]
                 parts.append(
-                    "PROMOCIÓN DE ALTA PRIORIDAD (el mall quiere que esto tenga visibilidad real. "
-                    "Salvo que sea una emergencia, queja o un momento serio, INCLÚYELA al final de tu "
-                    "respuesta como un cierre natural — primero respondes lo que el cliente preguntó, y "
-                    "luego, tras un salto de línea, deslizas la invitación. Varía cómo lo dices cada vez, "
-                    "sin sonar forzado ni repetitivo. Adapta el ESTILO y el TONO al tipo de cosa que es — "
-                    "un sorteo de un carro con emoción y urgencia ('¡y de paso, no te pierdas...!'), una "
-                    "promoción de ropa con tono de moda, un evento familiar con calidez. Menciona SOLO "
-                    "esta, no mezcles con otras. SOBRE EL FORMATO: escríbelo como una invitación natural y "
-                    "breve (1-2 líneas, nunca un bloque de datos tipo ficha técnica), separada de la "
-                    "respuesta principal por un salto de línea en blanco, con máximo 1 emoji. Si de verdad "
-                    "no encaja de ninguna forma natural, puedes omitirla — pero por defecto, inclúyela):\n" +
+                    "PROMOCIÓN DISPONIBLE (puedes mencionarla al final de tu respuesta, como un cierre "
+                    "natural y tranquilo, SOLO si encaja bien con el tema — nunca si es una emergencia, "
+                    "queja o momento serio. Primero respondes lo que el cliente preguntó; luego, si fluye, "
+                    "tras un salto de línea deslizas UNA invitación breve y relajada. Que suene natural, "
+                    "no como publicidad forzada. Varía cómo lo dices. FORMATO: 1-2 líneas máximo, tono "
+                    "calmado, máximo 1 emoji, separada por un salto de línea. Si no encaja de forma "
+                    "natural, simplemente omítela — vale más una respuesta limpia que una promo forzada):\n" +
                     "\n".join(f"🎯 {t}" for t in promo_texts)
                 )
     except Exception as e:
