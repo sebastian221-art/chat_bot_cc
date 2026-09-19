@@ -1,7 +1,7 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, StorePayload } from '@/lib/api'
+import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, importStoresExcel, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
 import CineCartelera from '@/components/CineCartelera'
@@ -33,6 +33,7 @@ export default function TiendasPage() {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const excelInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -43,6 +44,22 @@ export default function TiendasPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const result = await importStoresExcel(file)
+      alert(`Importacion de la plantilla Excel completa:\n\u2705 ${result.created} locales nuevos\n\uD83D\uDD04 ${result.updated} actualizados\n\uD83D\uDCD6 ${result.con_carta_pendiente} tienen carta por subir\n\n${result.mensaje || ''}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al importar el Excel: ' + err.message)
+    } finally {
+      setImporting(false)
+      if (excelInputRef.current) excelInputRef.current.value = ''
+    }
+  }
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -117,6 +134,20 @@ export default function TiendasPage() {
             onChange={handleImportFile}
             className="hidden"
           />
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx"
+            onChange={handleImportExcel}
+            className="hidden"
+          />
+          <button
+            onClick={() => excelInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 text-white bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> {importing ? 'Importando...' : 'Importar Plantilla Excel'}
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}

@@ -571,6 +571,63 @@ async def import_stores(file: UploadFile = File(...), db: Session = Depends(get_
     return {"ok": True, "created": created, "updated": updated, "skipped": skipped, "errors": errors[:20]}
 
 
+@router.post("/stores/import-excel")
+async def import_stores_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Importa la PLANTILLA EXCEL de locales (la de 2 hojas: información
+    general + catálogo). Lee el .xlsx tal como se lo entregan al Centro
+    Comercial, combina ambas hojas y carga/actualiza cada local.
+    """
+    from services.excel_importer import parse_plantilla
+
+    content = await file.read()
+    try:
+        locales = parse_plantilla(content)
+    except Exception as e:
+        logger.error(f"Error leyendo la plantilla Excel: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel. ¿Es la plantilla correcta? Detalle: {str(e)[:300]}")
+
+    existing_stores = {(s.name, s.local_number): s for s in db.query(Store).all()}
+    created, updated, con_carta, errors = 0, 0, 0, []
+
+    for i, loc in enumerate(locales, start=2):
+        if not loc.get("name"):
+            continue
+        if loc.get("_anexa_carta"):
+            con_carta += 1
+        key = (loc["name"], loc.get("local_number"))
+        existing = existing_stores.get(key)
+        if existing:
+            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "extra_info"]:
+                if loc.get(field):
+                    setattr(existing, field, loc[field])
+            updated += 1
+        else:
+            db.add(Store(
+                name=loc["name"], local_number=loc.get("local_number"),
+                floor=loc.get("floor", "Por confirmar"), category=loc.get("category", "Por confirmar"),
+                description=loc.get("description", ""), schedule=loc.get("schedule", ""),
+                phone=loc.get("phone", ""), location_hint=loc.get("location_hint", ""),
+                tags=loc.get("tags", ""), extra_info=loc.get("extra_info", ""), active=True,
+            ))
+            created += 1
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error guardando locales del Excel: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo guardar. Detalle: {str(e)[:300]}")
+
+    _reindex(db)
+    print(f"  📥  Import Excel: {created} nuevos, {updated} actualizados, {con_carta} marcados con carta")
+    return {
+        "ok": True, "created": created, "updated": updated,
+        "total_leidos": len(locales), "con_carta_pendiente": con_carta,
+        "mensaje": f"Se procesaron {len(locales)} locales de la plantilla. {con_carta} tienen carta por subir (súbela desde el panel de cada local).",
+    }
+
+
 # ══════════════════════════════════════════════════════════════════
 # EVENTS  (ahora en base de datos — persiste entre redeploys)
 # ══════════════════════════════════════════════════════════════════

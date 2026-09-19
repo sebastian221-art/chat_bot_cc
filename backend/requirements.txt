@@ -31,3 +31,5 @@ bcrypt==4.2.0
 # Procesamiento de imágenes — convierte cualquier foto subida (webp, gif,
 # etc.) a JPG, porque WhatsApp solo acepta JPG/PNG por link
 Pillow==10.4.0
+# Lectura de plantillas Excel (importador de locales)
+openpyxl==3.1.5

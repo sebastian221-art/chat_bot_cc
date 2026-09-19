@@ -99,6 +99,7 @@ export const updateStore = (i: number, d: StorePayload)  => req(`/stores/${i}`, 
 export const deleteStore = (i: number)                   => req(`/stores/${i}`, { method: 'DELETE' })
 export const exportStores = ()          => downloadFile('/stores/export', 'locales.csv')
 export const importStores = (file: File) => uploadFile('/stores/import', file)
+export const importStoresExcel = (file: File) => uploadFile('/stores/import-excel', file)
 
 // ── Eventos ──────────────────────────────────────────────────────
 export const getEvents   = ()                            => req('/events')
