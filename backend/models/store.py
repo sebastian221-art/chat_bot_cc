@@ -9,11 +9,11 @@ class Store(Base):
     id            = Column(Integer, primary_key=True, index=True)
     name          = Column(String(150), nullable=False, index=True)
     local_number  = Column(String(60), nullable=True)   # ej: "104", "S/N" — ampliado de 20 a 60 (lección aprendida: un valor de 25 caracteres causó un error 500 real en una importación)
-    floor         = Column(String(20), nullable=False)
+    floor         = Column(String(60), nullable=False)
     category      = Column(String(80), nullable=False)
     description   = Column(Text, nullable=True)
     schedule      = Column(String(200), nullable=True)
-    phone         = Column(String(20), nullable=True)
+    phone         = Column(String(60), nullable=True)
     location_hint = Column(String(200), nullable=True)
     tags          = Column(String(300), nullable=True)
     photo_url     = Column(String(500), nullable=True)  # link a una foto del local (externo — ver nota en el panel)
@@ -30,8 +30,8 @@ class Store(Base):
     # datos lance el error "value too long". Es IMPOSIBLE que ese error
     # vuelva a ocurrir por estos campos.
     _LIMITES = {
-        "name": 150, "local_number": 60, "floor": 20, "category": 80,
-        "schedule": 200, "phone": 20, "location_hint": 200, "tags": 300,
+        "name": 150, "local_number": 60, "floor": 60, "category": 80,
+        "schedule": 200, "phone": 60, "location_hint": 200, "tags": 300,
         "photo_url": 500,
     }
 
