@@ -33,3 +33,5 @@ bcrypt==4.2.0
 Pillow==10.4.0
 # Lectura de plantillas Excel (importador de locales)
 openpyxl==3.1.5
+# Compresión de PDF (cartas grandes → livianas para WhatsApp)
+pikepdf==9.4.0
