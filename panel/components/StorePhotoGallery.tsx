@@ -47,7 +47,7 @@ export default function StorePhotoGallery({ storeId }: { storeId: number | null 
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { alert('Solo se permiten imágenes o PDF'); return }
-    if (file.size > 15 * 1024 * 1024) { alert('Máximo 15 MB por archivo'); return }
+    if (file.size > 25 * 1024 * 1024) { alert('Máximo 25 MB por archivo'); return }
 
     setUploading(true)
     try {
