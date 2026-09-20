@@ -628,6 +628,18 @@ async def import_stores_excel(file: UploadFile = File(...), db: Session = Depend
         logger.error(f"Error leyendo la plantilla Excel: {str(e)}")
         raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel. ¿Es la plantilla correcta? Detalle: {str(e)[:300]}")
 
+    # RED DE SEGURIDAD DEFINITIVA: cortar CADA campo a su límite exacto de
+    # la base de datos, sin importar qué traiga el importador. Así es
+    # imposible que un dato demasiado largo cause el error "value too long".
+    LIMITES = {"name": 150, "local_number": 60, "floor": 20, "category": 80,
+               "schedule": 200, "phone": 20, "location_hint": 200, "tags": 300}
+    for loc in locales:
+        for campo, lim in LIMITES.items():
+            v = loc.get(campo)
+            if v and len(str(v)) > lim:
+                print(f"  ✂️  Recortado '{campo}' de {loc.get('name','?')[:20]}: {len(str(v))} → {lim} caracteres")
+                loc[campo] = str(v)[:lim]
+
     existing_stores = {(s.name, s.local_number): s for s in db.query(Store).all()}
     created, updated, con_carta, errors = 0, 0, 0, []
 
