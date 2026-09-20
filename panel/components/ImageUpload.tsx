@@ -30,8 +30,8 @@ export default function ImageUpload({ value, onChange, label = 'Foto', accent = 
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
-      alert('Solo se permiten imágenes (JPG, PNG, WEBP, GIF)')
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Solo se permiten imágenes (JPG, PNG, WEBP, GIF) o PDF')
       return
     }
     if (file.size > 8 * 1024 * 1024) {
