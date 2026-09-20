@@ -1569,3 +1569,4 @@ def set_orquestador_switch(body: SwitchIn, db: Session = Depends(get_db)):
         return {"ok": True, "switch": cfg}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+# Deploy forzado — red de seguridad importador activa (20260920-0919)
