@@ -126,12 +126,20 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
         pago = _txt(ws.cell(row, c_pago).value) if c_pago else ""
         carta = _txt(ws.cell(row, c_carta).value) if c_carta else ""
 
-        # Primer teléfono si hay varios separados por coma/;/ /
-        telefono = contacto
-        for sep in [",", ";", "/", " y "]:
-            if sep in telefono:
-                telefono = telefono.split(sep)[0].strip()
-                break
+        # Primer teléfono si vienen varios. Los separadores pueden ser
+        # coma, punto y coma, barra, " y ", o guiones. Extraemos el PRIMER
+        # número de 7 a 12 dígitos seguidos (un teléfono válido), ignorando
+        # separadores y espacios entre números distintos.
+        import re as _re
+        # Primero normalizamos separadores a un espacio, luego buscamos el
+        # primer grupo de dígitos consecutivos (sin mezclar dos números).
+        _limpio = _re.sub(r"[^\d]+", " ", contacto).strip()
+        _numeros = [n for n in _limpio.split() if len(n) >= 7]
+        if _numeros:
+            telefono = _numeros[0]  # el primer teléfono válido
+        else:
+            telefono = _re.sub(r"[^\d]", "", contacto)  # lo que haya
+        telefono = telefono[:20]  # seguridad: nunca superar el límite de la BD
 
         # Info extra que el sistema no tiene en campos propios → a description
         extras = []
