@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func
+from sqlalchemy.orm import validates
 from models.database import Base
 
 
@@ -20,6 +21,30 @@ class Store(Base):
     active        = Column(Boolean, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # ── PROTECCIÓN AUTOMÁTICA DE LONGITUD (red de seguridad definitiva) ──
+    # Estos validadores se ejecutan SOLOS cada vez que se asigna un valor
+    # a un campo con límite, sin importar de dónde venga (importador CSV,
+    # Excel, edición manual, etc.). Si un valor es más largo que la
+    # columna, lo recorta automáticamente en vez de dejar que la base de
+    # datos lance el error "value too long". Es IMPOSIBLE que ese error
+    # vuelva a ocurrir por estos campos.
+    _LIMITES = {
+        "name": 150, "local_number": 60, "floor": 20, "category": 80,
+        "schedule": 200, "phone": 20, "location_hint": 200, "tags": 300,
+        "photo_url": 500,
+    }
+
+    @validates("name", "local_number", "floor", "category", "schedule",
+               "phone", "location_hint", "tags", "photo_url")
+    def _recortar_campo(self, key, value):
+        if value is None:
+            return value
+        limite = self._LIMITES.get(key)
+        s = str(value)
+        if limite and len(s) > limite:
+            return s[:limite]
+        return s
 
     def to_dict(self):
         return {
