@@ -1,7 +1,7 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { getStores, createStore, updateStore, deleteStore, exportStores, importStores, importStoresExcel, StorePayload } from '@/lib/api'
+import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
 import CineCartelera from '@/components/CineCartelera'
@@ -44,6 +44,21 @@ export default function TiendasPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const handleBorrarTodo = async () => {
+    if (!confirm(`\u26A0 Vas a BORRAR TODOS los ${stores.length} locales. Esto no se puede deshacer.\n\n\u00BFSeguro que quieres continuar?`)) return
+    if (!confirm('\u00DAltima confirmaci\u00F3n: se borrar\u00E1 TODO el directorio de locales. \u00BFContinuar?')) return
+    setImporting(true)
+    try {
+      const result = await deleteAllStores()
+      alert(`\u2705 ${result.mensaje || 'Locales borrados.'}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al borrar: ' + err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -154,6 +169,13 @@ export default function TiendasPage() {
             className="flex items-center gap-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
           >
             <Upload size={14} /> {importing ? 'Importando...' : 'Importar CSV'}
+          </button>
+          <button
+            onClick={handleBorrarTodo}
+            disabled={importing || stores.length === 0}
+            className="flex items-center gap-2 text-white bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Trash2 size={14} /> Borrar todos
           </button>
           <button
             onClick={() => exportStores()}

@@ -558,13 +558,23 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
     from models.event import Event
     from models.raffle import Raffle
 
-    eventos = db.query(Event).order_by(Event.priority.desc()).all()
-    if not eventos:
+    eventos_todos = db.query(Event).order_by(Event.priority.desc()).all()
+    if not eventos_todos:
         traza.paso("ejecucion", "No hay eventos cargados → respuesta honesta")
         return {"text": "Por ahora no tenemos eventos programados, pero te invito a estar pendiente 😊. "
                         "¿Te ayudo con algo más del centro comercial?", "image_urls": [], "location": None}
 
-    traza.paso("ejecucion", f"Eventos activos: {len(eventos)} → se listan y se manda la foto del principal")
+    # ROTACIÓN: si hay varios eventos, se elige uno como "principal" (el
+    # que da la foto y encabeza) de forma ponderada por prioridad — los
+    # más importantes salen de primeros más seguido, pero rotan. Así la
+    # foto no es siempre la del mismo evento. Los demás igual se listan.
+    import random as _rnd
+    if len(eventos_todos) > 1:
+        pesos = [max(1, e.priority) ** 2 for e in eventos_todos]
+        principal = _rnd.choices(eventos_todos, weights=pesos, k=1)[0]
+        eventos = [principal] + [e for e in eventos_todos if e.id != principal.id]
+    else:
+        eventos = eventos_todos
 
     # Datos EXACTOS de los eventos (para la redacción creativa)
     datos = []
@@ -622,11 +632,20 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
     from models.raffle import Raffle
     from models.event import Event
 
-    sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
-    if not sorteos:
+    sorteos_todos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    if not sorteos_todos:
         traza.paso("ejecucion", "No hay sorteos activos → respuesta honesta")
         return {"text": "Por ahora no tenemos sorteos activos, pero mantente atento porque siempre hay novedades 😊. "
                         "¿Te ayudo con algo más?", "image_urls": [], "location": None}
+
+    # ROTACIÓN ponderada por prioridad para el sorteo principal (la foto)
+    import random as _rnd
+    if len(sorteos_todos) > 1:
+        pesos = [max(1, s.priority) ** 2 for s in sorteos_todos]
+        principal = _rnd.choices(sorteos_todos, weights=pesos, k=1)[0]
+        sorteos = [principal] + [s for s in sorteos_todos if s.id != principal.id]
+    else:
+        sorteos = sorteos_todos
 
     traza.paso("ejecucion", f"Sorteos activos: {len(sorteos)} → se listan y se manda la foto del principal")
 
@@ -688,7 +707,16 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
     from models.event import Event
     from models.raffle import Raffle
 
-    promos = db.query(Marketing).filter(Marketing.active == True).order_by(Marketing.priority.desc()).all()
+    promos_todos = db.query(Marketing).filter(Marketing.active == True).order_by(Marketing.priority.desc()).all()
+
+    # ROTACIÓN ponderada por prioridad para la promo principal (la foto)
+    import random as _rnd
+    if len(promos_todos) > 1:
+        pesos = [max(1, m.priority) ** 2 for m in promos_todos]
+        principal = _rnd.choices(promos_todos, weights=pesos, k=1)[0]
+        promos = [principal] + [m for m in promos_todos if m.id != principal.id]
+    else:
+        promos = promos_todos
 
     if promos:
         traza.paso("ejecucion", f"Promociones activas: {len(promos)} → se listan y se manda la foto de la principal")

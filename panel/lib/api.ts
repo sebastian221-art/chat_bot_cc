@@ -100,6 +100,7 @@ export const deleteStore = (i: number)                   => req(`/stores/${i}`, 
 export const exportStores = ()          => downloadFile('/stores/export', 'locales.csv')
 export const importStores = (file: File) => uploadFile('/stores/import', file)
 export const importStoresExcel = (file: File) => uploadFile('/stores/import-excel', file)
+export const deleteAllStores = () => req('/stores?confirmar=SI', { method: 'DELETE' })
 
 // ── Eventos ──────────────────────────────────────────────────────
 export const getEvents   = ()                            => req('/events')

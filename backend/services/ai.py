@@ -374,13 +374,18 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
 
             # Solo las que NO se han mostrado ya en esta sesión
             candidatos = [c for c in candidatos if (c[0], c[1]) not in ya_mostradas]
-            # VARIEDAD: en vez de mostrar SIEMPRE el de mayor prioridad
-            # (que hacía que apareciera siempre el mismo, ej. Festipatitas),
-            # elegimos UNO al azar entre los disponibles. Así rota entre
-            # eventos, sorteos y promos distintos en cada oportunidad.
+            # ROTACIÓN PONDERADA POR PRIORIDAD:
+            # - Rota DENTRO de cada tipo y entre tipos (no repite el mismo
+            #   evento/sorteo/promo una y otra vez).
+            # - Pero da MÁS peso a los de mayor prioridad: un evento de
+            #   prioridad 5 sale más seguido que uno de prioridad 4, sin
+            #   quedarse pegado en uno solo. El peso es la prioridad al
+            #   cuadrado, para que la importancia se note pero todos roten.
             import random as _rnd
             if candidatos:
-                candidatos = [_rnd.choice(candidatos)]
+                pesos = [max(1, c[2]) ** 2 for c in candidatos]  # c[2] = prioridad
+                elegido = _rnd.choices(candidatos, weights=pesos, k=1)[0]
+                candidatos = [elegido]
 
             if candidatos:
                 promo_texts = [c[3] for c in candidatos]

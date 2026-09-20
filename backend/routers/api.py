@@ -493,6 +493,23 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
     return {"ok": True, "removed": name}
 
 
+@router.delete("/stores")
+def delete_all_stores(confirmar: str = "", db: Session = Depends(get_db)):
+    """
+    Borra TODOS los locales de una vez. Requiere el parámetro
+    confirmar='SI' como doble seguro, para que no se dispare por error.
+    Pensado para limpiar antes de importar una plantilla completa.
+    """
+    if confirmar != "SI":
+        raise HTTPException(status_code=400, detail="Para borrar todos los locales, se requiere confirmación explícita.")
+    total = db.query(Store).count()
+    db.query(Store).delete()
+    db.commit()
+    _reindex(db)
+    print(f"  🗑️🗑️  Se borraron TODOS los locales: {total}")
+    return {"ok": True, "removed_count": total, "mensaje": f"Se borraron {total} locales. El directorio quedó vacío, listo para importar."}
+
+
 @router.get("/stores/export")
 def export_stores(db: Session = Depends(get_db)):
     stores = db.query(Store).order_by(Store.name).all()
