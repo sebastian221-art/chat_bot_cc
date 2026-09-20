@@ -60,7 +60,7 @@ export default function ImageUpload({ value, onChange, label = 'Foto', accent = 
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.pdf,application/pdf"
         onChange={handleFile}
         className="hidden"
       />

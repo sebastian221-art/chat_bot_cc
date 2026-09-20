@@ -30,7 +30,7 @@ from models.delivery_transfer import DeliveryTransfer
 from models.delivery_management import DeliveryManagement
 from models.mall_info import MallInfo
 from models.promotion_shown import PromotionShown
-from services.whatsapp import send_text_message, send_image_message, send_location_message, parse_incoming_message, download_media
+from services.whatsapp import send_text_message, send_image_message, send_location_message, send_document_message, parse_incoming_message, download_media
 from services.ai import generate_response, is_delivery_intent, is_delivery_management_intent, needs_human_attention, build_handoff_message, classify_intent
 from services.vision_search import handle_image_message
 from services.content_matching import find_event_by_message, find_raffle_by_message, find_marketing_by_message
@@ -784,8 +784,14 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     # Se mandan como mensajes separados, uno por foto, en orden — hasta
     # 2 (el tope que ya viene aplicado desde _route_message).
     for img_url in image_urls:
-        await send_image_message(to=phone_number, image_url=img_url)
-        print(f"  🖼️   Foto enviada: {img_url}")
+        # Si el archivo es un PDF (ej. una carta grande subida como PDF),
+        # se envía como DOCUMENTO de WhatsApp, no como imagen.
+        if img_url.lower().endswith(".pdf"):
+            await send_document_message(to=phone_number, document_url=img_url, filename="Carta.pdf", caption="Aquí tienes la carta 📄")
+            print(f"  📄  PDF (carta) enviado: {img_url}")
+        else:
+            await send_image_message(to=phone_number, image_url=img_url)
+            print(f"  🖼️   Foto enviada: {img_url}")
     if location_data:
         await send_location_message(to=phone_number, **location_data)
         print(f"  📍  Ubicación enviada: {location_data['name']}")

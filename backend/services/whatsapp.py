@@ -67,6 +67,43 @@ async def send_image_message(to: str, image_url: str, caption: str = "") -> bool
             return False
 
 
+async def send_document_message(to: str, document_url: str, filename: str = "documento.pdf", caption: str = "") -> bool:
+    """
+    Manda un DOCUMENTO (PDF) por WhatsApp usando un link público. Se usa
+    para las cartas/menús que el admin sube como PDF (útil cuando la
+    carta es muy grande o tiene varias páginas — se ve mejor que una
+    foto). WhatsApp lo muestra como un archivo descargable con su nombre.
+    """
+    url = f"{WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "document",
+        "document": {
+            "link": document_url,
+            "filename": filename[:200] if filename else "documento.pdf",
+            "caption": caption[:1024] if caption else "",
+        },
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            logger.info(f"Documento (PDF) enviado a {to}")
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP enviando documento a {to}: {e.response.text}")
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado enviando documento a {to}: {str(e)}")
+            return False
+
+
 async def send_location_message(to: str, latitude: float, longitude: float, name: str = "", address: str = "") -> bool:
     """
     Manda una ubicación real de WhatsApp — aparece como un pin de mapa

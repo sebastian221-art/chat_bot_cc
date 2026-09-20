@@ -118,7 +118,7 @@ export default function StorePhotoGallery({ storeId }: { storeId: number | null 
         >
           {LABELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
         </select>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf,application/pdf" onChange={handleFile} className="hidden" />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}

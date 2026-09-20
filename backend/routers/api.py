@@ -499,15 +499,39 @@ def delete_all_stores(confirmar: str = "", db: Session = Depends(get_db)):
     Borra TODOS los locales de una vez. Requiere el parámetro
     confirmar='SI' como doble seguro, para que no se dispare por error.
     Pensado para limpiar antes de importar una plantilla completa.
+
+    Borra local por local (no con un delete masivo) porque hay tablas
+    que dependen de las tiendas (fotos, cine, marketing). Borrando una a
+    una, SQLAlchemy maneja bien esas relaciones (las fotos tienen
+    CASCADE; para cine/marketing soltamos la referencia antes).
     """
     if confirmar != "SI":
         raise HTTPException(status_code=400, detail="Para borrar todos los locales, se requiere confirmación explícita.")
-    total = db.query(Store).count()
-    db.query(Store).delete()
-    db.commit()
-    _reindex(db)
-    print(f"  🗑️🗑️  Se borraron TODOS los locales: {total}")
-    return {"ok": True, "removed_count": total, "mensaje": f"Se borraron {total} locales. El directorio quedó vacío, listo para importar."}
+
+    try:
+        from models.cine_funcion import CineFuncion
+        from models.marketing import Marketing
+        from models.store_photo import StorePhoto
+
+        stores = db.query(Store).all()
+        total = len(stores)
+
+        for s in stores:
+            # 1) Soltar referencias que NO tienen CASCADE (evita el 500)
+            db.query(CineFuncion).filter(CineFuncion.store_id == s.id).delete(synchronize_session=False)
+            db.query(Marketing).filter(Marketing.store_id == s.id).update({"store_id": None}, synchronize_session=False)
+            db.query(StorePhoto).filter(StorePhoto.store_id == s.id).delete(synchronize_session=False)
+            # 2) Borrar la tienda
+            db.delete(s)
+
+        db.commit()
+        _reindex(db)
+        print(f"  🗑️🗑️  Se borraron TODOS los locales: {total}")
+        return {"ok": True, "removed_count": total, "mensaje": f"Se borraron {total} locales. El directorio quedó vacío, listo para importar."}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al borrar todos los locales: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudieron borrar todos los locales. Detalle: {str(e)[:300]}")
 
 
 @router.get("/stores/export")

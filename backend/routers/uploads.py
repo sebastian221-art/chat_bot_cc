@@ -35,10 +35,26 @@ MAX_FILE_SIZE_MB = 8
 @router.post("/image")
 async def upload_image(file: UploadFile = File(...)):
     ext = Path(file.filename or "").suffix.lower()
+
+    # ── PDF: se guarda tal cual (es un documento, no se convierte) ──
+    # Útil para cartas/menús grandes que se ven mejor como PDF.
+    if ext == ".pdf":
+        content = await file.read()
+        size_mb = len(content) / (1024 * 1024)
+        if size_mb > 15:
+            raise HTTPException(status_code=400, detail=f"El PDF pesa {size_mb:.1f} MB — el máximo es 15 MB.")
+        upload_dir = Path(settings.UPLOAD_DIR)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{uuid.uuid4().hex}.pdf"
+        (upload_dir / filename).write_bytes(content)
+        public_url = f"{settings.PUBLIC_BASE_URL}/uploads/{filename}"
+        print(f"  📄  PDF subido: {filename} ({size_mb:.2f} MB)")
+        return {"ok": True, "url": public_url, "tipo": "pdf"}
+
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido ({ext or 'sin extensión'}). Usa JPG, PNG, WEBP o GIF.",
+            detail=f"Tipo de archivo no permitido ({ext or 'sin extensión'}). Usa JPG, PNG, WEBP, GIF o PDF.",
         )
 
     content = await file.read()
