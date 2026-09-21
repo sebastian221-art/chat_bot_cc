@@ -319,9 +319,13 @@ def _texto_promo_para_pegar(db, phone_number: str = "") -> dict | None:
             return None
 
         # ── Candidatos de prioridad alta ──
-        eventos = db.query(Event).filter(Event.priority >= 4).all()
-        sorteos = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
-        promos = db.query(Marketing).filter(Marketing.priority >= 4, Marketing.active == True).all()
+        # Tomamos promos de prioridad media-alta (>=2). El mall quiere que
+        # promocione casi siempre, así que no nos limitamos solo a las de
+        # máxima prioridad — todas las activas con prioridad razonable
+        # entran a la rotación (ponderada, las más altas salen más).
+        eventos = db.query(Event).filter(Event.priority >= 2).all()
+        sorteos = db.query(Raffle).filter(Raffle.priority >= 2, Raffle.active == True).all()
+        promos = db.query(Marketing).filter(Marketing.priority >= 2, Marketing.active == True).all()
 
         candidatos = []
         for e in eventos:
