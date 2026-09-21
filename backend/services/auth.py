@@ -17,7 +17,16 @@ from models.user import User, UserRole
 
 logger = logging.getLogger("mall_bot")
 
-SECRET_KEY        = os.getenv("JWT_SECRET", "cc-el-puente-super-secret-2024-change-in-prod")
+# El secreto para firmar los tokens. DEBE configurarse como variable de
+# entorno JWT_SECRET en Railway con un valor largo y aleatorio. Si se usa
+# el valor por defecto (que está en el código público), cualquiera podría
+# falsificar tokens — por eso se advierte fuerte en los logs.
+_SECRET_DEFECTO = "cc-el-puente-super-secret-2024-change-in-prod"
+SECRET_KEY = os.getenv("JWT_SECRET", _SECRET_DEFECTO)
+if SECRET_KEY == _SECRET_DEFECTO:
+    logger.warning("⚠️ SEGURIDAD: se está usando el JWT_SECRET por defecto. "
+                   "Configura la variable de entorno JWT_SECRET en Railway con un "
+                   "valor largo y aleatorio para proteger las sesiones del panel.")
 ALGORITHM         = "HS256"
 TOKEN_EXPIRE_DAYS = 7
 

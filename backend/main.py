@@ -54,6 +54,15 @@ _SC = {2: GREEN, 3: CYAN, 4: YELLOW, 5: RED}
 
 async def _log_req(request: Request, call_next):
     path = request.url.path
+
+    # ── SEGURIDAD: rate limiting (anti-ataques de muchas peticiones) ──
+    try:
+        from services.seguridad import esta_limitado, respuesta_muchas_peticiones
+        if esta_limitado(request):
+            return respuesta_muchas_peticiones()
+    except Exception:
+        pass  # si algo falla en la seguridad, no tumbamos el servicio
+
     if path in _SKIP or any(path.startswith(p) for p in _SKIP_PFX):
         return await call_next(request)
     resp = await call_next(request)
@@ -91,8 +100,43 @@ app = FastAPI(title=settings.APP_NAME, version="3.0.0", lifespan=lifespan,
               docs_url="/docs" if settings.DEBUG else None)
 
 app.middleware("http")(_log_req)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+
+# ── SEGURIDAD: CORS restringido ──────────────────────────────────
+# Solo el panel de administración puede llamar a la API desde el
+# navegador (antes estaba abierto a cualquier web con "*"). El webhook
+# de WhatsApp no usa CORS (lo llama Meta directo, no un navegador), así
+# que restringir esto no afecta al bot.
+_ORIGENES_PERMITIDOS = [
+    "https://extraordinary-elegance-production.up.railway.app",
+    "http://localhost:3000",  # para desarrollo local
+]
+app.add_middleware(CORSMiddleware, allow_origins=_ORIGENES_PERMITIDOS, allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
+
+
+# ── SEGURIDAD: manejo de errores que NO filtra información ─────────
+# Si ocurre un error interno inesperado, el cliente recibe un mensaje
+# genérico (sin rutas, SQL, versiones ni detalles técnicos que un
+# atacante pueda aprovechar). El detalle real solo va a los logs.
+from fastapi.responses import JSONResponse as _JSONResponse
+from fastapi import Request as _Request
+
+@app.exception_handler(Exception)
+async def _error_seguro(request: _Request, exc: Exception):
+    logger = logging.getLogger("mall_bot")
+    logger.error(f"Error no controlado en {request.url.path}: {exc}", exc_info=True)
+    return _JSONResponse(status_code=500, content={"detail": "Ocurrió un error interno. Intenta de nuevo más tarde."})
+
+
+# ── SEGURIDAD: cabeceras de protección estándar ──────────────────
+@app.middleware("http")
+async def _cabeceras_seguridad(request, call_next):
+    resp = await call_next(request)
+    resp.headers["X-Content-Type-Options"] = "nosniff"       # evita adivinar tipos de archivo
+    resp.headers["X-Frame-Options"] = "DENY"                  # evita que embeban el panel en un iframe (clickjacking)
+    resp.headers["Referrer-Policy"] = "no-referrer"           # no filtra a dónde va el usuario
+    resp.headers["X-XSS-Protection"] = "1; mode=block"        # protección básica XSS
+    return resp
 
 app.include_router(webhook.router)
 app.include_router(api_router)

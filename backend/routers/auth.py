@@ -9,7 +9,7 @@ Endpoints de autenticación y gestión de usuarios.
   DELETE /auth/users/:id → eliminar usuario (solo admin)
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -81,11 +81,20 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 # ── Endpoints ─────────────────────────────────────────────────────
 
 @router.post("/login")
-def login(body: LoginIn, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    # ── SEGURIDAD: protección contra fuerza bruta ──
+    from services.seguridad import (
+        login_bloqueado, registrar_login_fallido, registrar_login_exitoso,
+    )
+    if login_bloqueado(request):
+        raise HTTPException(status_code=429, detail="Demasiados intentos fallidos. Por seguridad, espera unos minutos e intenta de nuevo.")
+
     user = authenticate_user(db, body.username, body.password)
     if not user:
+        registrar_login_fallido(request)
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
+    registrar_login_exitoso(request)
     token = create_token(user)
     print(f"  🔑  Login: {user.username} ({user.role})")
 
