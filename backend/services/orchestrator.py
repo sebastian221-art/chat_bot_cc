@@ -823,6 +823,31 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
             "Cuéntame en qué te puedo ayudar — tiendas, comida, horarios, servicios o lo que necesites 😊"
         )
 
+    # PROMOCIÓN AL FINAL (casi siempre): las herramientas dedicadas
+    # (búsqueda por categoría, número de tienda, cine, etc.) NO pasan por
+    # generate_response, así que la promoción del final nunca les llegaba.
+    # Aquí se la agregamos a esas respuestas, para que el mall tenga la
+    # visibilidad que pidió. NO se agrega en: emergencias, quejas,
+    # promociones/eventos/sorteos (que ya SON la promo), ni cuando la
+    # respuesta ya trae una promo. La conversación general la sigue
+    # manejando internamente (no la duplicamos).
+    HERRAMIENTAS_SIN_PROMO = {
+        "emergencia", "queja", "eventos", "sorteos", "promociones",
+        "conversacion_general", "gestion_domicilio",
+    }
+    if traza.herramienta_elegida not in HERRAMIENTAS_SIN_PROMO:
+        try:
+            from services.ai import _texto_promo_para_pegar
+            promo = _texto_promo_para_pegar(db, phone_number)
+            if promo:
+                resultado["text"] = resultado["text"].rstrip() + "\n\n" + promo["texto"]
+                # Si la promo tiene foto y la respuesta no traía ninguna, la adjuntamos
+                if promo.get("foto") and not resultado.get("image_urls"):
+                    resultado.setdefault("image_urls", []).append(promo["foto"])
+                traza.paso("promo_agregada", f"Promoción agregada al final: {promo.get('nombre', '')}")
+        except Exception as e:
+            traza.paso("promo_error", f"No se pudo agregar promo: {e}")
+
     # MEMORIA DE CONTEXTO: el webhook guarda `mentioned_store_id` en la
     # conversación para que los seguimientos ("¿tienen carta?", "¿a qué
     # hora abre?") sepan de qué tienda se venía hablando. Si la

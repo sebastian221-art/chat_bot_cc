@@ -282,6 +282,96 @@ def _get_session_start(db, phone_number: str):
     return session_start
 
 
+def _texto_promo_para_pegar(db, phone_number: str = "") -> dict | None:
+    """
+    Devuelve UNA promoción lista para pegar al final de cualquier
+    respuesta (texto ya redactado + foto), respetando la rotación
+    ponderada por prioridad y la frecuencia por sesión.
+
+    A diferencia de _build_promotions_block (que le da instrucciones a la
+    IA para que ELLA lo escriba), esta función arma el texto directamente
+    — se usa en las respuestas de herramientas dedicadas (categoría,
+    número de tienda, cine...) que no pasan por la IA de conversación.
+
+    Devuelve {"texto": str, "foto": str|None, "nombre": str} o None si en
+    este turno no toca promocionar.
+    """
+    from models.event import Event
+    from models.raffle import Raffle
+    from models.marketing import Marketing
+    from models.promotion_shown import PromotionShown
+    import random as _rnd
+
+    try:
+        # ── Frecuencia por sesión (misma lógica que el bloque IA) ──
+        ya_mostradas = set()
+        restantes = MAX_PROMOS_PER_SESSION
+        if phone_number:
+            session_start = _get_session_start(db, phone_number)
+            if session_start:
+                mostradas = (db.query(PromotionShown.entity_type, PromotionShown.entity_id)
+                             .filter(PromotionShown.phone_number == phone_number,
+                                     PromotionShown.shown_at >= session_start)
+                             .distinct().all())
+                ya_mostradas = {(t, i) for t, i in mostradas}
+                restantes = MAX_PROMOS_PER_SESSION - len(ya_mostradas)
+        if restantes <= 0:
+            return None
+
+        # ── Candidatos de prioridad alta ──
+        eventos = db.query(Event).filter(Event.priority >= 4).all()
+        sorteos = db.query(Raffle).filter(Raffle.priority >= 4, Raffle.active == True).all()
+        promos = db.query(Marketing).filter(Marketing.priority >= 4, Marketing.active == True).all()
+
+        candidatos = []
+        for e in eventos:
+            candidatos.append(("event", e.id, e.priority, e))
+        for r in sorteos:
+            candidatos.append(("raffle", r.id, r.priority, r))
+        for m in promos:
+            candidatos.append(("marketing", m.id, m.priority, m))
+
+        # Quitar las ya mostradas en esta sesión
+        candidatos = [c for c in candidatos if (c[0], c[1]) not in ya_mostradas]
+        if not candidatos:
+            return None
+
+        # Rotación ponderada por prioridad
+        pesos = [max(1, c[2]) ** 2 for c in candidatos]
+        tipo, eid, prio, obj = _rnd.choices(candidatos, weights=pesos, k=1)[0]
+
+        # ── Redactar el texto según el tipo ──
+        from services.orchestrator import _foto_de_entidad
+        if tipo == "event":
+            nombre = obj.name
+            cuando = f" el {obj.date}" if getattr(obj, "date", None) else ""
+            lugar = f" en {obj.location}" if getattr(obj, "location", None) else ""
+            texto = f"🎉 Y no te pierdas *{nombre}*{cuando}{lugar}. ¡Te esperamos!"
+            foto = _foto_de_entidad(db, "event", obj)
+        elif tipo == "raffle":
+            nombre = obj.name
+            premio = f" Puedes ganarte {obj.prize}." if getattr(obj, "prize", None) else ""
+            texto = f"🎁 Además, participa en *{nombre}*.{premio} ¡Pregúntame cómo participar!"
+            foto = _foto_de_entidad(db, "raffle", obj)
+        else:  # marketing
+            nombre = obj.title
+            desc = f" {obj.description}" if getattr(obj, "description", None) else ""
+            texto = f"🛍️ Por cierto, aprovecha: *{nombre}*.{desc}"
+            foto = _foto_de_entidad(db, "marketing", obj)
+
+        # Registrar que se mostró (para la rotación y frecuencia)
+        try:
+            db.add(PromotionShown(phone_number=phone_number, entity_type=tipo, entity_id=eid))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        return {"texto": texto, "foto": foto, "nombre": nombre}
+    except Exception as e:
+        logger.error(f"Error en _texto_promo_para_pegar: {e}")
+        return None
+
+
 def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> str:
     """
     Arma el bloque de promociones disponibles para esta respuesta:
