@@ -729,6 +729,41 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
     # 2. Limpiar historial viejo
     _trim_history(db, phone_number)
 
+    # ── PROTECCIÓN DE DATOS (Ley 1581) ────────────────────────────
+    from services.proteccion_datos import (
+        es_solicitud_eliminar, es_confirmacion_eliminar, eliminar_datos,
+        ya_vio_aviso, marcar_aviso_mostrado,
+        TEXTO_AVISO, TEXTO_CONFIRMAR_ELIMINAR, TEXTO_ELIMINADO,
+    )
+
+    # 2a. ¿El cliente pidió eliminar sus datos?
+    if es_solicitud_eliminar(message_text):
+        await send_text_message(to=phone_number, message=TEXTO_CONFIRMAR_ELIMINAR)
+        db.add(Conversation(phone_number=phone_number, user_name=user_name,
+                            role="assistant", message=TEXTO_CONFIRMAR_ELIMINAR))
+        db.commit()
+        return
+
+    # 2b. ¿Está confirmando una eliminación que pidió en el mensaje anterior?
+    #     (miramos si el último mensaje del bot fue la pregunta de confirmación)
+    ultimo_bot = (db.query(Conversation)
+                  .filter(Conversation.phone_number == phone_number, Conversation.role == "assistant")
+                  .order_by(Conversation.timestamp.desc()).offset(0).first())
+    if ultimo_bot and "deseas eliminar tus datos" in (ultimo_bot.message or "") and es_confirmacion_eliminar(message_text):
+        eliminar_datos(db, phone_number)
+        await send_text_message(to=phone_number, message=TEXTO_ELIMINADO)
+        return
+
+    # 2c. Si es un cliente NUEVO (nunca vio el aviso), se lo mostramos
+    #     antes de atenderlo. Solo una vez.
+    if not ya_vio_aviso(db, phone_number):
+        await send_text_message(to=phone_number, message=TEXTO_AVISO)
+        marcar_aviso_mostrado(db, phone_number)
+        db.add(Conversation(phone_number=phone_number, user_name=user_name,
+                            role="assistant", message=TEXTO_AVISO))
+        db.commit()
+        return
+
     # 3. Si el mensaje amerita atención humana, responde con el
     #    mensaje de transferencia directo — SIN pasar por la IA
     #    (para no arriesgarnos a que improvise datos falsos).
