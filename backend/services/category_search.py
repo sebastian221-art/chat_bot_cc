@@ -42,7 +42,7 @@ CATEGORIAS_BUSQUEDA = {
     "jeans": ["jean", "jeans", "pantalón", "pantalones"],
     "camisas": ["camisa", "camisas", "blusa"],
     "ropa deportiva": ["ropa deportiva", "deportiva"],
-    "ropa infantil": ["infantil", "niños", "bebé", "bebe"],
+    "ropa infantil": ["ropa infantil", "ropa para niños", "ropa de niños", "ropa bebé", "ropa de bebe"],
     "ropa interior": ["ropa interior", "interior", "lencería"],
 
     # ── Calzado ──
@@ -56,18 +56,26 @@ CATEGORIAS_BUSQUEDA = {
     "gafas": ["gafas", "lentes", "óptica", "optica"],
     "relojes": ["reloj", "relojes", "relojería"],
     "joyería": ["joyer", "joya", "anillo", "cadena"],
-    "bolsos": ["bolso", "bolsos", "cartera", "maletín"],
+    "bolsos": ["bolso", "bolsos", "cartera", "carteras", "morral", "morrales", "billetera", "riñonera", "maletín", "maleta"],
+    "accesorios": ["accesorio", "accesorios"],
+
+    # ── Belleza ──
+    "maquillaje": ["maquillaje", "cosmético", "cosmetico", "cosméticos", "labial", "base"],
+    "cuidado capilar": ["cabello", "capilar", "shampoo", "champú", "champu", "tratamiento capilar"],
 
     # ── Tecnología ──
     "tecnología": ["tecnolog", "celular", "computador", "electrónica"],
     "celulares": ["celular", "celulares", "móvil", "smartphone"],
 
+    # ── Entretenimiento ──
+    "juegos": ["juego", "juegos", "arcade", "diversión", "diversion", "recreación", "recreacion", "juegos de niños", "juegos para niños", "zona de juegos", "cumpleaños", "entretenimiento"],
+
     # ── Otros ──
     "farmacias": ["farmacia", "droguería", "drogueria", "medicamento"],
     "juguetes": ["juguete", "juguetería", "jugueteria"],
     "colchones": ["colchón", "colchon", "colchones"],
-    "muebles": ["mueble", "muebles", "hogar"],
-    "belleza": ["belleza", "peluquería", "peluqueria", "estética", "salón"],
+    "muebles": ["mueble", "muebles", "decoración", "decoracion"],
+    "belleza": ["belleza", "peluquería", "peluqueria", "estética", "salón", "spa"],
     "gimnasio": ["gimnasio", "gym", "fitness"],
     "bancos": ["banco", "cajero", "financiera"],
 }

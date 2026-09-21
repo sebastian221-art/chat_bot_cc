@@ -192,9 +192,15 @@ def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]
     condiciones = []
     for t in terminos:
         like = f"%{t.lower()}%"
+        # BÚSQUEDA PRECISA: solo buscamos el término en los campos que
+        # de verdad definen el TIPO de local — su categoría, su nombre y
+        # sus tags (palabras clave). NO buscamos en la descripción
+        # completa, porque ahí caían falsos positivos: un restaurante que
+        # menciona "para niños" en su descripción aparecía por error
+        # cuando alguien buscaba "ropa infantil". Los tags ya contienen
+        # las palabras clave correctas de cada local (cargadas del Excel).
         condiciones.append(func.lower(Store.category).like(like))
         condiciones.append(func.lower(Store.name).like(like))
-        condiciones.append(func.lower(Store.description).like(like))
         condiciones.append(func.lower(Store.tags).like(like))
 
     stores = (

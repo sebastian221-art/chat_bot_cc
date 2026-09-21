@@ -108,13 +108,13 @@ HERRAMIENTAS = [
     {
         "nombre": "promociones",
         "categoria": "Información",
-        "descripcion": "Cuando preguntan por PROMOCIONES, ofertas o descuentos de las tiendas del centro comercial. Ej: '¿hay promociones?', '¿alguna oferta?', '¿hay descuentos?'.",
+        "descripcion": "Cuando preguntan por PROMOCIONES, ofertas o descuentos de las tiendas del centro comercial. Ej: '¿hay promociones?', '¿alguna oferta?', '¿hay descuentos?'. OJO: NO es para preguntas sobre cómo registrar facturas, cómo participar en sorteos, ni información general del mall — eso va a conversacion_general.",
         "palabras_clave": ["promoción", "promocion", "promociones", "oferta", "ofertas", "descuento", "descuentos", "rebaja", "rebajas", "2x1", "promo"],
     },
     {
         "nombre": "conversacion_general",
         "categoria": "Conversación",
-        "descripcion": "El caso por defecto: consultas generales sobre tiendas, horarios, servicios, o cualquier cosa que no encaje en las herramientas anteriores. Aquí vive el comportamiento propositivo y el piloteo de lo inesperado (redirige con gracia lo que no es del mall).",
+        "descripcion": "El caso por defecto: consultas generales sobre tiendas, horarios, servicios, información del mall (cómo registrar facturas, parqueadero, baños, wifi, mascotas), o cualquier cosa que no encaje en las herramientas anteriores. Aquí vive el comportamiento propositivo y el piloteo de lo inesperado (redirige con gracia lo que no es del mall).",
         "palabras_clave": [],  # es el fallback — se usa cuando nada más aplica
     },
 ]

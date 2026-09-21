@@ -250,7 +250,7 @@ def _build_mall_info_block(db) -> str:
 
 
 SESSION_GAP_HOURS = 4  # más de esto sin escribir = cuenta como sesión nueva (punto de partida razonable, fácil de ajustar)
-MAX_PROMOS_PER_SESSION = 3
+MAX_PROMOS_PER_SESSION = 12
 
 
 def _get_session_start(db, phone_number: str):
@@ -348,11 +348,15 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
                                     _Conv.timestamp > ultima_promo.shown_at)
                             .count()
                         )
-                        if respuestas_desde < 2:
-                            restantes = 0  # aún muy pronto para otra promo
+                        # CASI SIEMPRE: el mall quiere que promocione seguido.
+                        # Solo evitamos repetir en 2 respuestas EXACTAMENTE
+                        # seguidas la misma promo; con que haya pasado 1
+                        # respuesta ya puede volver a promocionar (rotando cuál).
+                        if respuestas_desde < 1:
+                            restantes = 0
                 else:
-                    # Primera promo de la sesión: espera al menos 2 respuestas
-                    # previas del bot (para no promocionar en el primer saludo)
+                    # Primera promo de la sesión: solo esperamos que no sea
+                    # el primer mensaje (para no promocionar antes de saludar)
                     respuestas_previas = (
                         db.query(_Conv)
                         .filter(_Conv.phone_number == phone_number,
@@ -360,7 +364,7 @@ def _build_promotions_block(db, user_profile: str, phone_number: str = "") -> st
                                 _Conv.timestamp >= session_start)
                         .count()
                     )
-                    if respuestas_previas < 2:
+                    if respuestas_previas < 1:
                         restantes = 0
 
         if restantes > 0:
