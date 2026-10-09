@@ -797,8 +797,19 @@ async def import_cine_excel(file: UploadFile = File(...), db: Session = Depends(
     cine = (db.query(Store)
             .filter((Store.category.ilike("%cine%")) | (Store.name.ilike("%cine%")) | (Store.name.ilike("%cinelandia%")))
             .first())
+    cine_creado = False
     if not cine:
-        raise HTTPException(status_code=400, detail="No encontré el local del Cine en el sistema. Créalo primero (un local con 'Cine' en el nombre o categoría) y vuelve a importar.")
+        # No existe aún → lo creamos automáticamente para que el import no
+        # falle. El admin puede luego editarle piso, horario y foto.
+        cine = Store(
+            name="Cinelandia Múltiplex", local_number="CINE", floor="Nivel 3",
+            category="Cine", description="Cine del Centro Comercial El Puente.",
+            location_hint="Zona Terrazas", tags="cine, cinelandia, películas, peliculas, cartelera, funciones",
+            active=True,
+        )
+        db.add(cine)
+        db.flush()  # para obtener cine.id antes de crear las funciones
+        cine_creado = True
 
     # Reemplazar la cartelera: desactivar las funciones anteriores y crear las nuevas
     db.query(CineFuncion).filter(CineFuncion.store_id == cine.id).delete()
@@ -818,10 +829,13 @@ async def import_cine_excel(file: UploadFile = File(...), db: Session = Depends(
         raise HTTPException(status_code=400, detail=f"No se pudo guardar. Detalle: {str(e)[:300]}")
 
     _reindex(db)
-    print(f"  📥  Import Cine: {len(datos['funciones'])} funciones en '{cine.name}'")
+    print(f"  📥  Import Cine: {len(datos['funciones'])} funciones en '{cine.name}'" + (" (local creado)" if cine_creado else ""))
+    msg = f"Se cargaron {len(datos['funciones'])} películas en la cartelera de '{cine.name}'."
+    if cine_creado:
+        msg += " (Creé el local del Cine automáticamente; edítalo en el panel si quieres ajustar piso/horario/foto.)"
     return {"ok": True, "funciones": len(datos["funciones"]), "cine": cine.name,
-            "tarifas_confiteria": bool(datos["info_extra"]),
-            "mensaje": f"Se cargaron {len(datos['funciones'])} películas en la cartelera de '{cine.name}'."}
+            "tarifas_confiteria": bool(datos["info_extra"]), "cine_creado": cine_creado,
+            "mensaje": msg}
 
 
 # ══════════════════════════════════════════════════════════════════

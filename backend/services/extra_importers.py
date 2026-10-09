@@ -175,12 +175,20 @@ def parse_administrativo(file_bytes: bytes) -> dict:
                     "priority": prio,
                 })
             else:
+                # El campo 'time' solo admite 30 caracteres. Si el horario
+                # es largo (ej. "Viernes 7-10 PM - Sáb y Dom 3-10 PM") va a
+                # la descripción y 'time' queda corto o vacío, para no
+                # reventar la base (error "value too long").
+                time_corto = hor if len(hor) <= 30 else ""
+                desc_evt = desc_full
+                if hor and not time_corto:
+                    desc_evt = (desc_evt + " | Horario: " + hor).strip(" |")
                 eventos.append({
                     "name": nom,
                     "date": fecha,
-                    "time": hor,
+                    "time": time_corto,
                     "location": lug,
-                    "description": desc_full,
+                    "description": desc_evt,
                     "priority": 3,
                 })
 
@@ -213,6 +221,20 @@ def parse_administrativo(file_bytes: bytes) -> dict:
                 "valid_until": exp,
                 "active": True,   # como pidió el cliente, las vencidas también entran
             })
+
+    # ── RED DE SEGURIDAD: recortar a los límites reales de cada tabla ──
+    # (Event/Raffle/Marketing no tienen auto-recorte como Store, así que
+    # lo hacemos aquí para que nunca salga "value too long".)
+    def _cap(lst, limites):
+        for d in lst:
+            for campo, lim in limites.items():
+                v = d.get(campo)
+                if v and len(str(v)) > lim:
+                    d[campo] = str(v)[:lim]
+    _cap(eventos, {"name": 150, "date": 30, "time": 30, "location": 150})
+    _cap(sorteos, {"name": 150, "prize": 250, "end_date": 30, "location": 150})
+    _cap(promos,  {"title": 150, "valid_until": 30})
+    _cap(servicios, {"name": 150, "schedule": 200, "phone": 60, "location_hint": 200})
 
     return {"servicios": servicios, "eventos": eventos, "sorteos": sorteos, "promos": promos}
 
