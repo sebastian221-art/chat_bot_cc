@@ -8,31 +8,80 @@ logger = logging.getLogger(__name__)
 WHATSAPP_API_URL = "https://graph.facebook.com/v19.0"
 
 
+# WhatsApp rechaza cualquier texto de más de 4096 caracteres (devuelve
+# error y NO entrega el mensaje — el cliente no recibe NADA). Usamos un
+# margen seguro por debajo de ese tope.
+WHATSAPP_LIMITE_TEXTO = 3900
+
+
+def _partir_mensaje(texto: str, limite: int = WHATSAPP_LIMITE_TEXTO) -> list[str]:
+    """
+    Parte un texto largo en varios trozos que SÍ caben en WhatsApp.
+    Corta preferiblemente entre párrafos (línea en blanco), luego por
+    saltos de línea, y solo como último recurso parte una línea muy
+    larga. Así una respuesta larga (ej. la cartelera de cine con 6
+    películas) llega completa en 2–3 mensajes, en vez de perderse.
+    """
+    if texto is None:
+        return [""]
+    if len(texto) <= limite:
+        return [texto]
+
+    trozos, actual = [], ""
+    for parrafo in texto.split("\n\n"):
+        # Si el párrafo solo cabe por su cuenta, cerramos el actual.
+        if len(actual) + len(parrafo) + 2 > limite and actual:
+            trozos.append(actual.rstrip())
+            actual = ""
+        if len(parrafo) > limite:
+            # Párrafo enorme → partir por líneas, y si una línea sola
+            # excede el límite, cortarla en pedazos duros.
+            for linea in parrafo.split("\n"):
+                while len(linea) > limite:
+                    trozos.append(linea[:limite])
+                    linea = linea[limite:]
+                if len(actual) + len(linea) + 1 > limite and actual:
+                    trozos.append(actual.rstrip())
+                    actual = ""
+                actual += linea + "\n"
+        else:
+            actual += parrafo + "\n\n"
+    if actual.strip():
+        trozos.append(actual.rstrip())
+    return trozos or [texto[:limite]]
+
+
 async def send_text_message(to: str, message: str) -> bool:
     url = f"{WHATSAPP_API_URL}/{settings.WHATSAPP_PHONE_ID}/messages"
     headers = {
         "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": to,
-        "type": "text",
-        "text": {"preview_url": False, "body": message},
-    }
+    trozos = _partir_mensaje(message or "")
+    if len(trozos) > 1:
+        logger.info(f"Mensaje largo ({len(message)} caracteres) → se parte en {len(trozos)} mensajes para {to}")
+
+    todo_ok = True
     async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            logger.info(f"Mensaje enviado a {to}")
-            return True
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Error HTTP enviando a {to}: {e.response.text}")
-            return False
-        except Exception as e:
-            logger.error(f"Error inesperado enviando a {to}: {str(e)}")
-            return False
+        for trozo in trozos:
+            payload = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "text",
+                "text": {"preview_url": False, "body": trozo},
+            }
+            try:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                logger.info(f"Mensaje enviado a {to}")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Error HTTP enviando a {to}: {e.response.text}")
+                todo_ok = False
+            except Exception as e:
+                logger.error(f"Error inesperado enviando a {to}: {str(e)}")
+                todo_ok = False
+    return todo_ok
 
 
 async def send_image_message(to: str, image_url: str, caption: str = "") -> bool:
