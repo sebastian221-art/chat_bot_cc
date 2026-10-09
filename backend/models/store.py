@@ -114,9 +114,12 @@ class Store(Base):
             f"ID: {self.id}",
             f"Tienda: {self.name}",
             f"Local: {self.local_number or 'S/N'}",
-            f"Piso: {self.floor}",
             f"Categoría: {self.category}",
         ]
+        # El piso solo se incluye si está definido — nunca "Por confirmar"
+        # (para que la IA no se lo diga al cliente).
+        if self.floor and self.floor.strip().lower() != "por confirmar":
+            parts.insert(3, f"Piso: {self.floor}")
         if self.description:
             parts.append(f"Descripción: {self.description}")
         if self.schedule:

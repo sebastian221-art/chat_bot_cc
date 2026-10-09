@@ -209,6 +209,12 @@ def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]
         .order_by(Store.name.asc())
         .all()
     )
+    # Los consultorios/oficinas de la TORRE MÉDICA no son locales
+    # comerciales: no deben aparecer en búsquedas tipo "droguerías",
+    # "ópticas", etc. (antes inflaban el resultado — ej. "droguerías"
+    # daba 14). Se filtran aquí. La torre médica tiene su propia
+    # herramienta (torre_medica) para cuando sí la pregunten.
+    stores = [s for s in stores if "torre" not in (s.location_hint or "").lower()]
     return stores
 
 

@@ -162,7 +162,9 @@ def construir_lista_locales(stores: list, nombre_categoria: str) -> str:
     for s in stores:
         partes = [f"• *{s.name}*"]
         ubic = []
-        if s.floor:
+        # No mostrar "Por confirmar" al cliente (queda feo). Si el piso no
+        # está definido, se omite y se muestra solo la zona.
+        if s.floor and s.floor.strip().lower() != "por confirmar":
             ubic.append(s.floor)
         if s.location_hint:
             ubic.append(s.location_hint)

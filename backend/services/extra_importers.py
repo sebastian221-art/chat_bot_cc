@@ -165,9 +165,29 @@ def parse_administrativo(file_bytes: bytes) -> dict:
             es_sorteo = "sorteo" in tipo or "concurso" in tipo
             if es_sorteo:
                 prio = 5 if "principal" in nom.lower() else 4
+                # PREMIO corto y limpio: tomamos la parte inicial de la
+                # mecánica (hasta "por registros" / coma / paréntesis) y le
+                # quitamos el "Sorteamos" del inicio. Así el premio queda
+                # como "1 Tarjeta Bono Regalo por $13.000.000" en vez de
+                # repetir todo el párrafo cortado a la mitad.
+                premio = desc or nom
+                # Cortar en la posición MÁS TEMPRANA entre varios separadores
+                # (no la primera de la lista), para que el premio quede corto.
+                indices = []
+                for corte in (" por registros", " por registro", ", se participa",
+                              " se participa", ",", "("):
+                    i = premio.lower().find(corte.lower())
+                    if i > 10:
+                        indices.append(i)
+                if indices:
+                    premio = premio[:min(indices)]
+                premio = premio.strip()
+                if premio.lower().startswith("sorteamos "):
+                    premio = premio[len("sorteamos "):].strip()
+                premio = (premio or nom)[:250]
                 sorteos.append({
                     "name": nom,
-                    "prize": (desc[:240] if desc else nom)[:250],  # el premio va descrito en la mecánica
+                    "prize": premio,
                     "requirements": desc_full,
                     "end_date": fin or fecha,
                     "location": lug,

@@ -26,6 +26,29 @@ class Marketing(Base):
 
     store = relationship("Store", backref="marketing_promos")
 
+    def esta_vigente(self) -> bool:
+        """
+        True si la promoción NO está vencida. Se basa en valid_until, que
+        suele venir como "DD/MM/AAAA". Si la fecha ya pasó, devuelve False
+        (así Any no promociona ofertas vencidas, aunque sigan guardadas en
+        la base). Si no hay fecha o no se puede interpretar, se asume
+        vigente (no escondemos algo por una fecha rara)."""
+        import datetime, re
+        v = (self.valid_until or "").strip()
+        if not v:
+            return True
+        m = re.search(r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", v)
+        if not m:
+            return True
+        d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if a < 100:
+            a += 2000
+        try:
+            fin = datetime.date(a, mes, d)
+        except ValueError:
+            return True
+        return fin >= datetime.date.today()
+
     def to_dict(self):
         return {
             "id": self.id,

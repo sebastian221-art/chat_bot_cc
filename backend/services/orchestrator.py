@@ -387,10 +387,13 @@ async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict
             )
             return {"text": texto, "image_urls": [], "location": None}
 
-        if len(locales) >= 2:
+        if len(locales) >= 1:
+            # Aunque sea UN solo local, se muestra — antes se exigía 2+ y
+            # un local real (ej. Juguetería Cocoa Kids) quedaba oculto y el
+            # bot decía "no hay juguetería" siendo falso.
             return {"text": construir_lista_locales(locales, nombre_cat), "image_urls": [], "location": None}
 
-    traza.paso("ejecucion", "No se detectó categoría con 2+ locales → cae a conversación general")
+    traza.paso("ejecucion", "No se detectó categoría con locales → cae a conversación general")
     return await _ejecutar_conversacion_general(db, phone_number, mensaje, traza)
 
 
@@ -449,8 +452,50 @@ async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     el consultorio exacto.
     """
     from services.rag import search_knowledge_and_events
+    from services.store_transfer import find_store_by_message
+    from models.store import Store as _Store
 
-    traza.paso("ejecucion", "Consulta de servicios médicos → busca en la base de conocimiento")
+    traza.paso("ejecucion", "Consulta de servicios médicos → primero busca en los locales (torre médica)")
+
+    # ── 0) ¿Nombró un consultorio/servicio puntual? (Sanitas, ISEM, FOSCAL…)
+    #    Los consultorios se cargan como locales con zona 'Torre Médica',
+    #    así que la misma búsqueda de tiendas los encuentra.
+    store = find_store_by_message(db, mensaje)
+    if store:
+        traza.paso("ejecucion", f"Servicio médico puntual encontrado en locales: '{store.name}'")
+        partes = [f"🏥 *{store.name}* se encuentra en la *Torre Médica* del Centro Comercial El Puente."]
+        piso = (store.floor or "").strip()
+        if piso and piso.lower() != "por confirmar":
+            partes.append(f"📍 {piso}")
+        if store.schedule:
+            partes.append(f"🕒 {store.schedule}")
+        link = store.whatsapp_link()
+        if store.phone and link:
+            partes.append(f"📞 {store.phone} 👉 {link}")
+        elif store.phone:
+            partes.append(f"📞 {store.phone}")
+        partes.append("Si necesitas llegar, el *Punto de Información* (Pasillo Barichara) también puede orientarte. 😊")
+        return {"text": "\n".join(partes), "image_urls": [], "location": None}
+
+    # ── 1) ¿Pregunta general por la torre médica? → listar los consultorios cargados
+    medicos = db.query(_Store).filter(
+        _Store.active == True, _Store.location_hint.ilike("%torre%")
+    ).all()
+    pide_lista = any(p in mensaje.lower() for p in (
+        "torre", "medic", "médic", "consultorio", "salud", "doctor", "especialista", "cita"
+    ))
+    if medicos and pide_lista:
+        traza.paso("ejecucion", f"Torre médica → se listan {len(medicos)} consultorios/servicios cargados")
+        lineas = ["🏥 En la *Torre Médica* del Centro Comercial El Puente encuentras:\n"]
+        for m in medicos:
+            det = f"• *{m.name}*"
+            if m.schedule:
+                det += f" — 🕒 {m.schedule}"
+            if m.phone:
+                det += f" — 📞 {m.phone}"
+            lineas.append(det)
+        lineas.append("\n¿Buscas alguno en particular? Dime el nombre y te paso sus datos. 😊")
+        return {"text": "\n".join(lineas), "image_urls": [], "location": None}
 
     # Buscar en la base de conocimiento algo sobre torre médica/servicios
     try:
@@ -708,6 +753,9 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
     from models.raffle import Raffle
 
     promos_todos = db.query(Marketing).filter(Marketing.active == True).order_by(Marketing.priority.desc()).all()
+    # No mostrar promociones vencidas (quedan guardadas, pero Any no las
+    # ofrece como vigentes).
+    promos_todos = [m for m in promos_todos if m.esta_vigente()]
 
     # ROTACIÓN ponderada por prioridad para la promo principal (la foto)
     import random as _rnd
@@ -790,6 +838,35 @@ EJECUTORES = {
 # PUNTO DE ENTRADA — lo que llama el webhook cuando el switch está ON
 # ══════════════════════════════════════════════════════════════════
 
+def _menciona_pelicula_en_cartelera(db, mensaje: str) -> str | None:
+    """
+    ¿El mensaje nombra una película que está en cartelera ahora? Devuelve
+    el título si sí, None si no. Sirve para que preguntas como "¿a qué
+    horas dan Tadeo?" o "¿de qué trata Vértigo 2?" vayan SIEMPRE a cine,
+    aunque no digan la palabra 'película' (antes se iban a 'eventos').
+
+    Es conservador: solo cuenta palabras distintivas del título (4+ letras)
+    y excluye palabras genéricas que podrían chocar con otras consultas
+    del mall (ej. 'punto' de 'Punto de Información').
+    """
+    try:
+        from services.store_transfer import _sin_tildes
+        from models.cine_funcion import CineFuncion
+        import re as _re
+        GENERICAS = {"punto", "muerto", "madre", "nueva", "parte", "gran",
+                     "nuevo", "mundo", "vida", "amor", "casa", "dos"}
+        msg = _sin_tildes(mensaje)
+        funciones = db.query(CineFuncion).filter(CineFuncion.active == True).all()
+        for f in funciones:
+            for w in _re.findall(r"[a-z0-9]+", _sin_tildes(f.title)):
+                if len(w) >= 4 and w not in GENERICAS:
+                    if _re.search(rf"\b{_re.escape(w)}\b", msg):
+                        return f.title
+    except Exception:
+        pass
+    return None
+
+
 async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str, modo: str = "prueba") -> dict:
     """
     Punto de entrada único del orquestador. Recibe el mensaje, decide,
@@ -803,6 +880,17 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
 
     # 1. Decidir qué herramienta usar (híbrido)
     nombre_tool, metodo = await decidir_herramienta(mensaje, traza)
+
+    # Corrección de cine: si el mensaje nombra una película en cartelera
+    # y NO quedó en cine, lo reencaminamos (ej. "¿a qué horas dan Tadeo?"
+    # se iba a 'eventos'). No pisa emergencia/queja/domicilio.
+    if nombre_tool not in ("cartelera_cine", "emergencia", "queja", "gestion_domicilio"):
+        peli = _menciona_pelicula_en_cartelera(db, mensaje)
+        if peli:
+            traza.paso("correccion_cine", f"El mensaje nombra la película '{peli}' → se reencamina a cartelera_cine (venía como '{nombre_tool}')")
+            nombre_tool = "cartelera_cine"
+            metodo = "reglas"
+
     traza.herramienta_elegida = nombre_tool
 
     # 2. Ejecutar la herramienta (si no está conectada aún, cae al general)

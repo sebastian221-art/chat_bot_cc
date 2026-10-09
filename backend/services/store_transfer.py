@@ -10,10 +10,20 @@ No usa IA generativa — es más rápido y no hay riesgo de que invente
 un número de contacto que no existe.
 """
 import re
+import unicodedata
 from sqlalchemy.orm import Session
 from models.store import Store
 
 STOPWORDS_ES = {"la", "el", "los", "las", "de", "del", "y", "un", "una", "en", "por", "para"}
+
+
+def _sin_tildes(s: str) -> str:
+    """Pasa a minúsculas y quita tildes/acentos. Así 'Mercagán' (como lo
+    escribe el cliente) hace match con 'Mercagan' (como está en la BD),
+    y viceversa. Antes esto fallaba y el bot preguntaba '¿de qué tienda?'
+    aunque el cliente SÍ la había nombrado."""
+    s = (s or "").lower()
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 
 def _significant_words(name: str) -> list[str]:
@@ -21,7 +31,8 @@ def _significant_words(name: str) -> list[str]:
     # Incluye dígitos: "12B" es la parte distintiva de "12B Burguer Angus".
     # Antes el patrón solo tomaba letras y "12B" se convertía en "b" (se
     # descartaba), por eso "cuéntame de 12B" no encontraba la tienda.
-    words = re.findall(r"[a-z0-9áéíóúñü']+", name.lower())
+    # Trabajamos sin tildes para que el emparejado sea tolerante a acentos.
+    words = re.findall(r"[a-z0-9ñ']+", _sin_tildes(name))
     return [w for w in words if (len(w) > 2 or any(c.isdigit() for c in w)) and w not in STOPWORDS_ES]
 
 
@@ -39,13 +50,14 @@ def find_store_by_message(db: Session, message: str) -> Store | None:
     Si encuentra exactamente una coincidencia, la devuelve. Si hay 0 o
     varias (ambiguo), devuelve None — mejor preguntar que adivinar mal.
     """
-    msg = message.lower()
+    msg = _sin_tildes(message)
     # Normalizar "12 b" → "12b" (la gente escribe el nombre con espacio)
     msg = re.sub(r"(\d)\s+([a-z])\b", r"\1\2", msg)
     stores = db.query(Store).filter(Store.active == True).all()
 
     # 1) Coincidencia por nombre completo — la más confiable, se revisa primero
-    exact_matches = [s for s in stores if s.name.lower() in msg]
+    #    (sin tildes de ambos lados, para que 'Mercagán' == 'Mercagan')
+    exact_matches = [s for s in stores if _sin_tildes(s.name) in msg]
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(exact_matches) > 1:

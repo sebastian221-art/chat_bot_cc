@@ -334,6 +334,7 @@ def _texto_promo_para_pegar(db, phone_number: str = "") -> dict | None:
         eventos = db.query(Event).filter(Event.priority >= 2).all()
         sorteos = db.query(Raffle).filter(Raffle.priority >= 2, Raffle.active == True).all()
         promos = db.query(Marketing).filter(Marketing.priority >= 2, Marketing.active == True).all()
+        promos = [m for m in promos if m.esta_vigente()]  # no inyectar promos vencidas
 
         candidatos = []
         for e in eventos:
