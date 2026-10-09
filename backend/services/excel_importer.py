@@ -104,7 +104,11 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
     c_resp     = _col(ws, hg, "responsable")
     c_cargo    = _col(ws, hg, "cargo")
     c_pago     = _col(ws, hg, "métodos de pago", "metodos de pago", "pago")
-    c_carta    = _col(ws, hg, "anexa carta", "catálogo", "catalogo")
+    # OJO: "anexa carta" y "catalogos o link" son DOS columnas distintas.
+    # c_carta = la de "¿Anexa Carta / Catálogo? (Sí/No)".
+    # c_link  = la de "Catalogos o link" (el PDF o el enlace del catálogo).
+    c_carta    = _col(ws, hg, "anexa carta", "¿anexa")
+    c_link     = _col(ws, hg, "catalogos o link", "catálogos o link", "catalogo o link", "link")
 
     locales = {}  # clave: id_local (str) → dict del local
     orden = []
@@ -125,6 +129,27 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
         cargo = _txt(ws.cell(row, c_cargo).value) if c_cargo else ""
         pago = _txt(ws.cell(row, c_pago).value) if c_pago else ""
         carta = _txt(ws.cell(row, c_carta).value) if c_carta else ""
+        link_raw = _txt(ws.cell(row, c_link).value) if c_link else ""
+
+        # ¿Lo que pusieron en "Catalogos o link" es un ENLACE o un archivo
+        # PDF/foto que se subirá manual? Si es un enlace (http, www, wa.me,
+        # instagram, un dominio .com/.co, etc.) lo guardamos como catálogo
+        # digital → Any lo manda como "la carta". Si es un nombre de archivo
+        # (termina en .pdf/.jpg/.png) NO es link: esa carta la sube el admin
+        # como foto desde el panel.
+        catalogo_link = ""
+        if link_raw:
+            low = link_raw.lower()
+            es_archivo = low.endswith((".pdf", ".jpg", ".jpeg", ".png", ".webp"))
+            es_enlace = (
+                low.startswith(("http://", "https://", "www."))
+                or "wa.me" in low or "wa.link" in low
+                or "instagram" in low or "linktr" in low or "facebook" in low
+                or (("." in low) and (" " not in link_raw.strip()) and not es_archivo
+                    and any(d in low for d in (".com", ".co", ".net", ".org", ".io", ".shop", ".store")))
+            )
+            if es_enlace and not es_archivo:
+                catalogo_link = link_raw
 
         # Primer teléfono si vienen varios. Los separadores pueden ser
         # coma, punto y coma, barra, " y ", o guiones. Extraemos el PRIMER
@@ -160,16 +185,23 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
             "_catalogo_desc": [],                 # se llena con hoja 2
             "_tags": [],                          # se llena con hoja 2
             "_anexa_carta": carta.lower().startswith("s"),  # "Sí" → True
+            "_catalogo_link": catalogo_link,               # enlace de carta/catálogo (o "")
             "responsable": f"{resp} ({cargo})".strip() if resp else "",
         }
-        locales[idloc] = local
-        orden.append(idloc)
+        # LLAVE ÚNICA = ID + nombre. Algunos locales REUSAN el mismo número
+        # (ej. el 204 lo usan "Gari Sushi" y "FOSCAL odontología", que están
+        # en torres distintas). Si usáramos solo el ID como llave, el segundo
+        # pisaría al primero y se perdería un local. El nombre los distingue.
+        clave = f"{idloc}#{nombre.strip().lower()}"
+        locales[clave] = local
+        orden.append(clave)
 
     # ── Hoja 2: catálogo de productos/servicios ───────────────────
     if HOJA_CATALOGO in wb.sheetnames:
         ws2 = wb[HOJA_CATALOGO]
         hc = _headers(ws2)
         c2_id     = _col(ws2, hc, "id", "número de local", "numero de local")
+        c2_nombre = _col(ws2, hc, "nombre del local", "nombre")
         c2_subcat = _col(ws2, hc, "subcategoría", "subcategoria")
         c2_pub    = _col(ws2, hc, "público", "publico")
         c2_ocas   = _col(ws2, hc, "ocasión", "ocasion", "plan")
@@ -177,11 +209,25 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
         c2_marcas = _col(ws2, hc, "marcas")
         c2_info   = _col(ws2, hc, "información detallada", "informacion detallada", "detalle")
 
+        # Índice de respaldo por ID solo cuando ese ID es ÚNICO (no reusado),
+        # para emparejar aunque el nombre del catálogo difiera un poco.
+        from collections import Counter
+        _ids = [k.split("#", 1)[0] for k in locales]
+        _ids_unicos = {i for i, n in Counter(_ids).items() if n == 1}
+        _por_id = {k.split("#", 1)[0]: k for k in locales}
+
         for row in range(2, ws2.max_row + 1):
             idloc = _txt(ws2.cell(row, c2_id).value) if c2_id else ""
-            if not idloc or idloc not in locales:
+            nom2  = _txt(ws2.cell(row, c2_nombre).value) if c2_nombre else ""
+            if not idloc:
                 continue
-            L = locales[idloc]
+            clave = f"{idloc}#{nom2.strip().lower()}"
+            if clave in locales:
+                L = locales[clave]
+            elif idloc in _ids_unicos:
+                L = locales[_por_id[idloc]]   # mismo ID único, nombre con otra variante
+            else:
+                continue
 
             subcat = _txt(ws2.cell(row, c2_subcat).value) if c2_subcat else ""
             pub    = _txt(ws2.cell(row, c2_pub).value) if c2_pub else ""
@@ -224,6 +270,7 @@ def parse_plantilla(file_bytes: bytes) -> list[dict]:
             "description": descripcion[:4000] if descripcion else "",
             "tags": tags[:300],
             "extra_info": f"Responsable: {L['responsable']}" if L["responsable"] else "",
+            "catalogo_link": L["_catalogo_link"][:500] if L.get("_catalogo_link") else "",
             "_anexa_carta": L["_anexa_carta"],
         })
 

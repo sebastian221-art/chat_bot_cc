@@ -1,7 +1,7 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, StorePayload } from '@/lib/api'
+import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, importAdministrativo, importCine, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
 import CineCartelera from '@/components/CineCartelera'
@@ -19,7 +19,7 @@ const FLOORS = ['Sótano','Piso 1','Piso 2','Piso 3','Piso 1 y Piso 2']
 
 const EMPTY: StorePayload = {
   name:'', local_number:'', floor:'Piso 1', category:'', description:'',
-  schedule:'', phone:'', location_hint:'', tags:'', photo_url:'', extra_info:'',
+  schedule:'', phone:'', location_hint:'', tags:'', photo_url:'', extra_info:'', catalogo_link:'',
 }
 
 export default function TiendasPage() {
@@ -34,6 +34,8 @@ export default function TiendasPage() {
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
+  const adminInputRef = useRef<HTMLInputElement>(null)
+  const cineInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -73,6 +75,38 @@ export default function TiendasPage() {
     } finally {
       setImporting(false)
       if (excelInputRef.current) excelInputRef.current.value = ''
+    }
+  }
+
+  const handleImportAdmin = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const r = await importAdministrativo(file)
+      alert(`Plantilla Administrativa importada:\n🏬 ${r.servicios} servicios\n🎉 ${r.eventos} eventos\n🎟️ ${r.sorteos} sorteos\n📣 ${r.promos} promociones\n\n${r.mensaje || ''}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al importar el administrativo: ' + err.message)
+    } finally {
+      setImporting(false)
+      if (adminInputRef.current) adminInputRef.current.value = ''
+    }
+  }
+
+  const handleImportCine = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const r = await importCine(file)
+      alert(`Plantilla de Cine importada:\n🎬 ${r.funciones} películas en la cartelera de ${r.cine}\n\n${r.mensaje || ''}`)
+      await load()
+    } catch (err: any) {
+      alert('Error al importar el cine: ' + err.message)
+    } finally {
+      setImporting(false)
+      if (cineInputRef.current) cineInputRef.current.value = ''
     }
   }
 
@@ -156,12 +190,42 @@ export default function TiendasPage() {
             onChange={handleImportExcel}
             className="hidden"
           />
+          <input
+            ref={adminInputRef}
+            type="file"
+            accept=".xlsx"
+            onChange={handleImportAdmin}
+            className="hidden"
+          />
+          <input
+            ref={cineInputRef}
+            type="file"
+            accept=".xlsx"
+            onChange={handleImportCine}
+            className="hidden"
+          />
           <button
             onClick={() => excelInputRef.current?.click()}
             disabled={importing}
             className="flex items-center gap-2 text-white bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
           >
-            <Upload size={14} /> {importing ? 'Importando...' : 'Importar Plantilla Excel'}
+            <Upload size={14} /> {importing ? 'Importando...' : 'Importar Locales'}
+          </button>
+          <button
+            onClick={() => adminInputRef.current?.click()}
+            disabled={importing}
+            title="Info del mall, eventos, sorteos y promociones"
+            className="flex items-center gap-2 text-white bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> Importar Administrativo
+          </button>
+          <button
+            onClick={() => cineInputRef.current?.click()}
+            disabled={importing}
+            title="Cartelera, horarios, tarifas y confitería del cine"
+            className="flex items-center gap-2 text-white bg-fuchsia-700 hover:bg-fuchsia-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> Importar Cine
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -377,6 +441,12 @@ export default function TiendasPage() {
           <div>
             <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Tags (coma separados)</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="nike,zapatillas,deportivo" {...field('tags')} />
+          </div>
+
+          <div className="col-span-2">
+            <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Carta / Catálogo (link)</label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="https://instagram.com/... o https://wa.me/c/57..." {...field('catalogo_link')} />
+            <p className="text-zinc-600 text-[11px] mt-1">Si el local no manda la carta como foto/PDF sino como enlace, pégalo aquí: Any lo enviará como su carta.</p>
           </div>
 
         </div>

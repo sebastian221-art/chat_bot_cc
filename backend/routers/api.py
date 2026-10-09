@@ -59,6 +59,7 @@ class StoreIn(BaseModel):
     tags: Optional[str] = ""
     photo_url: Optional[str] = ""
     extra_info: Optional[str] = ""
+    catalogo_link: Optional[str] = ""
 
 class EventIn(BaseModel):
     name: str
@@ -631,8 +632,9 @@ async def import_stores_excel(file: UploadFile = File(...), db: Session = Depend
     # RED DE SEGURIDAD DEFINITIVA: cortar CADA campo a su límite exacto de
     # la base de datos, sin importar qué traiga el importador. Así es
     # imposible que un dato demasiado largo cause el error "value too long".
-    LIMITES = {"name": 150, "local_number": 60, "floor": 20, "category": 80,
-               "schedule": 200, "phone": 20, "location_hint": 200, "tags": 300}
+    LIMITES = {"name": 150, "local_number": 60, "floor": 60, "category": 80,
+               "schedule": 200, "phone": 60, "location_hint": 200, "tags": 300,
+               "catalogo_link": 500}
     for loc in locales:
         for campo, lim in LIMITES.items():
             v = loc.get(campo)
@@ -651,7 +653,7 @@ async def import_stores_excel(file: UploadFile = File(...), db: Session = Depend
         key = (loc["name"], loc.get("local_number"))
         existing = existing_stores.get(key)
         if existing:
-            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "extra_info"]:
+            for field in ["floor", "category", "description", "schedule", "phone", "location_hint", "tags", "extra_info", "catalogo_link"]:
                 if loc.get(field):
                     setattr(existing, field, loc[field])
             updated += 1
@@ -661,7 +663,8 @@ async def import_stores_excel(file: UploadFile = File(...), db: Session = Depend
                 floor=loc.get("floor", "Por confirmar"), category=loc.get("category", "Por confirmar"),
                 description=loc.get("description", ""), schedule=loc.get("schedule", ""),
                 phone=loc.get("phone", ""), location_hint=loc.get("location_hint", ""),
-                tags=loc.get("tags", ""), extra_info=loc.get("extra_info", ""), active=True,
+                tags=loc.get("tags", ""), extra_info=loc.get("extra_info", ""),
+                catalogo_link=loc.get("catalogo_link", ""), active=True,
             ))
             created += 1
 
@@ -679,6 +682,146 @@ async def import_stores_excel(file: UploadFile = File(...), db: Session = Depend
         "total_leidos": len(locales), "con_carta_pendiente": con_carta,
         "mensaje": f"Se procesaron {len(locales)} locales de la plantilla. {con_carta} tienen carta por subir (súbela desde el panel de cada local).",
     }
+
+
+@router.post("/import/administrativo")
+async def import_administrativo_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Importa la PLANTILLA ADMINISTRATIVA (info institucional + eventos +
+    sorteos + promociones). Separa automáticamente eventos de sorteos,
+    convierte la prioridad texto (Baja/Media/Alta) a número, y hace
+    upsert por nombre/título para no duplicar al reimportar.
+    """
+    from services.extra_importers import parse_administrativo
+
+    content = await file.read()
+    try:
+        datos = parse_administrativo(content)
+    except Exception as e:
+        logger.error(f"Error leyendo plantilla administrativa: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel administrativo. Detalle: {str(e)[:300]}")
+
+    res = {"servicios": 0, "eventos": 0, "sorteos": 0, "promos": 0}
+
+    # ── Servicios institucionales → Store (categoría servicios) ────
+    stores_idx = {s.name.strip().lower(): s for s in db.query(Store).all()}
+    for s in datos["servicios"]:
+        ex = stores_idx.get(s["name"].strip().lower())
+        if ex:
+            ex.schedule = s["schedule"] or ex.schedule
+            ex.phone = s["phone"] or ex.phone
+            ex.location_hint = s["location_hint"] or ex.location_hint
+            ex.description = s["description"] or ex.description
+            ex.category = s["category"]
+        else:
+            db.add(Store(
+                name=s["name"], local_number="S/N", floor="Por confirmar",
+                category=s["category"], description=s["description"],
+                schedule=s["schedule"], phone=s["phone"],
+                location_hint=s["location_hint"], tags="administración, servicios, mall",
+                active=True,
+            ))
+        res["servicios"] += 1
+
+    # ── Eventos → Event (upsert por nombre) ────────────────────────
+    ev_idx = {e.name.strip().lower(): e for e in db.query(Event).all()}
+    for e in datos["eventos"]:
+        ex = ev_idx.get(e["name"].strip().lower())
+        if ex:
+            ex.date, ex.time, ex.location = e["date"], e["time"], e["location"]
+            ex.description, ex.priority = e["description"], e["priority"]
+        else:
+            db.add(Event(name=e["name"], date=e["date"], time=e["time"],
+                         location=e["location"], description=e["description"],
+                         priority=e["priority"]))
+        res["eventos"] += 1
+
+    # ── Sorteos → Raffle (upsert por nombre) ───────────────────────
+    rf_idx = {r.name.strip().lower(): r for r in db.query(Raffle).all()}
+    for r in datos["sorteos"]:
+        ex = rf_idx.get(r["name"].strip().lower())
+        if ex:
+            ex.prize, ex.requirements, ex.end_date = r["prize"], r["requirements"], r["end_date"]
+            ex.location, ex.description, ex.priority = r["location"], r["description"], r["priority"]
+            ex.active = True
+        else:
+            db.add(Raffle(name=r["name"], prize=r["prize"], requirements=r["requirements"],
+                          end_date=r["end_date"], location=r["location"],
+                          description=r["description"], priority=r["priority"], active=True))
+        res["sorteos"] += 1
+
+    # ── Promos → Marketing (upsert por título) ─────────────────────
+    mk_idx = {m.title.strip().lower(): m for m in db.query(Marketing).all()}
+    for p in datos["promos"]:
+        ex = mk_idx.get(p["title"].strip().lower())
+        if ex:
+            ex.description, ex.priority = p["description"], p["priority"]
+            ex.valid_until, ex.active = p["valid_until"], p["active"]
+        else:
+            db.add(Marketing(title=p["title"], description=p["description"],
+                             priority=p["priority"], valid_until=p["valid_until"],
+                             active=p["active"]))
+        res["promos"] += 1
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error guardando administrativo: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo guardar. Detalle: {str(e)[:300]}")
+
+    _reindex(db)
+    print(f"  📥  Import Administrativo: {res}")
+    return {"ok": True, **res,
+            "mensaje": f"{res['servicios']} servicios, {res['eventos']} eventos, {res['sorteos']} sorteos y {res['promos']} promociones cargados."}
+
+
+@router.post("/import/cine")
+async def import_cine_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Importa la PLANTILLA DE CINE (cartelera + horarios + tarifas +
+    confitería). Cruza cartelera con horarios por título, reemplaza la
+    cartelera anterior del Cine y guarda tarifas/confitería como info del
+    local Cine para que Any responda precios.
+    """
+    from services.extra_importers import parse_cine
+
+    content = await file.read()
+    try:
+        datos = parse_cine(content)
+    except Exception as e:
+        logger.error(f"Error leyendo plantilla de cine: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel de cine. Detalle: {str(e)[:300]}")
+
+    # Buscar el local del Cine (por categoría o nombre)
+    cine = (db.query(Store)
+            .filter((Store.category.ilike("%cine%")) | (Store.name.ilike("%cine%")) | (Store.name.ilike("%cinelandia%")))
+            .first())
+    if not cine:
+        raise HTTPException(status_code=400, detail="No encontré el local del Cine en el sistema. Créalo primero (un local con 'Cine' en el nombre o categoría) y vuelve a importar.")
+
+    # Reemplazar la cartelera: desactivar las funciones anteriores y crear las nuevas
+    db.query(CineFuncion).filter(CineFuncion.store_id == cine.id).delete()
+    for f in datos["funciones"]:
+        db.add(CineFuncion(store_id=cine.id, title=f["title"], showtimes=f["showtimes"],
+                           description=f["description"], is_premiere=f["is_premiere"], active=True))
+
+    # Guardar tarifas/confitería en la info del Cine
+    if datos["info_extra"]:
+        cine.extra_info = datos["info_extra"]
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error guardando cine: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"No se pudo guardar. Detalle: {str(e)[:300]}")
+
+    _reindex(db)
+    print(f"  📥  Import Cine: {len(datos['funciones'])} funciones en '{cine.name}'")
+    return {"ok": True, "funciones": len(datos["funciones"]), "cine": cine.name,
+            "tarifas_confiteria": bool(datos["info_extra"]),
+            "mensaje": f"Se cargaron {len(datos['funciones'])} películas en la cartelera de '{cine.name}'."}
 
 
 # ══════════════════════════════════════════════════════════════════

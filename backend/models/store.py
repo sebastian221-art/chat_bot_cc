@@ -18,6 +18,12 @@ class Store(Base):
     tags          = Column(String(300), nullable=True)
     photo_url     = Column(String(500), nullable=True)  # link a una foto del local (externo — ver nota en el panel)
     extra_info    = Column(Text, nullable=True)  # campo libre: carta, cartelera, o cualquier info adicional del local
+    # LINK de catálogo/carta digital del local (Instagram, web, wa.me/c/…,
+    # catálogo en línea). Cuando un local NO manda la carta como PDF/foto
+    # sino como enlace, se guarda aquí. Si el cliente pide "la carta / el
+    # menú / el catálogo", Any le envía ESTE link directamente — el link
+    # cuenta como carta, no solo los PDF o las imágenes.
+    catalogo_link = Column(String(500), nullable=True)
     active        = Column(Boolean, default=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
@@ -32,11 +38,11 @@ class Store(Base):
     _LIMITES = {
         "name": 150, "local_number": 60, "floor": 60, "category": 80,
         "schedule": 200, "phone": 60, "location_hint": 200, "tags": 300,
-        "photo_url": 500,
+        "photo_url": 500, "catalogo_link": 500,
     }
 
     @validates("name", "local_number", "floor", "category", "schedule",
-               "phone", "location_hint", "tags", "photo_url")
+               "phone", "location_hint", "tags", "photo_url", "catalogo_link")
     def _recortar_campo(self, key, value):
         if value is None:
             return value
@@ -60,6 +66,7 @@ class Store(Base):
             "tags": self.tags,
             "photo_url": self.photo_url,  # respaldo — se mantiene por compatibilidad con fotos cargadas antes de la galería
             "extra_info": self.extra_info,
+            "catalogo_link": self.catalogo_link,
             "active": self.active,
             "photos": [p.to_dict() for p in sorted(self.photos, key=lambda p: p.created_at)] if self.photos else [],
         }
@@ -90,6 +97,18 @@ class Store(Base):
             digits = "57" + digits
         return f"https://wa.me/{digits}"
 
+    def carta_como_link(self) -> str | None:
+        """
+        Devuelve el link de catálogo SOLO si el local no tiene una foto de
+        carta subida (porque en ese caso la carta se manda como imagen).
+        Sirve para que, cuando no hay foto pero sí hay enlace, Any igual
+        pueda entregar 'la carta' como link en vez de decir que no la tiene.
+        """
+        tiene_foto_carta = any(getattr(p, "label", None) == "carta" for p in (self.photos or []))
+        if tiene_foto_carta:
+            return None
+        return self.catalogo_link or None
+
     def to_rag_text(self) -> str:
         parts = [
             f"ID: {self.id}",
@@ -113,6 +132,12 @@ class Store(Base):
             parts.append(f"Palabras clave: {self.tags}")
         if self.extra_info:
             parts.append(f"Información adicional: {self.extra_info}")
+        if self.catalogo_link:
+            parts.append(
+                "CARTA/CATÁLOGO del local (ESTE enlace ES la carta/menú/catálogo "
+                "de este local; si el cliente pide la carta, el menú o el catálogo, "
+                f"envíaselo tal cual como respuesta): {self.catalogo_link}"
+            )
         # Si esta tienda es el Cine y tiene funciones cargadas, se
         # incluyen aquí mismo — así, cuando alguien pregunte por el
         # cine, la cartelera actual viene incluida automáticamente,
