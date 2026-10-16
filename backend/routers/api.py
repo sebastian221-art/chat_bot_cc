@@ -776,6 +776,40 @@ async def import_administrativo_excel(file: UploadFile = File(...), db: Session 
             "mensaje": f"{res['servicios']} servicios, {res['eventos']} eventos, {res['sorteos']} sorteos y {res['promos']} promociones cargados."}
 
 
+@router.post("/sync/ahora")
+async def sync_ahora(forzar_afiche: bool = False, db: Session = Depends(get_db)):
+    """
+    Lanza AHORA la sincronización automática con las páginas oficiales
+    (Cinelandia + El Puente). Es lo mismo que corre solo cada día.
+    `forzar_afiche=true` obliga a releer el afiche de campañas con visión
+    aunque no haya cambiado.
+    """
+    from services.sincronizador import ejecutar_sincronizacion
+    resumen = await ejecutar_sincronizacion(db, forzar_afiche=forzar_afiche)
+    c, m, k = resumen.get("cine", {}), resumen.get("mall", {}), resumen.get("campanas", {})
+    errores = (c.get("errores") or []) + (m.get("errores") or []) + (k.get("errores") or [])
+    msg = (
+        f"🎬 Cine: {c.get('peliculas', 0)} películas, {c.get('combos', 0)} combos, {c.get('tarifas', 0)} tarifas, {c.get('proximas', 0)} estrenos próximos. "
+        f"🏢 Mall: {m.get('servicios', 0)} servicios, {m.get('torre', 0)} consultorios torre médica. "
+        f"🖼️ Afiche: {'cambió → ' + str(k.get('eventos', 0)) + ' eventos, ' + str(k.get('sorteos', 0)) + ' sorteos, ' + str(k.get('promos', 0)) + ' promos' if k.get('afiche_cambio') else 'sin cambios'}."
+    )
+    return {"ok": not errores, "mensaje": msg, "errores": errores, "resumen": resumen}
+
+
+@router.get("/sync/estado")
+def sync_estado(db: Session = Depends(get_db)):
+    """Último resultado de la sincronización automática y datos del afiche leído."""
+    import json as _json
+    from models.sync_estado import sync_get
+    ultimo = sync_get(db, "ultimo_resumen")
+    afiche = sync_get(db, "afiche_json")
+    return {
+        "ultimo_resumen": _json.loads(ultimo) if ultimo else None,
+        "afiche_url": sync_get(db, "afiche_url"),
+        "afiche_leido": _json.loads(afiche) if afiche else None,
+    }
+
+
 @router.post("/import/cine")
 async def import_cine_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """

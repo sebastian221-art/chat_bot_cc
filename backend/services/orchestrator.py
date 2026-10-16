@@ -355,37 +355,22 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
 
 async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict:
     """
-    Búsqueda justa por categoría. Con un matiz de CALIDAD para no soltar
-    "chorreros":
-      - Si la categoría tiene MUCHOS locales (>8, ej. "ropa"→24,
-        "zapatos"→16) y la petición es amplia, primero PREGUNTA para
-        acotar (qué estilo/tipo busca), en vez de listar 24 de corrido.
-      - Si son pocos (2-8, ej. "hamburguesas"→6), lista directo — ahí
-        la lista completa sí es útil y no abruma.
-      - Con 0-1, cae a conversación general (que pilotea/pregunta).
+    Búsqueda JUSTA por categoría: SIEMPRE se listan TODOS los locales que
+    coinciden, sin importar cuántos sean (ropa=27, zapatos=16…). Es una
+    exigencia del Centro Comercial: si se muestran solo algunos o se
+    "pregunta para acotar", los demás locales sienten que hay preferencia.
+    Las listas largas ya no son problema porque WhatsApp parte los
+    mensajes largos automáticamente (ver services/whatsapp.py).
+    Con 0 locales, cae a conversación general.
     """
     from services.category_search import detectar_categoria, construir_lista_locales
     from services.rag import find_all_stores_by_category
-
-    UMBRAL_ACOTAR = 8  # más locales que esto → mejor preguntar primero
 
     cat = detectar_categoria(mensaje)
     if cat:
         nombre_cat, terminos = cat
         locales = find_all_stores_by_category(db, terminos)
-        traza.paso("ejecucion", f"Categoría '{nombre_cat}' → {len(locales)} locales (búsqueda justa)")
-
-        if len(locales) > UMBRAL_ACOTAR:
-            # Demasiados para listar de golpe → acotar con una pregunta,
-            # manteniendo la personalidad y ofreciendo orientar.
-            traza.paso("acotar", f"{len(locales)} locales es mucho → se pregunta para acotar en vez de soltar la lista")
-            texto = (
-                f"¡Tenemos bastantes opciones de {nombre_cat} en el centro comercial! 😊 "
-                f"Para recomendarte la ideal y no abrumarte con toda la lista, cuéntame un poco más: "
-                f"¿qué estás buscando en particular — algún estilo, marca, rango de precio o para quién es? "
-                f"Con esa pista te digo el local perfecto. Y si prefieres verlos todos, dime \"muéstrame todos\" y te paso la lista completa."
-            )
-            return {"text": texto, "image_urls": [], "location": None}
+        traza.paso("ejecucion", f"Categoría '{nombre_cat}' → {len(locales)} locales (búsqueda justa, se listan TODOS)")
 
         if len(locales) >= 1:
             # Aunque sea UN solo local, se muestra — antes se exigía 2+ y

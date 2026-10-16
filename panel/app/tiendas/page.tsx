@@ -1,7 +1,7 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, importAdministrativo, importCine, StorePayload } from '@/lib/api'
+import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, importAdministrativo, importCine, syncWebAhora, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
 import CineCartelera from '@/components/CineCartelera'
@@ -32,6 +32,7 @@ export default function TiendasPage() {
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
   const [importing, setImporting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
   const adminInputRef = useRef<HTMLInputElement>(null)
@@ -107,6 +108,21 @@ export default function TiendasPage() {
     } finally {
       setImporting(false)
       if (cineInputRef.current) cineInputRef.current.value = ''
+    }
+  }
+
+  const handleSyncWeb = async () => {
+    if (!confirm('Esto lee AHORA las páginas oficiales (Cinelandia y El Puente) y actualiza cartelera, tarifas, confitería, servicios, torre médica y el afiche de campañas (eventos/sorteos/promos). ¿Continuar?')) return
+    setSyncing(true)
+    try {
+      const r = await syncWebAhora(false)
+      const err = (r.errores && r.errores.length) ? '\n\n⚠️ Avisos:\n- ' + r.errores.join('\n- ') : ''
+      alert('Sincronización web terminada:\n\n' + (r.mensaje || '') + err)
+      await load()
+    } catch (err: any) {
+      alert('Error al sincronizar: ' + err.message)
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -226,6 +242,14 @@ export default function TiendasPage() {
             className="flex items-center gap-2 text-white bg-fuchsia-700 hover:bg-fuchsia-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
           >
             <Upload size={14} /> Importar Cine
+          </button>
+          <button
+            onClick={handleSyncWeb}
+            disabled={syncing || importing}
+            title="Lee las páginas oficiales (Cinelandia y El Puente) y actualiza todo automáticamente"
+            className="flex items-center gap-2 text-white bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sincronizando...' : 'Sincronizar web'}
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}

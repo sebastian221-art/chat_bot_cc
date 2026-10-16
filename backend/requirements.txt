@@ -35,3 +35,5 @@ Pillow==10.4.0
 openpyxl==3.1.5
 # Compresión de PDF (cartas grandes → livianas para WhatsApp)
 pikepdf==9.4.0
+# Lectura de páginas web (sincronizador automático: Cinelandia + El Puente)
+beautifulsoup4==4.12.3

@@ -34,7 +34,7 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle, delivery_management, store_photo, entity_photo, promotion_shown, marketing, cine_funcion, orchestrator_trace
+from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle, delivery_management, store_photo, entity_photo, promotion_shown, marketing, cine_funcion, orchestrator_trace, sync_estado
 from services import orchestrator_switch  # registra la tabla orchestrator_config
 from services import proteccion_datos  # registra la tabla aviso_privacidad_mostrado
 from routers import webhook
@@ -93,7 +93,34 @@ async def lifespan(app: FastAPI):
     print(f"  {CYAN}📊  Panel{RESET}    →  http://localhost:3000")
     print(f"  {CYAN}📖  Docs{RESET}     →  http://localhost:8000/docs")
     print(f"{sep}\n")
+
+    # ── SINCRONIZADOR AUTOMÁTICO (web del mall + Cinelandia) ───────
+    # Corre en segundo plano: la primera vez poco después de arrancar y
+    # luego cada SYNC_INTERVALO_HORAS (por defecto 24 h). Si algo falla,
+    # solo lo registra — nunca tumba el servidor. Se puede apagar con
+    # SYNC_AUTOMATICO=0 y lanzar a mano desde el panel (/sync/ahora).
+    import asyncio, os
+    tarea_sync = None
+    if os.environ.get("SYNC_AUTOMATICO", "1") != "0":
+        async def _loop_sync():
+            from services.sincronizador import ejecutar_sincronizacion
+            horas = float(os.environ.get("SYNC_INTERVALO_HORAS", "24"))
+            await asyncio.sleep(90)  # dejar que el servidor termine de arrancar
+            while True:
+                dbs = SessionLocal()
+                try:
+                    await ejecutar_sincronizacion(dbs)
+                except Exception as e:
+                    print(f"{YELLOW}  ⚠  Sincronización web falló: {e}{RESET}")
+                finally:
+                    dbs.close()
+                await asyncio.sleep(max(1.0, horas) * 3600)
+        tarea_sync = asyncio.create_task(_loop_sync())
+        print(f"{GREEN}  ✓  Sincronizador web programado (cada {os.environ.get('SYNC_INTERVALO_HORAS', '24')} h){RESET}")
+
     yield
+    if tarea_sync:
+        tarea_sync.cancel()
     print(f"\n{GREY}  ─  Servidor detenido{RESET}\n")
 
 app = FastAPI(title=settings.APP_NAME, version="3.0.0", lifespan=lifespan,
