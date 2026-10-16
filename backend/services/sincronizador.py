@@ -247,7 +247,11 @@ def leer_tarifas(html: str) -> list[str]:
         for l in _texto_lineas(html):
             if RE_PRECIO.search(l) and len(l) < 160:
                 lineas.append(l)
-    return lineas[:40]
+    vistas, unicas = set(), []
+    for l in lineas:
+        if l not in vistas:
+            vistas.add(l); unicas.append(l)
+    return unicas[:40]
 
 
 def leer_proximamente(html: str) -> list[str]:
@@ -542,23 +546,84 @@ async def sincronizar_mall(db: Session) -> dict:
 # ══════════════════════════════════════════════════════════════════
 # 🖼️ AFICHE DE CAMPAÑAS → VISIÓN → EVENTOS / SORTEOS / PROMOS
 # ══════════════════════════════════════════════════════════════════
+def _candidatas_afiche(html: str) -> list[str]:
+    """
+    Encuentra el AFICHE (la imagen más grande de Wix en la página) y devuelve
+    varias URLs para descargarlo, de la más conveniente a la más cruda.
+
+    Por qué así: Wix publica la MISMA imagen en varios tamaños (miniaturas de
+    96px, 400px, 1920px…). Antes se elegía mal (salía la de 96px) y además
+    al quitar el formato AVIF la URL quedaba inválida (403). Ahora:
+      1. Se identifica la imagen por su tamaño ORIGINAL (…~mv2_d_1920_1920…).
+      2. Se CONSTRUYE la URL de descarga en grande y en JPG (que la visión
+         acepta), con respaldos si Wix rechaza alguna variante.
+    """
+    medias: dict[str, int] = {}
+    for u in set(re.findall(r"https://static\.wixstatic\.com/media/([^/\s\"'<>)]+)", html)):
+        m = re.search(r"mv2_d_(\d+)_(\d+)", u)
+        area = int(m.group(1)) * int(m.group(2)) if m else 0
+        medias[u] = max(medias.get(u, 0), area)
+    if not medias:
+        return []
+    # también considerar tamaños pedidos w_,h_ cuando no hay mv2_d
+    for u in list(medias):
+        if medias[u] == 0:
+            for mm in re.finditer(re.escape(u) + r"/v1/fill/w_(\d+),h_(\d+)", html):
+                medias[u] = max(medias[u], int(mm.group(1)) * int(mm.group(2)))
+    media, area = max(medias.items(), key=lambda kv: kv[1])
+    if area < 600 * 600:
+        return []
+    base = f"https://static.wixstatic.com/media/{media}"
+    return [
+        f"{base}/v1/fill/w_1600,h_1600,al_c,q_85/afiche.jpg",   # grande, JPG
+        f"{base}/v1/fill/w_1600,h_1600,al_c,q_85,enc_auto/afiche.png",
+        f"{base}/v1/fit/w_1600,h_1600,q_85/afiche.jpg",
+        base,                                                   # original tal cual
+    ]
+
+
 def _url_afiche(html: str) -> str | None:
-    """La imagen MÁS GRANDE de wixstatic en la página (el afiche cambia de URL cada mes)."""
-    cands = []
-    for u in set(re.findall(r"https://static\.wixstatic\.com/media/[^\s\"'<>)]+", html)):
-        w = h = 0
-        m = re.search(r"mv2_d_(\d+)_(\d+)", u) or re.search(r"w_(\d+),h_(\d+)", u)
-        if m:
-            w, h = int(m.group(1)), int(m.group(2))
-        cands.append((w * h, u))
-    cands = [c for c in cands if c[0] >= 800 * 800]
-    if not cands:
-        return None
-    cands.sort(reverse=True)
-    u = cands[0][1]
-    # pedir formato estándar (no AVIF) para que el modelo de visión lo acepte
-    u = u.replace("enc_avif,", "").replace("enc_auto,", "").replace(",enc_avif", "").replace(",enc_auto", "")
-    return u
+    c = _candidatas_afiche(html)
+    return c[0] if c else None
+
+
+async def _descargar_afiche(html: str) -> tuple[bytes, str, str]:
+    """Descarga el afiche probando varias URLs (con Referer, que Wix exige a veces)."""
+    candidatas = _candidatas_afiche(html)
+    if not candidatas:
+        raise RuntimeError("no se encontró la imagen del afiche en la página")
+    ultimo = ""
+    headers = {"User-Agent": UA, "Referer": "https://www.elpuente.com.co/", "Accept": "image/*,*/*;q=0.8"}
+    async with httpx.AsyncClient(timeout=40.0, follow_redirects=True, headers=headers) as c:
+        for url in candidatas:
+            try:
+                r = await c.get(url)
+                if r.status_code == 200 and r.content and len(r.content) > 5000:
+                    mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
+                    return r.content, mime, url
+                ultimo = f"{r.status_code} en {url[:90]}"
+            except Exception as e:
+                ultimo = f"{str(e)[:60]} en {url[:90]}"
+    raise RuntimeError(f"no se pudo descargar el afiche ({ultimo})")
+
+
+def _preparar_imagen_para_vision(img: bytes, mime: str) -> tuple[bytes, str]:
+    """
+    Convierte a JPEG y limita a 1600px / calidad 85 para que el modelo de
+    visión la acepte siempre (evita AVIF/WebP raros y archivos muy pesados).
+    Si Pillow no puede abrirla, se devuelve tal cual.
+    """
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(img))
+        im = im.convert("RGB")
+        im.thumbnail((1600, 1600))
+        out = io.BytesIO()
+        im.save(out, format="JPEG", quality=85, optimize=True)
+        return out.getvalue(), "image/jpeg"
+    except Exception:
+        return img, mime
 
 
 PROMPT_AFICHE = """Eres un extractor de datos. Esta imagen es el AFICHE OFICIAL de campañas del mes del Centro Comercial El Puente (San Gil, Colombia). Lee TODO el texto del afiche y devuelve ÚNICAMENTE un JSON válido (sin explicaciones, sin markdown) con esta forma exacta:
@@ -656,11 +721,8 @@ async def sincronizar_campanas(db: Session, forzar: bool = False) -> dict:
     res = {"afiche_cambio": False, "eventos": 0, "sorteos": 0, "promos": 0, "errores": [], "mes": ""}
     try:
         html = await _get(URL_CAMPANAS)
-        url = _url_afiche(html)
-        if not url:
-            res["errores"].append("Campañas: no se encontró la imagen del afiche en la página.")
-            return res
-        img, mime = await _get_bytes(url)
+        img, mime, url = await _descargar_afiche(html)
+        img, mime = _preparar_imagen_para_vision(img, mime)
         h = hashlib.sha256(img).hexdigest()
         if not forzar and sync_get(db, "afiche_hash") == h:
             return res  # mismo afiche → nada que hacer
