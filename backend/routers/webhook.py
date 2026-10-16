@@ -794,7 +794,7 @@ async def _process_text_message(db: Session, phone_number: str, user_name: str, 
             # "produccion" se marca como producción.
             modo_switch = get_modo(db)
             modo_orq = "produccion" if modo_switch == "produccion" else "prueba"
-            result = await procesar_con_orquestador(db, phone_number, message_text, modo=modo_orq)
+            result = await procesar_con_orquestador(db, phone_number, message_text, modo=modo_orq, user_name=user_name)
         else:
             result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
         response_text = result["text"]
@@ -979,7 +979,7 @@ async def test_bot(request: Request, db: Session = Depends(get_db)):
                 from services.orchestrator_switch import debe_usar_orquestador
                 if debe_usar_orquestador(db, phone_number):
                     from services.orchestrator import procesar_con_orquestador
-                    result = await procesar_con_orquestador(db, phone_number, message_text, modo="prueba")
+                    result = await procesar_con_orquestador(db, phone_number, message_text, modo="prueba", user_name=user_name)
                 else:
                     result = await _route_message(db, phone_number, user_name, message_text, exclude_msg_id=current_msg.id)
             debug_log = buf.getvalue()

@@ -71,7 +71,7 @@ CATEGORIAS_BUSQUEDA = {
     "juegos": ["juego", "juegos", "arcade", "diversión", "diversion", "recreación", "recreacion", "juegos de niños", "juegos para niños", "zona de juegos", "cumpleaños", "entretenimiento"],
 
     # ── Otros ──
-    "farmacias": ["farmacia", "droguería", "drogueria", "medicamento"],
+    "droguerías": ["farmacia", "drogueria", "medicamento", "drogas "],
     "juguetes": ["juguete", "juguetería", "jugueteria"],
     "colchones": ["colchón", "colchon", "colchones"],
     "muebles": ["mueble", "muebles", "decoración", "decoracion"],
@@ -86,10 +86,17 @@ INTENCION_BUSQUEDA = [
     "cuáles", "cuales", "hay", "venden", "vende", "puedo comprar", "puedo comer",
     "consigo", "encuentro", "busco", "quiero", "necesito", "tienen",
     "recomienda", "recomiéndame", "recomiendame", "opciones de",
+    # "tiendas de ropa", "locales de zapatos", "almacenes de ropa", "sitios de comida"
+    "tiendas de", "tienda de", "locales de", "local de", "almacenes de", "almacén de",
+    "almacen de", "sitios de", "lugares de", "lugar de", "lista de", "todos los", "todas las",
 ]
 
+# Mensajes MUY cortos ("ropa", "droguerías", "juguetería", "zapatos") son
+# una búsqueda aunque no traigan verbo: el cliente escribió solo lo que busca.
+MAX_PALABRAS_MENSAJE_CORTO = 3
 
-def detectar_categoria(mensaje: str) -> tuple[str, list[str]] | None:
+
+def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str, list[str]] | None:
     """
     Si el mensaje es una búsqueda por categoría, devuelve
     (nombre_categoria, terminos_para_buscar). Si no, devuelve None.
@@ -97,8 +104,14 @@ def detectar_categoria(mensaje: str) -> tuple[str, list[str]] | None:
     Prefiere la coincidencia MÁS ESPECÍFICA — "zapatos formales" gana
     sobre "zapatos", "hamburguesas" gana sobre "comida" — para no
     responder de más ni de menos.
+
+    exigir_intencion=False: se usa cuando OTRO ya decidió que es una
+    búsqueda (ej. la IA del orquestador eligió 'busqueda_categoria'); ahí
+    solo hace falta saber QUÉ categoría es, sin pedir un verbo como
+    "dónde"/"quiero". Antes "tiendas de ropa" o "droguerías" devolvían
+    None por no traer esas palabras y el bot terminaba inventando.
     """
-    msg = msg_limpio = mensaje.lower()
+    msg = msg_limpio = mensaje.lower().strip()
 
     # EXCEPCIÓN: si preguntan por la UBICACIÓN de la zona de comidas /
     # plazoleta (no por comida en sí), NO es una búsqueda de categoría —
@@ -111,6 +124,10 @@ def detectar_categoria(mensaje: str) -> tuple[str, list[str]] | None:
 
     # ¿Hay al menos una señal de que quieren BUSCAR algo?
     hay_intencion = any(p in msg for p in INTENCION_BUSQUEDA)
+    if not hay_intencion and len(msg.replace("?", " ").replace("¿", " ").split()) <= MAX_PALABRAS_MENSAJE_CORTO:
+        hay_intencion = True  # mensaje corto tipo "droguerías" / "tiendas de ropa"
+    if not hay_intencion and not exigir_intencion:
+        hay_intencion = True
     if not hay_intencion:
         return None
 

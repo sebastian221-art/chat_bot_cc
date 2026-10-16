@@ -55,11 +55,13 @@ HERRAMIENTAS = [
     {
         "nombre": "cartelera_cine",
         "categoria": "Información",
-        "descripcion": "Cuando preguntan por películas, cartelera, funciones o estrenos del cine.",
+        "descripcion": "TODO lo del cine (Cinelandia): películas, cartelera, horarios de funciones, estrenos, TARIFAS/precio de la boleta, COMBOS de confitería/crispetas, y dónde queda el cine. Ej: 'cuánto vale la boleta', 'combos de confitería', 'horarios de Tadeo'.",
         "palabras_clave": [
             "cartelera", "película", "pelicula", "peliculas", "películas",
             "estreno", "estrenos", "función de cine", "funciones de cine",
             "que dan en el cine", "qué dan en el cine",
+            "cine", "cinelandia", "confitería", "confiteria", "crispeta", "crispetas",
+            "boleta", "boletas", "boletería", "boleteria",
         ],
     },
     {
@@ -103,7 +105,7 @@ HERRAMIENTAS = [
         "nombre": "sorteos",
         "categoria": "Información",
         "descripcion": "Cuando preguntan por los SORTEOS, rifas o premios del centro comercial. Ej: '¿qué están sorteando?', '¿hay algún sorteo?', '¿cómo participo en el sorteo?'.",
-        "palabras_clave": ["sorteo", "sorteos", "rifa", "rifas", "premio", "premios", "sortear", "sorteando", "me gano", "ganar un"],
+        "palabras_clave": ["sorteo", "sorteos", "rifa", "rifas", "rifando", "rifan", "premio", "premios", "sortear", "sorteando", "sortean", "me gano", "ganar un", "ganarme"],
     },
     {
         "nombre": "promociones",

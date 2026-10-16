@@ -31,6 +31,7 @@ REGLAS DE SEGURIDAD (para no dañar lo que ya está bien):
   - Cada bloque va en su propio try/except: si falla uno, los demás siguen.
 """
 import re
+import asyncio
 import json
 import base64
 import hashlib
@@ -123,12 +124,20 @@ def leer_cartelera(html: str) -> dict:
     soup = _soup(html)
     grupos: dict[str, dict] = {}
 
+    def _es_ficha(t: str) -> bool:
+        u = t.upper()
+        return any(k in u for k in ("FORMATO", "GENERO", "GÉNERO", "CLASIFICACI", "DURACI", "COMPRAR ENTRADAS"))
+
     for a in soup.find_all("a", href=True):
         m = re.search(r"pelicula\.php\?id=(\d+)", a["href"])
         if not m:
             continue
         pid = m.group(1)
-        g = grupos.setdefault(pid, {"id": pid, "textos": [], "horarios": [], "fechas": set(), "anchor": None})
+        g = grupos.setdefault(pid, {"id": pid, "textos": [], "horarios": [], "fechas": set(), "anchor": None, "alts": []})
+        for img in a.find_all("img"):
+            alt = _limpiar(img.get("alt") or "")
+            if alt and alt not in g["alts"]:
+                g["alts"].append(alt)
         t = _limpiar(a.get_text(" "))
         fm = re.search(r"fecha=(\d{8})", a["href"])
         if fm:
@@ -140,35 +149,53 @@ def leer_cartelera(html: str) -> dict:
                 g["horarios"].append(t.upper().replace(".", ""))
         else:
             g["textos"].append(t)
-            if g["anchor"] is None and not t.lower().startswith("póster") and t.upper() not in ("COMPRAR ENTRADAS", "VER DETALLES", "VISIÓN 2D", "VISIÓN 3D"):
-                g["anchor"] = a
+            if _es_ficha(t) or g["anchor"] is None:
+                if not t.lower().startswith("póster") and t.upper() not in ("COMPRAR ENTRADAS", "VER DETALLES", "VISIÓN 2D", "VISIÓN 3D"):
+                    g["anchor"] = a
 
     GENERICOS = {"comprar entradas", "ver detalles", "visión 2d", "visión 3d", "vision 2d", "vision 3d", "horarios", "clic"}
+
     peliculas = []
     for pid, g in grupos.items():
-        # Título = el texto más largo que no sea botón/hora/"Póster de …"
-        candidatos = [t for t in g["textos"] if _norm(t) not in GENERICOS and not t.lower().startswith("póster de") and not t.lower().startswith("poster de")]
-        if not candidatos:
-            # a veces solo viene "Póster de X"
-            for t in g["textos"]:
-                if t.lower().startswith(("póster de ", "poster de ")):
-                    candidatos.append(t.split(" de ", 1)[1])
-        if not candidatos:
+        # TÍTULO. Fuentes, en orden de confianza:
+        #   1. alt de la imagen del póster: "Póster de STREET FIGHTER"
+        #   2. texto de enlace corto que no sea botón ni ficha técnica
+        # Antes se tomaba "el texto más largo" y salía la ficha completa
+        # ("FORMATO: 2D GENERO: … COMPRAR ENTRADAS") como título.
+        title = ""
+        for t in g["alts"]:
+            tl = t.lower()
+            if tl.startswith(("póster de ", "poster de ")):
+                title = t.split(" de ", 1)[1].strip()
+                break
+        if not title:
+            candidatos = [t for t in g["textos"] if _norm(t) not in GENERICOS and not _es_ficha(t)
+                          and not t.lower().startswith(("póster de", "poster de")) and len(t) <= 80]
+            if candidatos:
+                # el más repetido (título aparece en tarjeta y en lista); si empata, el más largo
+                title = max(candidatos, key=lambda t: (candidatos.count(t), len(t))).strip()
+        if not title:
             continue
-        title = max(candidatos, key=len).strip()
 
         # Ficha técnica: subir por los padres del enlace hasta encontrar el bloque con FORMATO/DURACIÓN
         ficha = {"formato": "", "genero": "", "clasificacion": "", "duracion": "", "estreno": False}
+        # Subimos por los padres hasta el bloque (fila) que tiene la ficha
+        # técnica Y el título (ahí también está el sello "ESTRENO"). Si no
+        # aparece así, nos quedamos con el primer bloque que tenga la ficha.
         nodo = g["anchor"]
-        bloque_txt = ""
+        bloque_txt = primer_ficha = ""
         for _ in range(8):
             if nodo is None:
                 break
             txt = _limpiar(nodo.get_text(" "))
-            if ("DURACI" in txt.upper() or "FORMATO" in txt.upper()) and title.upper()[:10] in txt.upper():
+            tiene_ficha = ("DURACI" in txt.upper() or "FORMATO" in txt.upper())
+            if tiene_ficha and len(txt) < 2500 and not primer_ficha:
+                primer_ficha = txt
+            if tiene_ficha and len(txt) < 2500 and title.upper() in txt.upper():
                 bloque_txt = txt
                 break
             nodo = nodo.parent
+        bloque_txt = bloque_txt or primer_ficha
         if bloque_txt:
             def _campo(pat):
                 mm = re.search(pat + r"\s*:?\**\s*([^|]+?)(?=\s+(?:FORMATO|GENERO|GÉNERO|CLASIFICACI|DURACI|COMPRAR|\d{1,2}:\d{2})|$)", bloque_txt, re.I)
@@ -192,6 +219,58 @@ def leer_cartelera(html: str) -> dict:
     ids_hoy = {p["id"] for p in en_cartelera}
     proximas = [p for p in peliculas if p["id"] not in ids_hoy]
     return {"hoy": en_cartelera, "proximas": proximas, "fecha": hoy}
+
+
+def leer_ficha_pelicula(html: str) -> dict:
+    """
+    De la página de UNA película (pelicula.php?id=N) saca:
+      sinopsis (texto después del título "Sinopsis"), trailer (enlace de
+      YouTube), y clasificacion/duracion/formato si vienen.
+    Todo opcional: si algo no está, queda "".
+    """
+    out = {"sinopsis": "", "trailer": "", "clasificacion": "", "duracion": "", "formato": ""}
+    try:
+        soup = _soup(html)
+        for a in soup.find_all("a", href=True):
+            h = a["href"]
+            if "youtube.com/watch" in h or "youtu.be/" in h:
+                out["trailer"] = h.strip()
+                break
+        lineas = _texto_lineas(html)
+        CORTES = ("tráiler", "trailer", "horario", "título original", "titulo original", "país", "pais", "director",
+                  "idioma", "comprar", "funciones", "formato", "clasificaci", "duraci", "compartir", "ver el tr")
+        for i, l in enumerate(lineas):
+            if _norm(l).rstrip(":") == "sinopsis":
+                partes = []
+                for l2 in lineas[i + 1:i + 12]:
+                    n2 = _norm(l2)
+                    if any(n2.startswith(c) for c in CORTES) or (len(l2) < 25 and partes):
+                        break
+                    if len(l2) >= 25:
+                        partes.append(l2)
+                out["sinopsis"] = _cap(" ".join(partes), 700)
+                break
+        for l in lineas:
+            n = _norm(l)
+            if not out["clasificacion"] and ("apta para" in n or "todo público" in n or "todo publico" in n or n.startswith("+")):
+                out["clasificacion"] = l[:60]
+            if not out["duracion"]:
+                m = re.search(r"\b(\d{2,3})\s*MIN\b", l, re.I)
+                if m:
+                    out["duracion"] = f"{m.group(1)} MIN"
+            if not out["formato"] and re.search(r"FORMATO\s*:?\s*(2D|3D)", l, re.I):
+                out["formato"] = re.search(r"(2D|3D)", l, re.I).group(1).upper()
+    except Exception:
+        pass
+    return out
+
+
+def _cap(t: str, n: int) -> str:
+    t = (t or "").strip()
+    if len(t) <= n:
+        return t
+    corte = t[:n].rsplit(". ", 1)[0]
+    return (corte if len(corte) > n * 0.5 else t[:n]).rstrip(".") + "…"
 
 
 def leer_confiteria(html: str) -> list[dict]:
@@ -283,14 +362,29 @@ async def sincronizar_cine(db: Session) -> dict:
         html = await _get(URL_CARTELERA)
         cart = leer_cartelera(html)
         if cart["hoy"]:
+            # Ficha de cada película (sinopsis + tráiler) — en paralelo, y si
+            # alguna falla no detiene la cartelera.
+            async def _ficha(p):
+                try:
+                    return leer_ficha_pelicula(await _get(f"https://www.cinelandia.com.co/pelicula.php?id={p['id']}&ciudad=2"))
+                except Exception:
+                    return {}
+            fichas = await asyncio.gather(*[_ficha(p) for p in cart["hoy"]])
+
             db.query(CineFuncion).filter(CineFuncion.store_id == cine.id).delete()
-            for p in cart["hoy"]:
-                ficha = " · ".join(x for x in [p["genero"], p["clasificacion"], p["formato"], p["duracion"]] if x)
-                desc = ficha
-                if p["estreno"]:
-                    desc = ("ESTRENO · " + desc).strip(" ·")
+            for p, fx in zip(cart["hoy"], fichas):
+                fx = fx or {}
+                clasif = p["clasificacion"] or fx.get("clasificacion", "")
+                dur = p["duracion"] or fx.get("duracion", "")
+                fmt = p["formato"] or fx.get("formato", "")
+                ficha = " · ".join(x for x in [p["genero"], clasif, fmt, dur] if x)
+                desc = ("ESTRENO · " + ficha).strip(" ·") if p["estreno"] else ficha
+                if fx.get("sinopsis"):
+                    desc += "\n" + fx["sinopsis"]
+                if fx.get("trailer"):
+                    desc += "\nTráiler: " + fx["trailer"]
                 db.add(CineFuncion(store_id=cine.id, title=p["title"][:150], showtimes=", ".join(p["horarios"])[:200],
-                                   description=desc, is_premiere=bool(p["estreno"]), active=True))
+                                   description=desc.strip(), is_premiere=bool(p["estreno"]), active=True))
             res["peliculas"] = len(cart["hoy"])
             res["proximas"] = len(cart["proximas"])
             db.commit()

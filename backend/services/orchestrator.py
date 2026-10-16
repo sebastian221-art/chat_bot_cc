@@ -17,8 +17,10 @@ Convive con el flujo viejo mediante un switch (ver orchestrator_switch).
 Mientras el switch no lo active, este código no toca a ningún cliente.
 """
 import json
+import re
 import time
 import logging
+import contextvars
 
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,21 @@ from models.orchestrator_trace import OrchestratorTrace
 from services.orchestrator_tools import HERRAMIENTAS, herramienta_por_nombre
 
 logger = logging.getLogger("mall_bot")
+
+
+# Nombre del cliente del mensaje en curso (perfil de WhatsApp). Se guarda
+# aquí para que TODAS las herramientas lo tengan sin cambiar sus firmas.
+# Antes el orquestador llamaba a _route_message con nombre "" y por eso Any
+# nunca llamaba al cliente por su nombre en modo orquestador.
+_usuario_actual: contextvars.ContextVar[str] = contextvars.ContextVar("usuario_actual", default="")
+
+
+def nombre_cliente() -> str:
+    """Nombre del cliente (o '' si WhatsApp no lo trae / es genérico)."""
+    n = (_usuario_actual.get() or "").strip()
+    if not n or n.lower() in ("usuario", "cliente", "tester", "none", "null"):
+        return ""
+    return n.split()[0].capitalize() if n.isupper() or n.islower() else n.split()[0]
 
 
 class Traza:
@@ -44,6 +61,7 @@ class Traza:
         self.fotos_urls = []       # links de las fotos enviadas (para verlas en el panel)
         self.contenido_extra = []  # qué evento/promo/sorteo/tienda se agregó
         self.ubicacion = "no"
+        self.uso_general = False   # True si la respuesta la terminó dando la conversación general (IA)
 
     def paso(self, nombre: str, detalle: str):
         ms = round((time.time() - self.inicio) * 1000, 1)
@@ -87,10 +105,22 @@ def _decidir_por_reglas(mensaje: str, traza: Traza) -> str | None:
         if not palabras:
             continue  # herramientas sin palabras clave se deciden por IA/lógica especial
         for palabra in palabras:
-            if palabra in msg:
+            if _coincide_palabra(palabra, msg):
                 traza.paso("decision_reglas", f"La palabra '{palabra}' coincide con la herramienta '{h['nombre']}'")
                 return h["nombre"]
     return None
+
+
+def _coincide_palabra(palabra: str, msg: str) -> bool:
+    """
+    Coincidencia por PALABRA COMPLETA (acepta plural -s/-es), no por
+    subcadena. Antes "tarifas de parqueadero" disparaba 'sorteos' porque
+    "ta-RIFA-s" contiene "rifa". Las frases con espacios siguen igual.
+    """
+    pal = palabra.lower().strip()
+    if " " in pal:
+        return pal in msg
+    return re.search(rf"(?<![a-záéíóúñü]){re.escape(pal)}(?:s|es)?(?![a-záéíóúñü])", msg) is not None
 
 
 async def _decidir_por_ia(mensaje: str, traza: Traza) -> str:
@@ -225,8 +255,10 @@ async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> di
     traza.paso("ejecucion", "Conversación general → delega en _route_message (incluye fotos de tienda/evento/sorteo)")
     from routers.webhook import _route_message
 
+    traza.uso_general = True
+
     async def _intentar():
-        r = await _route_message(db, phone_number, "", mensaje)
+        r = await _route_message(db, phone_number, nombre_cliente(), mensaje)
         return r
 
     resultado = None
@@ -326,8 +358,18 @@ async def _ejecutar_numero_tienda(db, phone_number, mensaje, traza) -> dict:
 
 
 async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
-    """Reutiliza services/cine.py — la misma cartelera determinística del flujo viejo."""
-    from services.cine import find_cine_store, find_cine_funcion_by_message, build_cartelera_message, build_funcion_especifica_message
+    """
+    Todo lo del CINE, según lo que pregunten:
+      - tarifas/boleta/precio        → bloque de TARIFAS (de la info extra del cine)
+      - confitería/combos/crispetas  → bloque de CONFITERÍA
+      - dónde queda / ubicación      → datos del local del cine
+      - una película puntual         → esa película (horarios + sinopsis)
+      - lo demás                     → cartelera completa (corta: título, horarios, ficha)
+    La info extra (tarifas/confitería) la carga 'Sincronizar web' o la
+    plantilla de cine; si no existe, se dice con honestidad y se da el contacto.
+    """
+    from services.cine import (find_cine_store, find_cine_funcion_by_message, build_cartelera_message,
+                               build_funcion_especifica_message, bloque_info_extra)
     from routers.webhook import _wrap
 
     cine_store = find_cine_store(db)
@@ -335,13 +377,55 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
         traza.paso("ejecucion", "No hay tienda de cine registrada")
         return {"text": build_cartelera_message(None), "image_urls": [], "location": None}
 
+    msg = _sin_tildes_simple(mensaje)
+    nom = nombre_cliente()
+
+    def _intro(frase: str) -> str:
+        # "Sebastián, estas son…" / "Estas son…"
+        return f"{nom}, {frase}" if nom else frase[0].upper() + frase[1:]
+
+    def _contacto() -> str:
+        tel = re.sub(r"\D", "", cine_store.phone or "")
+        return f" Puedes confirmar directo con el cine al {cine_store.phone}." if tel else " Puedes confirmar en la taquilla del cine."
+
+    # ── Tarifas / precios ──
+    if any(k in msg for k in ("tarifa", "precio", "cuanto vale", "cuanto cuesta", "cuanto esta", "boleta", "boleteria", "entrada", "cuanto sale", "valor de")) and not any(k in msg for k in ("combo", "crispeta", "confiteria", "palomita")):
+        bloque = bloque_info_extra(cine_store, "tarifa")
+        traza.paso("ejecucion", f"Cine → tarifas ({'encontradas' if bloque else 'sin datos cargados'})")
+        if bloque:
+            return {"text": f"🎟️ {_intro(f'estas son las tarifas de *{cine_store.name}*:')}\n\n{bloque}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+        return {"text": f"Aún no tengo las tarifas de *{cine_store.name}* cargadas.{_contacto()}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+
+    # ── Confitería / combos ──
+    if any(k in msg for k in ("combo", "crispeta", "confiteria", "palomita", "gaseosa", "perro caliente", "nachos")):
+        bloque = bloque_info_extra(cine_store, "confiter")
+        traza.paso("ejecucion", f"Cine → confitería ({'encontrada' if bloque else 'sin datos cargados'})")
+        if bloque:
+            return {"text": f"🍿 {_intro(f'esto tiene la confitería de *{cine_store.name}*:')}\n\n{bloque}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+        return {"text": f"Aún no tengo los combos de confitería de *{cine_store.name}* cargados.{_contacto()}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+
+    # ── Ubicación / horario del cine como local ──
+    if any(k in msg for k in ("donde queda", "donde esta", "ubicacion", "en que piso", "como llego", "horario del cine", "a que hora abre")) and not any(k in msg for k in ("pelicula", "funcion", "cartelera")):
+        partes = [f"🎬 *{cine_store.name}*"]
+        ubic = ", ".join(x for x in [cine_store.floor if (cine_store.floor or "").lower() != "por confirmar" else "", cine_store.location_hint] if x)
+        if ubic:
+            partes.append(f"📍 {ubic}")
+        if cine_store.schedule:
+            partes.append(f"🕒 {cine_store.schedule}")
+        if cine_store.phone:
+            partes.append(f"📞 {cine_store.phone}")
+        traza.paso("ejecucion", "Cine → ubicación/datos del local")
+        return {"text": "\n".join(partes), "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+
+    # ── Película puntual ──
     funcion = find_cine_funcion_by_message(db, cine_store.id, mensaje)
     if funcion:
         traza.paso("ejecucion", f"Película puntual: '{funcion.title}'")
         from models.entity_photo import get_entity_photo
         poster = get_entity_photo(db, "cine_funcion", funcion.id, "poster")
-        return {"text": build_funcion_especifica_message(funcion, cine_store), "image_urls": _wrap([poster]), "location": None}
+        return {"text": build_funcion_especifica_message(funcion, cine_store), "image_urls": _wrap([poster]), "location": None, "mentioned_store_id": cine_store.id}
 
+    # ── Cartelera completa ──
     traza.paso("ejecucion", f"Cartelera completa de '{cine_store.name}'")
     from models.entity_photo import get_entity_photo
     posters = []
@@ -350,7 +434,11 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
             p = get_entity_photo(db, "cine_funcion", f.id, "poster")
             if p:
                 posters.append(p)
-    return {"text": build_cartelera_message(cine_store), "image_urls": posters, "location": None}
+    texto = build_cartelera_message(cine_store)
+    # Si preguntaron por una película que NO está en cartelera, se aclara.
+    if any(k in msg for k in ("horario", "a que hora", "dan ", "funcion", "de que trata")) and "pelicula" not in msg and "cartelera" not in msg and "cine" not in msg:
+        texto = "Esa película no está en la cartelera de esta semana. " + texto
+    return {"text": texto, "image_urls": posters, "location": None, "mentioned_store_id": cine_store.id}
 
 
 async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict:
@@ -366,7 +454,10 @@ async def _ejecutar_busqueda_categoria(db, phone_number, mensaje, traza) -> dict
     from services.category_search import detectar_categoria, construir_lista_locales
     from services.rag import find_all_stores_by_category
 
-    cat = detectar_categoria(mensaje)
+    # La IA (o las reglas) YA decidieron que es una búsqueda por categoría:
+    # no exigimos verbo ("dónde", "quiero"). "tiendas de ropa", "droguerías",
+    # "juguetería" deben listar TODOS los locales, no caer a la IA.
+    cat = detectar_categoria(mensaje, exigir_intencion=False)
     if cat:
         nombre_cat, terminos = cat
         locales = find_all_stores_by_category(db, terminos)
@@ -416,7 +507,7 @@ async def _ejecutar_gestion_domicilio(db, phone_number, mensaje, traza) -> dict:
     """
     traza.paso("ejecucion", "Gestión de domicilio → delega en el flujo probado (_route_message) para no romper el paso a paso")
     from routers.webhook import _route_message
-    resultado = await _route_message(db, phone_number, "", mensaje)
+    resultado = await _route_message(db, phone_number, nombre_cliente(), mensaje)
     return {
         "text": resultado.get("text", ""),
         "image_urls": resultado.get("image_urls", []),
@@ -836,23 +927,58 @@ def _menciona_pelicula_en_cartelera(db, mensaje: str) -> str | None:
     """
     try:
         from services.store_transfer import _sin_tildes
+        from services.cine import palabras_clave_titulo
         from models.cine_funcion import CineFuncion
         import re as _re
-        GENERICAS = {"punto", "muerto", "madre", "nueva", "parte", "gran",
-                     "nuevo", "mundo", "vida", "amor", "casa", "dos"}
         msg = _sin_tildes(mensaje)
         funciones = db.query(CineFuncion).filter(CineFuncion.active == True).all()
         for f in funciones:
-            for w in _re.findall(r"[a-z0-9]+", _sin_tildes(f.title)):
-                if len(w) >= 4 and w not in GENERICAS:
-                    if _re.search(rf"\b{_re.escape(w)}\b", msg):
-                        return f.title
+            for w in palabras_clave_titulo(f.title):
+                if _re.search(rf"\b{_re.escape(w)}\b", msg):
+                    return f.title
     except Exception:
         pass
     return None
 
 
-async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str, modo: str = "prueba") -> dict:
+def _sin_tildes_simple(t: str) -> str:
+    from services.store_transfer import _sin_tildes
+    return _sin_tildes(t or "")
+
+
+PALABRAS_CARTA = ("carta", "menú", "menu", "catálogo", "catalogo", "qué venden", "que venden", "qué tienen", "que tienen", "productos de")
+
+
+def _atajo_carta_link(db, mensaje: str, traza) -> dict | None:
+    """Si piden la carta/menú/catálogo de un local que la tiene como ENLACE, responde directo."""
+    try:
+        msg = mensaje.lower()
+        if not any(p in msg for p in PALABRAS_CARTA):
+            return None
+        from services.store_transfer import find_store_by_message
+        st = find_store_by_message(db, mensaje)
+        if not st:
+            return None
+        link = st.carta_como_link() if hasattr(st, "carta_como_link") else None
+        if not link:
+            return None
+        nom = nombre_cliente()
+        saludo = f"¡Claro, {nom}! " if nom else "¡Claro! "
+        texto = f"{saludo}Aquí puedes ver la carta/catálogo de *{st.name}* 👉 {link}"
+        if st.phone:
+            tel = re.sub(r"\D", "", st.phone)
+            if tel:
+                if tel.startswith("3") and len(tel) == 10:
+                    tel = "57" + tel
+                texto += f"\nSi quieres pedir o preguntar algo, escríbeles directo: https://wa.me/{tel}"
+        traza.paso("atajo_carta", f"'{st.name}' tiene la carta como enlace → se entrega directo sin IA")
+        return {"text": texto, "image_urls": [], "location": None, "mentioned_store_id": st.id}
+    except Exception as e:
+        traza.paso("atajo_carta_error", str(e)[:80])
+        return None
+
+
+async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str, modo: str = "prueba", user_name: str = "") -> dict:
     """
     Punto de entrada único del orquestador. Recibe el mensaje, decide,
     ejecuta, guarda la traza, y devuelve la respuesta en el MISMO
@@ -861,7 +987,22 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
     diferencia.
     """
     traza = Traza(phone_number, mensaje, modo)
-    traza.paso("inicio", f"Mensaje recibido: '{mensaje}'")
+    _usuario_actual.set(user_name or "")
+    traza.paso("inicio", f"Mensaje recibido: '{mensaje}'" + (f" (cliente: {nombre_cliente()})" if nombre_cliente() else ""))
+
+    # ATAJO CARTA/CATÁLOGO POR LINK: "carta de Gari Sushi", "menú de X",
+    # "catálogo de Y" → si el local tiene su carta como ENLACE (Instagram,
+    # web, WhatsApp), se entrega directo, sin IA (antes la IA decía
+    # "te comparto lo que tengo de su carta 👇" y no mandaba nada).
+    atajo = _atajo_carta_link(db, mensaje, traza)
+    if atajo:
+        traza.herramienta_elegida = "conversacion_general"
+        traza.metodo_decision = "reglas"
+        traza.razon_decision = "Carta/catálogo por enlace del local (respuesta directa)"
+        traza.respuesta = atajo["text"]
+        traza.paso("fin", f"Respuesta lista ({len(traza.respuesta)} caracteres, 0 fotos)")
+        traza.guardar(db)
+        return atajo
 
     # 1. Decidir qué herramienta usar (híbrido)
     nombre_tool, metodo = await decidir_herramienta(mensaje, traza)
@@ -908,7 +1049,9 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
         "emergencia", "queja", "eventos", "sorteos", "promociones",
         "conversacion_general", "gestion_domicilio",
     }
-    if traza.herramienta_elegida not in HERRAMIENTAS_SIN_PROMO:
+    # Si la herramienta terminó delegando en la conversación general, la IA
+    # YA puso su promoción → no se agrega otra (antes salían dos seguidas).
+    if traza.herramienta_elegida not in HERRAMIENTAS_SIN_PROMO and not traza.uso_general:
         try:
             from services.ai import _texto_promo_para_pegar
             promo = _texto_promo_para_pegar(db, phone_number)
@@ -935,10 +1078,9 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
             # Solo guardar tienda de contexto si el mensaje la NOMBRA y NO
             # es una búsqueda por categoría (para no arrastrar una tienda
             # a preguntas de "zapatos", "ropa", "comida", etc.)
-            if not detectar_categoria(mensaje):
-                st = find_store_by_message(db, mensaje)
-                if st:
-                    resultado["mentioned_store_id"] = st.id
+            st = find_store_by_message(db, mensaje)
+            if st and (not detectar_categoria(mensaje) or _sin_tildes_simple(st.name) in _sin_tildes_simple(mensaje)):
+                resultado["mentioned_store_id"] = st.id
         except Exception:
             pass
     if resultado.get("mentioned_store_id"):
