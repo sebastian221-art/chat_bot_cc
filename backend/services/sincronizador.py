@@ -551,35 +551,57 @@ def _candidatas_afiche(html: str) -> list[str]:
     Encuentra el AFICHE (la imagen más grande de Wix en la página) y devuelve
     varias URLs para descargarlo, de la más conveniente a la más cruda.
 
-    Por qué así: Wix publica la MISMA imagen en varios tamaños (miniaturas de
-    96px, 400px, 1920px…). Antes se elegía mal (salía la de 96px) y además
-    al quitar el formato AVIF la URL quedaba inválida (403). Ahora:
-      1. Se identifica la imagen por su tamaño ORIGINAL (…~mv2_d_1920_1920…).
-      2. Se CONSTRUYE la URL de descarga en grande y en JPG (que la visión
-         acepta), con respaldos si Wix rechaza alguna variante.
+    Por qué así: Wix publica la MISMA imagen en varios tamaños y con el
+    identificador escrito de varias formas (a veces completo
+    "…~mv2_d_1920_1920_s_2.png" y a veces recortado "…~mv2_d_1920_1920").
+    Si se arma la URL con el identificador RECORTADO, Wix responde 403.
+    Ahora:
+      1. Se agrupan todas las apariciones por el código único de la imagen
+         (lo que va antes de "~mv2") y se queda con la versión MÁS COMPLETA
+         (la que termina en .png/.jpg/.webp…).
+      2. Se elige la imagen de mayor tamaño original (…_d_1920_1920…).
+      3. Se construyen URLs de descarga en grande y en JPG, con respaldos.
     """
-    medias: dict[str, int] = {}
-    for u in set(re.findall(r"https://static\.wixstatic\.com/media/([^/\s\"'<>)]+)", html)):
-        m = re.search(r"mv2_d_(\d+)_(\d+)", u)
+    html = html.replace("%7E", "~").replace("%7e", "~").replace("\\/", "/")
+    # codigo -> (identificador más completo, área)
+    por_codigo: dict[str, tuple[str, int]] = {}
+    patron = re.compile(r"https://static\.wixstatic\.com/media/([A-Za-z0-9_]+~mv2[A-Za-z0-9_.\-]*)")
+    for ident in set(patron.findall(html)):
+        codigo = ident.split("~mv2", 1)[0]
+        m = re.search(r"mv2_d_(\d+)_(\d+)", ident)
         area = int(m.group(1)) * int(m.group(2)) if m else 0
-        medias[u] = max(medias.get(u, 0), area)
-    if not medias:
+        if area == 0:
+            for mm in re.finditer(re.escape(ident) + r"/v1/(?:fill|fit)/w_(\d+),h_(\d+)", html):
+                area = max(area, int(mm.group(1)) * int(mm.group(2)))
+        tiene_ext = bool(re.search(r"\.(png|jpe?g|webp|gif|avif)$", ident, re.I))
+        prev = por_codigo.get(codigo)
+        # preferimos el identificador con extensión (completo); si empatan, el más largo
+        if prev is None:
+            por_codigo[codigo] = (ident, area)
+        else:
+            prev_ident, prev_area = prev
+            prev_ext = bool(re.search(r"\.(png|jpe?g|webp|gif|avif)$", prev_ident, re.I))
+            mejor = ident if (tiene_ext and not prev_ext) or (tiene_ext == prev_ext and len(ident) > len(prev_ident)) else prev_ident
+            por_codigo[codigo] = (mejor, max(area, prev_area))
+    if not por_codigo:
         return []
-    # también considerar tamaños pedidos w_,h_ cuando no hay mv2_d
-    for u in list(medias):
-        if medias[u] == 0:
-            for mm in re.finditer(re.escape(u) + r"/v1/fill/w_(\d+),h_(\d+)", html):
-                medias[u] = max(medias[u], int(mm.group(1)) * int(mm.group(2)))
-    media, area = max(medias.items(), key=lambda kv: kv[1])
+    media, area = max(por_codigo.values(), key=lambda t: t[1])
     if area < 600 * 600:
         return []
     base = f"https://static.wixstatic.com/media/{media}"
-    return [
+    cands = [
         f"{base}/v1/fill/w_1600,h_1600,al_c,q_85/afiche.jpg",   # grande, JPG
-        f"{base}/v1/fill/w_1600,h_1600,al_c,q_85,enc_auto/afiche.png",
         f"{base}/v1/fit/w_1600,h_1600,q_85/afiche.jpg",
+        f"{base}/v1/fill/w_1600,h_1600,al_c,q_85,enc_auto/afiche.png",
         base,                                                   # original tal cual
     ]
+    # además, la URL exacta tal como aparece en la página (sin AVIF, que la visión no lee)
+    for u in re.findall(re.escape(base) + r"/v1/[^\s\"'<>)]+", html):
+        u2 = re.sub(r",?enc_avif", "", u).replace(",quality_auto", "")
+        if u2 not in cands:
+            cands.insert(3, u2)
+            break
+    return cands
 
 
 def _url_afiche(html: str) -> str | None:
@@ -592,7 +614,7 @@ async def _descargar_afiche(html: str) -> tuple[bytes, str, str]:
     candidatas = _candidatas_afiche(html)
     if not candidatas:
         raise RuntimeError("no se encontró la imagen del afiche en la página")
-    ultimo = ""
+    intentos: list[str] = []
     headers = {"User-Agent": UA, "Referer": "https://www.elpuente.com.co/", "Accept": "image/*,*/*;q=0.8"}
     async with httpx.AsyncClient(timeout=40.0, follow_redirects=True, headers=headers) as c:
         for url in candidatas:
@@ -601,10 +623,10 @@ async def _descargar_afiche(html: str) -> tuple[bytes, str, str]:
                 if r.status_code == 200 and r.content and len(r.content) > 5000:
                     mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
                     return r.content, mime, url
-                ultimo = f"{r.status_code} en {url[:90]}"
+                intentos.append(f"{r.status_code} en …{url[-70:]}")
             except Exception as e:
-                ultimo = f"{str(e)[:60]} en {url[:90]}"
-    raise RuntimeError(f"no se pudo descargar el afiche ({ultimo})")
+                intentos.append(f"{str(e)[:50]} en …{url[-70:]}")
+    raise RuntimeError("no se pudo descargar el afiche (" + " | ".join(intentos) + ")")
 
 
 def _preparar_imagen_para_vision(img: bytes, mime: str) -> tuple[bytes, str]:
