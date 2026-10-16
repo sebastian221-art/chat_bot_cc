@@ -610,23 +610,62 @@ def _url_afiche(html: str) -> str | None:
 
 
 async def _descargar_afiche(html: str) -> tuple[bytes, str, str]:
-    """Descarga el afiche probando varias URLs (con Referer, que Wix exige a veces)."""
+    """
+    Descarga el afiche probando varias URLs y varias ESTRATEGIAS:
+      1. Directo a Wix con cabeceras idénticas a un navegador (+ Referer).
+      2. Directo a Wix sin Referer.
+      3. A través de un servicio público de imágenes (images.weserv.nl), que
+         descarga la imagen desde SUS servidores y nos la entrega en JPG.
+         Sirve cuando Wix bloquea las IPs de servidores (como Railway) con 403.
+    """
+    import urllib.parse
     candidatas = _candidatas_afiche(html)
     if not candidatas:
         raise RuntimeError("no se encontró la imagen del afiche en la página")
     intentos: list[str] = []
-    headers = {"User-Agent": UA, "Referer": "https://www.elpuente.com.co/", "Accept": "image/*,*/*;q=0.8"}
-    async with httpx.AsyncClient(timeout=40.0, follow_redirects=True, headers=headers) as c:
-        for url in candidatas:
+    nav = {
+        "User-Agent": UA,
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "identity",
+        "Sec-Fetch-Dest": "image", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Site": "cross-site",
+        "Cache-Control": "no-cache", "Pragma": "no-cache",
+    }
+    con_ref = dict(nav, Referer="https://www.elpuente.com.co/", Origin="https://www.elpuente.com.co")
+
+    def _ok(r) -> bool:
+        ct = (r.headers.get("content-type") or "").lower()
+        return r.status_code == 200 and r.content and len(r.content) > 5000 and "text/html" not in ct
+
+    async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as c:
+        # Estrategias 1 y 2: directo a Wix
+        for headers, etiqueta in ((con_ref, "wix+ref"), (nav, "wix")):
+            for url in candidatas:
+                try:
+                    r = await c.get(url, headers=headers)
+                    if _ok(r):
+                        mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
+                        return r.content, mime, url
+                    intentos.append(f"{etiqueta}:{r.status_code}")
+                except Exception as e:
+                    intentos.append(f"{etiqueta}:{str(e)[:40]}")
+        # Estrategia 3: proxy público de imágenes
+        originales = [candidatas[-1]] + [u for u in candidatas if u != candidatas[-1]][:2]
+        for url in originales:
+            sin_esquema = re.sub(r"^https?://", "", url)
+            purl = ("https://images.weserv.nl/?url=" + urllib.parse.quote(sin_esquema, safe="")
+                    + "&w=1600&h=1600&fit=inside&output=jpg&q=85")
             try:
-                r = await c.get(url)
-                if r.status_code == 200 and r.content and len(r.content) > 5000:
-                    mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
-                    return r.content, mime, url
-                intentos.append(f"{r.status_code} en …{url[-70:]}")
+                r = await c.get(purl, headers={"User-Agent": UA, "Accept": "image/*,*/*;q=0.8"})
+                if _ok(r):
+                    return r.content, "image/jpeg", url
+                intentos.append(f"proxy:{r.status_code}")
             except Exception as e:
-                intentos.append(f"{str(e)[:50]} en …{url[-70:]}")
-    raise RuntimeError("no se pudo descargar el afiche (" + " | ".join(intentos) + ")")
+                intentos.append(f"proxy:{str(e)[:40]}")
+    raise RuntimeError(
+        "Wix bloqueó la descarga del afiche desde el servidor (" + ", ".join(intentos[:12]) + "). "
+        "Solución: súbelo manualmente con el botón 'Leer afiche (subir imagen)'."
+    )
 
 
 def _preparar_imagen_para_vision(img: bytes, mime: str) -> tuple[bytes, str]:
@@ -734,7 +773,24 @@ def _buscar_por_nombre(db, modelo, campo: str, nombre: str):
     return mejor
 
 async def sincronizar_campanas(db: Session, forzar: bool = False) -> dict:
-    """Descarga el afiche; si cambió (o forzar=True), lo lee con visión y carga eventos/sorteos/promos."""
+    """Descarga el afiche de la web; si cambió (o forzar=True), lo lee con visión y carga eventos/sorteos/promos."""
+    res = {"afiche_cambio": False, "eventos": 0, "sorteos": 0, "promos": 0, "errores": [], "mes": ""}
+    try:
+        html = await _get(URL_CAMPANAS)
+        img, mime, url = await _descargar_afiche(html)
+    except Exception as e:
+        res["errores"].append(f"Campañas: {str(e)[:260]}")
+        return res
+    return await procesar_afiche(db, img, mime, url, forzar=forzar)
+
+
+async def procesar_afiche_subido(db: Session, img: bytes, mime: str) -> dict:
+    """Afiche subido a mano desde el panel (cuando Wix bloquea la descarga). Siempre se lee."""
+    return await procesar_afiche(db, img, mime, "subido manualmente desde el panel", forzar=True)
+
+
+async def procesar_afiche(db: Session, img: bytes, mime: str, url: str, forzar: bool = False) -> dict:
+    """Lee el afiche con visión (si cambió o forzar=True) y carga eventos/sorteos/promos."""
     from models.sync_estado import sync_get, sync_set
     from models.event import Event
     from models.raffle import Raffle
@@ -742,8 +798,6 @@ async def sincronizar_campanas(db: Session, forzar: bool = False) -> dict:
 
     res = {"afiche_cambio": False, "eventos": 0, "sorteos": 0, "promos": 0, "errores": [], "mes": ""}
     try:
-        html = await _get(URL_CAMPANAS)
-        img, mime, url = await _descargar_afiche(html)
         img, mime = _preparar_imagen_para_vision(img, mime)
         h = hashlib.sha256(img).hexdigest()
         if not forzar and sync_get(db, "afiche_hash") == h:

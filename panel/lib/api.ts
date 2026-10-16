@@ -104,6 +104,7 @@ export const importAdministrativo = (file: File) => uploadFile('/import/administ
 export const importCine = (file: File) => uploadFile('/import/cine', file)
 export const syncWebAhora = (forzarAfiche = false) => req(`/sync/ahora?forzar_afiche=${forzarAfiche}`, { method: 'POST' })
 export const getSyncEstado = () => req('/sync/estado')
+export const leerAficheSubido = (file: File) => uploadFile('/sync/afiche', file)
 export const deleteAllStores = () => req('/stores?confirmar=SI', { method: 'DELETE' })
 
 // ── Eventos ──────────────────────────────────────────────────────

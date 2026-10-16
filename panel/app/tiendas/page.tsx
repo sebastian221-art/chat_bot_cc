@@ -1,7 +1,7 @@
 // 📄 ARCHIVO: panel/app/tiendas/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, importAdministrativo, importCine, syncWebAhora, StorePayload } from '@/lib/api'
+import { getStores, createStore, updateStore, deleteStore, deleteAllStores, exportStores, importStores, importStoresExcel, importAdministrativo, importCine, syncWebAhora, leerAficheSubido, StorePayload } from '@/lib/api'
 import Modal from '@/components/Modal'
 import StorePhotoGallery from '@/components/StorePhotoGallery'
 import CineCartelera from '@/components/CineCartelera'
@@ -37,6 +37,7 @@ export default function TiendasPage() {
   const excelInputRef = useRef<HTMLInputElement>(null)
   const adminInputRef = useRef<HTMLInputElement>(null)
   const cineInputRef = useRef<HTMLInputElement>(null)
+  const aficheInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -108,6 +109,23 @@ export default function TiendasPage() {
     } finally {
       setImporting(false)
       if (cineInputRef.current) cineInputRef.current.value = ''
+    }
+  }
+
+  const handleLeerAfiche = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSyncing(true)
+    try {
+      const r = await leerAficheSubido(file)
+      const err = (r.errores && r.errores.length) ? '\n\n⚠️ Avisos:\n- ' + r.errores.join('\n- ') : ''
+      alert((r.mensaje || 'Afiche procesado.') + err + '\n\nRevisa Eventos, Sorteos y Promociones en el panel.')
+      await load()
+    } catch (err: any) {
+      alert('Error al leer el afiche: ' + err.message)
+    } finally {
+      setSyncing(false)
+      if (aficheInputRef.current) aficheInputRef.current.value = ''
     }
   }
 
@@ -220,6 +238,13 @@ export default function TiendasPage() {
             onChange={handleImportCine}
             className="hidden"
           />
+          <input
+            ref={aficheInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLeerAfiche}
+            className="hidden"
+          />
           <button
             onClick={() => excelInputRef.current?.click()}
             disabled={importing}
@@ -250,6 +275,14 @@ export default function TiendasPage() {
             className="flex items-center gap-2 text-white bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sincronizando...' : 'Sincronizar web'}
+          </button>
+          <button
+            onClick={() => aficheInputRef.current?.click()}
+            disabled={syncing || importing}
+            title="Sube la imagen del afiche de campañas del mes y la IA de visión carga eventos, sorteos y promociones"
+            className="flex items-center gap-2 text-white bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-sm font-medium px-3 py-2 rounded-lg transition-all"
+          >
+            <Upload size={14} /> Leer afiche (imagen)
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}

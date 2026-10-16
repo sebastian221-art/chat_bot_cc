@@ -796,6 +796,32 @@ async def sync_ahora(forzar_afiche: bool = False, db: Session = Depends(get_db))
     return {"ok": not errores, "mensaje": msg, "errores": errores, "resumen": resumen}
 
 
+@router.post("/sync/afiche")
+async def sync_afiche_subido(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Lee un afiche de campañas SUBIDO A MANO (imagen JPG/PNG) con visión y
+    carga sus eventos, sorteos y promociones. Es el plan B cuando Wix bloquea
+    la descarga automática desde el servidor (error 403).
+    """
+    from services.sincronizador import procesar_afiche_subido
+    contenido = await file.read()
+    if not contenido or len(contenido) < 5000:
+        raise HTTPException(400, "La imagen está vacía o es demasiado pequeña.")
+    mime = (file.content_type or "image/jpeg").split(";")[0].strip()
+    if not mime.startswith("image/"):
+        raise HTTPException(400, "Sube una imagen (JPG o PNG) del afiche.")
+    k = await procesar_afiche_subido(db, contenido, mime)
+    errores = k.get("errores") or []
+    msg = (f"🖼️ Afiche leído ({k.get('mes') or 'mes no detectado'}): {k.get('eventos', 0)} eventos, "
+           f"{k.get('sorteos', 0)} sorteos, {k.get('promos', 0)} promos.")
+    if not errores:
+        try:
+            load_stores_to_rag(db)
+        except Exception:
+            pass
+    return {"ok": not errores, "mensaje": msg, "errores": errores, "resumen": k}
+
+
 @router.get("/sync/estado")
 def sync_estado(db: Session = Depends(get_db)):
     """Último resultado de la sincronización automática y datos del afiche leído."""
