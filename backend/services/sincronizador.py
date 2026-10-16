@@ -683,7 +683,15 @@ def _preparar_imagen_para_vision(img: bytes, mime: str) -> tuple[bytes, str]:
         out = io.BytesIO()
         im.save(out, format="JPEG", quality=85, optimize=True)
         return out.getvalue(), "image/jpeg"
-    except Exception:
+    except Exception as e:
+        # Si el formato no se pudo abrir (p. ej. AVIF sin soporte), avisamos claro
+        # en vez de mandarle a la visión algo que va a rechazar con "invalid image data".
+        if mime not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+            raise RuntimeError(
+                f"no pude convertir la imagen ({mime or 'formato desconocido'}): {str(e)[:60]}. "
+                "Súbela en JPG o PNG (en el navegador: clic derecho → Guardar imagen como → JPG/PNG, "
+                "o abre la imagen y expórtala/pegala en Paint y guárdala como PNG)."
+            )
         return img, mime
 
 
