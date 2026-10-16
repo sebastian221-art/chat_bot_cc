@@ -24,7 +24,7 @@ no aparecerá — eso se resuelve con datos, no con código.
 # base de datos (para cubrir sinónimos y variantes de escritura).
 CATEGORIAS_BUSQUEDA = {
     # ── Comida ──
-    "hamburguesas": ["hamburgues"],
+    "hamburguesas": ["hamburgues", "burger"],
     "pizza": ["pizza", "pizzas"],
     "tacos": ["taco", "tacos", "mexicana"],
     "pollo": ["pollo", "asadero"],
@@ -80,6 +80,48 @@ CATEGORIAS_BUSQUEDA = {
     "bancos": ["banco", "cajero", "financiera"],
 }
 
+# Para algunas categorías, las palabras que DETECTAN la intención en el
+# mensaje no sirven para BUSCAR en la base: "comer" está dentro de
+# "Local COMERcial" y traía 76 locales (todo el mall) cuando alguien
+# preguntaba por "dónde comer". Aquí van los términos que sí se usan
+# contra la base de datos para esas categorías.
+TERMINOS_DB = {
+    "comida": ["restaurante", "comida", "almuerzo", "plazoleta de comidas", "cocina"],
+}
+
+
+def _plano(t: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFD", (t or "").lower().strip())
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+
+def _terminos_db(nombre_cat: str, terminos: list[str]) -> list[str]:
+    return TERMINOS_DB.get(nombre_cat, terminos)
+
+
+def _coincide_termino(termino: str, msg: str) -> bool:
+    """
+    ¿El término aparece en el mensaje? Exacto, o con un error de tecleo
+    pequeño en palabras largas ("hambuirguesas" ≈ "hamburgues").
+    Solo se tolera el error en términos de 6+ letras, para no confundir
+    palabras cortas distintas.
+    """
+    if termino in msg:
+        return True
+    if len(termino) < 6 or " " in termino:
+        return False
+    import difflib
+    for palabra in msg.split():
+        if len(palabra) < 5:
+            continue
+        trozo = palabra[:len(termino) + 1]
+        if difflib.SequenceMatcher(None, termino, trozo).ratio() >= 0.85 or \
+           difflib.SequenceMatcher(None, termino, palabra).ratio() >= 0.85:
+            return True
+    return False
+
+
 # Palabras que indican intención de BUSCAR un tipo (no una tienda puntual)
 INTENCION_BUSQUEDA = [
     "dónde", "donde", "qué locales", "que locales", "qué tiendas", "que tiendas",
@@ -111,7 +153,7 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
     "dónde"/"quiero". Antes "tiendas de ropa" o "droguerías" devolvían
     None por no traer esas palabras y el bot terminaba inventando.
     """
-    msg = msg_limpio = mensaje.lower().strip()
+    msg = _plano(mensaje)  # minúsculas y sin tildes: "jugueteria" = "juguetería"
 
     # EXCEPCIÓN: si preguntan por la UBICACIÓN de la zona de comidas /
     # plazoleta (no por comida en sí), NO es una búsqueda de categoría —
@@ -123,7 +165,7 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
         return None
 
     # ¿Hay al menos una señal de que quieren BUSCAR algo?
-    hay_intencion = any(p in msg for p in INTENCION_BUSQUEDA)
+    hay_intencion = any(_plano(p) in msg for p in INTENCION_BUSQUEDA)
     if not hay_intencion and len(msg.replace("?", " ").replace("¿", " ").split()) <= MAX_PALABRAS_MENSAJE_CORTO:
         hay_intencion = True  # mensaje corto tipo "droguerías" / "tiendas de ropa"
     if not hay_intencion and not exigir_intencion:
@@ -138,8 +180,8 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
     for nombre_cat, terminos in CATEGORIAS_BUSQUEDA.items():
         # Coincide si el nombre de la categoría, o cualquiera de sus
         # términos de búsqueda, aparece en el mensaje.
-        if nombre_cat in msg or any(t in msg for t in terminos):
-            coincidencias.append((nombre_cat, terminos))
+        if _plano(nombre_cat) in msg or any(_coincide_termino(_plano(t), msg) for t in terminos):
+            coincidencias.append((nombre_cat, _terminos_db(nombre_cat, terminos)))
 
     if not coincidencias:
         return None

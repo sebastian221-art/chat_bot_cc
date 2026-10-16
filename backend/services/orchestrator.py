@@ -267,8 +267,8 @@ async def _ejecutar_conversacion_general(db, phone_number, mensaje, traza) -> di
     except Exception as e:
         traza.paso("error", f"_route_message falló: {str(e)}")
 
-    # Red 1: reintento si vino vacío
-    if not resultado or not (resultado.get("text") or "").strip():
+    # Red 1: reintento si vino vacío o ridículamente corto ("Juan, no")
+    if not resultado or len((resultado.get("text") or "").strip()) < 12:
         traza.paso("reintento", "_route_message devolvió vacío → se reintenta una vez")
         try:
             resultado = await _intentar()
@@ -941,6 +941,27 @@ def _menciona_pelicula_en_cartelera(db, mensaje: str) -> str | None:
     return None
 
 
+SERVICIOS_NO_CINE = ("parqueadero", "centro comercial", "el mall", "banco", "cajero", "administracion", "punto de informacion",
+                     "misa", "bano", "atencion", "jumbo", "torre", "consultorio", "medico", "gimnasio", "casino", "registro")
+
+
+def _parece_pregunta_de_funcion(db, mensaje: str) -> bool:
+    """'horarios de X', 'a qué hora dan X', 'de qué trata X', 'funciones de X' — y X no es tienda ni servicio."""
+    try:
+        msg = _sin_tildes_simple(mensaje)
+        if not re.search(r"\b(horarios? de|a que horas? (dan|pasan|es)|de que trata|funcion(es)? de|dan la pelicula|pasan)\b", msg):
+            return False
+        if any(k in msg for k in SERVICIOS_NO_CINE):
+            return False
+        from services.store_transfer import find_store_by_message
+        if find_store_by_message(db, mensaje):
+            return False
+        from models.cine_funcion import CineFuncion
+        return db.query(CineFuncion).filter(CineFuncion.active == True).count() > 0
+    except Exception:
+        return False
+
+
 def _sin_tildes_simple(t: str) -> str:
     from services.store_transfer import _sin_tildes
     return _sin_tildes(t or "")
@@ -1016,6 +1037,15 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
             traza.paso("correccion_cine", f"El mensaje nombra la película '{peli}' → se reencamina a cartelera_cine (venía como '{nombre_tool}')")
             nombre_tool = "cartelera_cine"
             metodo = "reglas"
+
+    # Pregunta de CINE sin nombrar película conocida ("horarios de Vértigo 2"
+    # cuando ya salió de cartelera, "a qué hora dan X"): si no es una tienda
+    # ni un servicio del mall, va a cine, que responde "no está en cartelera"
+    # y muestra la cartelera actual (antes la IA contestaba "Juan, no").
+    if nombre_tool == "conversacion_general" and _parece_pregunta_de_funcion(db, mensaje):
+        traza.paso("correccion_cine", "Pregunta por horarios/función de algo que no es tienda ni servicio → cartelera_cine")
+        nombre_tool = "cartelera_cine"
+        metodo = "reglas"
 
     traza.herramienta_elegida = nombre_tool
 
