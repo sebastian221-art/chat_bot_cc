@@ -1176,6 +1176,5 @@ async def ejecutar_sincronizacion(db: Session, forzar_afiche: bool = False) -> d
     except Exception:
         pass
 
-        
     print(f"  🔄  Sincronización web: cine={resumen['cine']} | mall={resumen['mall']} | campañas={resumen['campanas']}")
     return resumen
