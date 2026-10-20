@@ -219,32 +219,20 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
     return coincidencias[0]
 
 
-# Nivel de cada zona del centro comercial (según la plantilla del mall).
-# Sirve para completar el nivel cuando un local lo tiene vacío o "Por
-# confirmar" pero sí tiene zona — así todas las líneas salen iguales.
-NIVEL_POR_ZONA = {
-    "pasillo barichara": "Nivel 1", "pasillo velez": "Nivel 1", "pasillo socorro": "Nivel 1",
-    "pasillo charala": "Nivel 2", "pasillo paramo": "Nivel 2", "plaza principal": "Nivel 2",
-    "pasillo curiti": "Nivel 3", "zona terrazas": "Nivel 3", "plazoleta de comidas la ceiba": "Nivel 3",
-    "plazoleta de comidas": "Nivel 3",
-}
-
-
 def ubicacion_mostrable(store) -> str:
     """
-    "Nivel 1, Pasillo Vélez" / "Paseo de la Cruz" / "Torre Médica, Piso 4".
-    Completa el nivel desde la zona cuando falta y nunca muestra
-    "Por confirmar" ni deja la línea a medias.
+    Cómo se le dice al cliente dónde queda un local: SOLO la zona
+    ("Pasillo Vélez", "Plaza Principal", "Paseo de la Cruz"). El Centro
+    Comercial pidió NO hablar de niveles (confunden al cliente). La Torre
+    Médica es la excepción: ahí sí se dice el piso ("Torre Médica, Piso 4").
     """
     piso = (getattr(store, "floor", "") or "").strip()
     zona = (getattr(store, "location_hint", "") or "").strip()
     if piso.lower() == "por confirmar":
         piso = ""
-    if not piso and zona:
-        piso = NIVEL_POR_ZONA.get(_plano(zona), "")
     if zona.lower().startswith("torre"):
         return ", ".join(x for x in [zona, piso] if x)
-    return ", ".join(x for x in [piso, zona] if x)
+    return zona
 
 
 def construir_lista_locales(stores: list, nombre_categoria: str) -> str:

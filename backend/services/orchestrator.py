@@ -468,7 +468,8 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
     # ── Ubicación / horario del cine como local ──
     if any(k in msg for k in ("donde queda", "donde esta", "ubicacion", "en que piso", "como llego", "horario del cine", "a que hora abre")) and not any(k in msg for k in ("pelicula", "funcion", "cartelera")):
         partes = [f"🎬 *{cine_store.name}*"]
-        ubic = ", ".join(x for x in [cine_store.floor if (cine_store.floor or "").lower() != "por confirmar" else "", cine_store.location_hint] if x)
+        from services.category_search import ubicacion_mostrable
+        ubic = ubicacion_mostrable(cine_store)
         if ubic:
             partes.append(f"📍 {ubic}")
         if cine_store.schedule:

@@ -801,6 +801,8 @@ Reglas:
 - SORTEOS = rifas/campañas donde se gana algo registrando facturas o participando (ej. "Latido Millonario", "250 Razones").
 - PROMOCIONES = descuentos, 2x1, parqueadero gratis, beneficios por facturas, etc.
 - Fechas en DD/MM/AAAA. El año es el del afiche; si solo dice el día y mes, usa el mes/año del afiche.
+- HORARIOS: cópialos EXACTOS como están escritos, con a.m./p.m. y el día si lo dice (ej. "5:00 p.m.", "Sábado 24 · 8:00 p.m.", "11:30 a.m. y 4:00 p.m. todos los domingos", "3:00 p.m. a 2:45 a.m."). Si la hora no se lee con claridad, deja "" — NUNCA la adivines ni la cambies.
+- Las fechas y días de la semana también EXACTOS (ej. "Viernes 23 de octubre", "del 23 al 25 de octubre"). No confundas el día del show con el último día del evento.
 - Si un dato no aparece, deja el campo "" (vacío). NO inventes nada que no esté en la imagen.
 - Copia montos y condiciones tal cual (ej. "$180.000", "20% OFF afiliados Coomuldesa y Cajasan").
 /no_think"""
@@ -819,24 +821,125 @@ def _extraer_json(texto: str) -> dict | None:
         return None
 
 
-async def leer_afiche_con_vision(img_bytes: bytes, mime: str) -> dict | None:
-    from services.ai import _get_groq_client, settings, _strip_thinking_tags
-    client = _get_groq_client()
+async def _vision_json(client, settings, _strip, img_bytes: bytes, mime: str, prompt: str) -> dict | None:
     b64 = base64.b64encode(img_bytes).decode("utf-8")
-    if mime not in ("image/png", "image/jpeg", "image/jpg", "image/webp"):
-        mime = "image/png"
     completion = await client.chat.completions.create(
         model=settings.GROQ_VISION_MODEL,
         messages=[{"role": "user", "content": [
-            {"type": "text", "text": PROMPT_AFICHE},
+            {"type": "text", "text": prompt},
             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
         ]}],
         max_tokens=2500,
         temperature=0.1,
     )
-    raw = _strip_thinking_tags(completion.choices[0].message.content or "")
+    raw = _strip(completion.choices[0].message.content or "")
     return _extraer_json(raw)
 
+
+def _recortes_afiche(img_bytes: bytes) -> list[bytes]:
+    """
+    Parte el afiche en 4 cuadrantes (con 12% de solape) y agranda cada uno
+    a 1600px. La letra chica (horarios, fechas, "a.m./p.m.") se lee MUCHO
+    mejor en recortes grandes que en la imagen completa pequeña.
+    """
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        W, H = im.size
+        sol_w, sol_h = int(W * 0.12), int(H * 0.12)
+        cajas = [
+            (0, 0, W // 2 + sol_w, H // 2 + sol_h),
+            (W // 2 - sol_w, 0, W, H // 2 + sol_h),
+            (0, H // 2 - sol_h, W // 2 + sol_w, H),
+            (W // 2 - sol_w, H // 2 - sol_h, W, H),
+        ]
+        out = []
+        for c in cajas:
+            t = im.crop(c)
+            esc = 1600 / max(t.size)
+            if esc > 1:
+                t = t.resize((int(t.size[0] * esc), int(t.size[1] * esc)), Image.LANCZOS)
+            buf = io.BytesIO()
+            t.save(buf, format="JPEG", quality=90)
+            out.append(buf.getvalue())
+        return out
+    except Exception:
+        return []
+
+
+def _fusionar_lecturas(lecturas: list[dict]) -> dict:
+    """
+    Une lo leído en la imagen completa y en los 4 recortes. Misma entidad
+    (nombre parecido) → se conserva la versión con MÁS campos llenos, y los
+    campos vacíos se completan con lo que trajeron las otras lecturas.
+    """
+    def _clave(n: str) -> str:
+        return " ".join(w for w in _norm(n).split() if len(w) > 2)[:40]
+
+    def _mejor(a: dict, b: dict) -> dict:
+        res = dict(a)
+        for k, v in b.items():
+            if v and not res.get(k):
+                res[k] = v
+        # si b tiene el mismo campo pero más largo (más detalle), tomarlo
+        for k in ("descripcion", "mecanica", "detalle", "horario"):
+            if b.get(k) and len(str(b[k])) > len(str(res.get(k) or "")) + 15:
+                res[k] = b[k]
+        return res
+
+    final = {"mes": "", "eventos": [], "sorteos": [], "promociones": []}
+    for lec in lecturas:
+        if not lec:
+            continue
+        if lec.get("mes") and not final["mes"]:
+            final["mes"] = str(lec["mes"])
+        for tipo, campo in (("eventos", "nombre"), ("sorteos", "nombre"), ("promociones", "titulo")):
+            for item in lec.get(tipo) or []:
+                if not isinstance(item, dict) or not item.get(campo):
+                    continue
+                k = _clave(str(item[campo]))
+                if not k:
+                    continue
+                hit = None
+                for ex in final[tipo]:
+                    ke = _clave(str(ex[campo]))
+                    if ke == k or (len(k) > 6 and (k in ke or ke in k)) or len(set(k.split()) & set(ke.split())) >= 2:
+                        hit = ex
+                        break
+                if hit is None:
+                    final[tipo].append(dict(item))
+                else:
+                    idx = final[tipo].index(hit)
+                    final[tipo][idx] = _mejor(hit, item)
+    return final
+
+
+async def leer_afiche_con_vision(img_bytes: bytes, mime: str) -> dict | None:
+    """
+    Lee el afiche con el modelo de visión en DOS pasadas: la imagen completa
+    (para no perder nada) y 4 recortes agrandados (para leer bien la letra
+    chica: horarios, fechas, precios). Luego fusiona todo.
+    """
+    from services.ai import _get_groq_client, settings, _strip_thinking_tags
+    client = _get_groq_client()
+    if mime not in ("image/png", "image/jpeg", "image/jpg", "image/webp"):
+        mime = "image/png"
+    lecturas = []
+    try:
+        lecturas.append(await _vision_json(client, settings, _strip_thinking_tags, img_bytes, mime, PROMPT_AFICHE))
+    except Exception as e:
+        logger.warning(f"Visión afiche (completo) falló: {e}")
+    for i, rec in enumerate(_recortes_afiche(img_bytes)):
+        try:
+            lecturas.append(await _vision_json(client, settings, _strip_thinking_tags, rec, "image/jpeg",
+                                               PROMPT_AFICHE + f"\n\nNOTA: esta imagen es SOLO UNA PARTE (recorte {i + 1} de 4) del afiche. Extrae únicamente lo que se ve completo en este recorte; si un bloque está cortado, omítelo."))
+        except Exception as e:
+            logger.warning(f"Visión afiche (recorte {i + 1}) falló: {e}")
+    lecturas = [l for l in lecturas if l]
+    if not lecturas:
+        return None
+    return _fusionar_lecturas(lecturas)
 
 
 def _buscar_por_nombre(db, modelo, campo: str, nombre: str):

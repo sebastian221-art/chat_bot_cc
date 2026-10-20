@@ -214,6 +214,7 @@ def build_funcion_especifica_message(funcion: CineFuncion, store: Store) -> str:
         lines.append(f"🕒 Horarios: {funcion.showtimes}")
     if funcion.description:
         lines.append(funcion.description.strip())
-    ubic = store.floor if (store.floor or "").strip().lower() not in ("", "por confirmar") else ""
+    from services.category_search import ubicacion_mostrable
+    ubic = ubicacion_mostrable(store)
     lines.append(f"\n📍 En {store.name}" + (f", {ubic}." if ubic else "."))
     return "\n".join(lines)
