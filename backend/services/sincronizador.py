@@ -1175,5 +1175,7 @@ async def ejecutar_sincronizacion(db: Session, forzar_afiche: bool = False) -> d
         sync_set(db, "ultimo_resumen", json.dumps(resumen, ensure_ascii=False))
     except Exception:
         pass
+
+        
     print(f"  🔄  Sincronización web: cine={resumen['cine']} | mall={resumen['mall']} | campañas={resumen['campanas']}")
     return resumen
