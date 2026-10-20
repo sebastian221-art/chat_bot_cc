@@ -116,10 +116,15 @@ class Store(Base):
             f"Local: {self.local_number or 'S/N'}",
             f"Categoría: {self.category}",
         ]
-        # El piso solo se incluye si está definido — nunca "Por confirmar"
+        # Nivel: se completa desde la zona cuando falta — nunca "Por confirmar"
         # (para que la IA no se lo diga al cliente).
-        if self.floor and self.floor.strip().lower() != "por confirmar":
-            parts.insert(3, f"Piso: {self.floor}")
+        try:
+            from services.category_search import ubicacion_mostrable
+            ubic = ubicacion_mostrable(self)
+        except Exception:
+            ubic = (self.floor or "") if (self.floor or "").strip().lower() != "por confirmar" else ""
+        if ubic:
+            parts.insert(3, f"Ubicación en el centro comercial: {ubic}")
         if self.description:
             parts.append(f"Descripción: {self.description}")
         if self.schedule:

@@ -44,6 +44,19 @@ HERRAMIENTAS = [
         ],
     },
     {
+        "nombre": "administracion_mall",
+        "categoria": "Atención",
+        "descripcion": "Cuando el tema lo resuelve la ADMINISTRACIÓN del centro comercial, no una tienda: alquilar o arrendar un salón, local, espacio o stand (fiestas, eventos privados), publicidad/pauta/patrocinios, proveedores, empleo u hojas de vida, convenios. Se responde con el contacto de la administración.",
+        "palabras_clave": [
+            "alquilar", "alquiler", "alquilo", "arrendar", "arriendo", "arrendamiento",
+            "salón de eventos", "salon de eventos", "salón de fiestas", "salon de fiestas",
+            "local disponible", "locales disponibles", "espacio disponible", "poner un stand", "montar un stand",
+            "publicidad", "pautar", "pauta publicitaria", "patrocinio", "patrocinar",
+            "hoja de vida", "hojas de vida", "vacante", "vacantes", "ofertas de empleo", "trabajar en el centro comercial",
+            "ser proveedor", "proveedor", "proveedores", "administración del centro", "administracion del centro", "gerencia",
+        ],
+    },
+    {
         "nombre": "gestion_domicilio",
         "categoria": "Acción",
         "descripcion": "Cuando el cliente quiere hacer un pedido a domicilio o ya está en medio de una gestión de pedido.",
@@ -98,7 +111,7 @@ HERRAMIENTAS = [
     {
         "nombre": "eventos",
         "categoria": "Información",
-        "descripcion": "Cuando preguntan por los EVENTOS del centro comercial (actividades, ferias, shows, celebraciones, festivales). Ej: '¿qué eventos hay?', '¿hay alguna actividad?'.",
+        "descripcion": "Cuando preguntan por los EVENTOS del centro comercial (actividades, ferias, shows, celebraciones, festivales) o quieren inscribirse/participar en uno. Ej: '¿qué eventos hay?', 'quiero inscribir a mis hijos en la carrera'. NO es para alquilar un salón o hacer una fiesta privada (eso es administracion_mall).",
         "palabras_clave": ["evento", "eventos", "actividad", "actividades", "feria", "festival", "show", "celebración", "celebracion"],
     },
     {

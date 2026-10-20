@@ -25,6 +25,11 @@ class Raffle(Base):
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
 
+    def esta_vigente(self) -> bool:
+        """True si está activo y su fecha límite (end_date, DD/MM/AAAA) no pasó."""
+        from models.event import _fecha_final_vigente
+        return bool(self.active) and _fecha_final_vigente(self.end_date)
+
     def to_dict(self):
         return {
             "id": self.id,

@@ -2,6 +2,20 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, func
 from models.database import Base
 
 
+def _fecha_final_vigente(texto: str) -> bool:
+    import datetime, re
+    fechas = re.findall(r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", texto or "")
+    if not fechas:
+        return True
+    d, m, a = (int(x) for x in fechas[-1])
+    if a < 100:
+        a += 2000
+    try:
+        return datetime.date(a, m, d) >= datetime.date.today()
+    except ValueError:
+        return True
+
+
 class Event(Base):
     __tablename__ = "events"
 
@@ -17,6 +31,15 @@ class Event(Base):
     photo_url   = Column(String(500), nullable=True)  # foto/afiche del evento
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def esta_vigente(self) -> bool:
+        """
+        True si el evento NO ha pasado. Lee la ÚLTIMA fecha DD/MM/AAAA que
+        aparezca en `date` ("18/10/2026" o "23/10/2026 al 25/10/2026"); si
+        esa fecha ya pasó, False. Sin fecha interpretable (ej. "Todos los
+        domingos") se asume vigente. Así Any deja de anunciar eventos viejos.
+        """
+        return _fecha_final_vigente(self.date)
 
     def to_dict(self):
         return {

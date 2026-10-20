@@ -67,8 +67,8 @@ def load_stores_to_rag(db: Session) -> int:
     info_points = db.query(InfoPoint).all()
 
     stores = db.query(Store).filter(Store.active == True).all()
-    events = db.query(Event).all()
-    raffles = db.query(Raffle).filter(Raffle.active == True).all()
+    events = [e for e in db.query(Event).all() if e.esta_vigente()]            # eventos ya pasados no se indexan
+    raffles = [r for r in db.query(Raffle).filter(Raffle.active == True).all() if r.esta_vigente()]
     knowledge = db.query(KnowledgeEntry).filter(KnowledgeEntry.active == True).all()
 
     # Limpiar colección antes de reindexar

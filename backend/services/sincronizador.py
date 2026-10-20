@@ -891,6 +891,55 @@ async def procesar_afiche_subido(db: Session, img: bytes, mime: str) -> dict:
     return await procesar_afiche(db, img, mime, "subido manualmente desde el panel", forzar=True)
 
 
+# Nombres de lugares que la visión suele leer mal en el afiche (letra
+# pequeña) → nombre real. Se aplica a lo que llega del afiche y, en cada
+# sincronización, a lo que ya está guardado.
+CORRECCIONES_LUGAR = {
+    "plazuela guamera": "Plazoleta Guanentá",
+    "plazuela guanenta": "Plazoleta Guanentá",
+    "plazoleta guamera": "Plazoleta Guanentá",
+    "plazuela de comidas centro comercial la ceiba": "Plazoleta de Comidas La Ceiba",
+    "plazoleta de comidas centro comercial la ceiba": "Plazoleta de Comidas La Ceiba",
+    "plazuela de comidas la ceiba": "Plazoleta de Comidas La Ceiba",
+    "plazuela de comidas": "Plazoleta de Comidas La Ceiba",
+    "lobby torre empresarial": "Lobby Torre Empresarial",
+}
+
+
+def corregir_lugar(texto: str) -> str:
+    if not texto:
+        return texto
+    t = _norm(texto)
+    for malo, bueno in CORRECCIONES_LUGAR.items():
+        if malo in t:
+            return bueno
+    return texto
+
+
+def corregir_lugares_guardados(db: Session) -> int:
+    """Aplica CORRECCIONES_LUGAR a eventos y sorteos ya guardados. Devuelve cuántos cambió."""
+    from models.event import Event
+    from models.raffle import Raffle
+    n = 0
+    try:
+        for e in db.query(Event).all():
+            nuevo = corregir_lugar(e.location or "")
+            if nuevo != (e.location or ""):
+                e.location = nuevo; n += 1
+            for malo, bueno in CORRECCIONES_LUGAR.items():
+                if e.description and malo in _norm(e.description):
+                    e.description = re.sub(re.escape(malo), bueno, e.description, flags=re.I); n += 1
+        for r in db.query(Raffle).all():
+            nuevo = corregir_lugar(r.location or "")
+            if nuevo != (r.location or ""):
+                r.location = nuevo; n += 1
+        if n:
+            db.commit()
+    except Exception:
+        db.rollback()
+    return n
+
+
 async def procesar_afiche(db: Session, img: bytes, mime: str, url: str, forzar: bool = False) -> dict:
     """Lee el afiche con visión (si cambió o forzar=True) y carga eventos/sorteos/promos."""
     from models.sync_estado import sync_get, sync_set
@@ -931,12 +980,13 @@ async def procesar_afiche(db: Session, img: bytes, mime: str, url: str, forzar: 
             if hor and len(hor) > 30:
                 desc = (desc + " | Horario: " + hor).strip(" |")
                 hor = ""
+            lugar = corregir_lugar(_f(e, "lugar"))
             ex = _buscar_por_nombre(db, Event, "name", nom)
             if ex:
-                ex.date, ex.time, ex.location, ex.description = fecha[:30], hor[:30], _f(e, "lugar")[:150], desc
+                ex.date, ex.time, ex.location, ex.description = fecha[:30], hor[:30], lugar[:150], desc
                 ex.priority = max(ex.priority or 0, PRIORIDAD_EVENTO)
             else:
-                db.add(Event(name=nom[:150], date=fecha[:30], time=hor[:30], location=(_f(e, "lugar") or "Centro Comercial El Puente")[:150],
+                db.add(Event(name=nom[:150], date=fecha[:30], time=hor[:30], location=(lugar or "Centro Comercial El Puente")[:150],
                              description=desc, priority=PRIORIDAD_EVENTO))
             res["eventos"] += 1
 
@@ -1002,6 +1052,10 @@ async def ejecutar_sincronizacion(db: Session, forzar_afiche: bool = False) -> d
         resumen["mall"] = {"errores": [str(e)[:160]]}
     try:
         resumen["campanas"] = await sincronizar_campanas(db, forzar=forzar_afiche)
+        try:
+            resumen["lugares_corregidos"] = corregir_lugares_guardados(db)
+        except Exception:
+            pass
     except Exception as e:
         resumen["campanas"] = {"errores": [str(e)[:160]]}
 

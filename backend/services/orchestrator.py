@@ -339,6 +339,55 @@ async def _ejecutar_queja(db, phone_number, mensaje, traza) -> dict:
     return {"text": texto, "image_urls": [], "location": None}
 
 
+def _telefono_administracion(db) -> str:
+    """Teléfono de la Administración si está cargada como 'local' de servicios; si no, el del mall."""
+    try:
+        from models.store import Store
+        adm = db.query(Store).filter(Store.name.ilike("%administraci%")).first()
+        if adm and adm.phone:
+            return adm.phone
+    except Exception:
+        pass
+    return CONTACTO_MALL
+
+
+def _link_wa(numero: str) -> str:
+    tel = re.sub(r"\D", "", numero or "")
+    if tel.startswith("3") and len(tel) == 10:
+        tel = "57" + tel
+    return f"https://wa.me/{tel}" if tel else ""
+
+
+async def _ejecutar_administracion_mall(db, phone_number, mensaje, traza) -> dict:
+    """
+    Temas que resuelve la ADMINISTRACIÓN del centro comercial, no Any:
+    alquiler de salón/local/espacio/stand, publicidad, proveedores,
+    empleo/hojas de vida, convenios. Respuesta corta y directa con el
+    contacto, sin inventar precios ni disponibilidad.
+    """
+    nom = nombre_cliente()
+    tel_adm = _telefono_administracion(db)
+    msg = _sin_tildes_simple(mensaje)
+    if any(k in msg for k in ("salon", "alquil", "arrend", "arriendo", "espacio", "stand", "local disponible", "locales disponibles", "fiesta", "evento privado")):
+        tema = "el alquiler de salones, locales o espacios"
+    elif any(k in msg for k in ("publicidad", "pautar", "pauta", "patrocin", "convenio")):
+        tema = "publicidad, pauta y convenios"
+    elif any(k in msg for k in ("hoja de vida", "hojas de vida", "empleo", "vacante", "trabajar", "trabajo")):
+        tema = "empleo y hojas de vida"
+    elif any(k in msg for k in ("proveedor", "vender mis productos", "ofrecer mis servicios")):
+        tema = "proveedores"
+    else:
+        tema = "ese tema"
+    traza.paso("ejecucion", f"Administración del mall → {tema} (se da el contacto, sin inventar condiciones)")
+    saludo = f"{nom}, eso" if nom else "Eso"
+    texto = (f"{saludo} lo maneja directamente la *Administración del Centro Comercial El Puente* ({tema}).\n"
+             f"📞 {tel_adm}" + (f" 👉 {_link_wa(tel_adm)}" if _link_wa(tel_adm) else ""))
+    if tel_adm != CONTACTO_MALL:
+        texto += f"\n📱 Línea del centro comercial: {CONTACTO_MALL} 👉 {_link_wa(CONTACTO_MALL)}"
+    texto += "\nEllos te confirman disponibilidad, condiciones y costos. 😊"
+    return {"text": texto, "image_urls": [], "location": None}
+
+
 async def _ejecutar_numero_tienda(db, phone_number, mensaje, traza) -> dict:
     """Reutiliza la lógica del flujo viejo: buscar tienda + armar su info de contacto."""
     from services.store_transfer import find_store_by_message, build_phone_info_message
@@ -369,7 +418,7 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
     plantilla de cine; si no existe, se dice con honestidad y se da el contacto.
     """
     from services.cine import (find_cine_store, find_cine_funcion_by_message, build_cartelera_message,
-                               build_funcion_especifica_message, bloque_info_extra)
+                               build_funcion_especifica_message, bloque_info_extra, resumir_tarifas, URL_COMPRA_CINE)
     from routers.webhook import _wrap
 
     cine_store = find_cine_store(db)
@@ -388,12 +437,24 @@ async def _ejecutar_cartelera_cine(db, phone_number, mensaje, traza) -> dict:
         tel = re.sub(r"\D", "", cine_store.phone or "")
         return f" Puedes confirmar directo con el cine al {cine_store.phone}." if tel else " Puedes confirmar en la taquilla del cine."
 
+    # ── Comprar / reservar boletas → link de compra (sin inventar pasos) ──
+    if any(k in msg for k in ("comprar", "compro", "reservar", "reserva", "adquirir", "en linea", "online", "por internet", "pagina del cine", "como hago para")):
+        bloque = bloque_info_extra(cine_store, "tarifa")
+        resumen = resumir_tarifas(bloque) if bloque else ""
+        traza.paso("ejecucion", "Cine → compra/reserva de boletas: link de Cinelandia + resumen de tarifas")
+        texto = (f"🎟️ {_intro('las boletas de *' + cine_store.name + '* se compran en taquilla o en línea aquí 👉 ' + URL_COMPRA_CINE)}\n"
+                 "Ahí eliges la película, el horario y la silla.")
+        if resumen:
+            texto += "\n\n" + resumen
+        return {"text": texto, "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+
     # ── Tarifas / precios ──
     if any(k in msg for k in ("tarifa", "precio", "cuanto vale", "cuanto cuesta", "cuanto esta", "boleta", "boleteria", "entrada", "cuanto sale", "valor de")) and not any(k in msg for k in ("combo", "crispeta", "confiteria", "palomita")):
         bloque = bloque_info_extra(cine_store, "tarifa")
         traza.paso("ejecucion", f"Cine → tarifas ({'encontradas' if bloque else 'sin datos cargados'})")
         if bloque:
-            return {"text": f"🎟️ {_intro(f'estas son las tarifas de *{cine_store.name}*:')}\n\n{bloque}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
+            texto = resumir_tarifas(bloque) or bloque
+            return {"text": f"🎟️ {_intro(f'estas son las tarifas de *{cine_store.name}*:')}\n\n{texto}\n\nCompra en línea 👉 {URL_COMPRA_CINE}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
         return {"text": f"Aún no tengo las tarifas de *{cine_store.name}* cargadas.{_contacto()}", "image_urls": [], "location": None, "mentioned_store_id": cine_store.id}
 
     # ── Confitería / combos ──
@@ -672,6 +733,40 @@ Responde SOLO con el mensaje para el cliente, nada más."""
     return None
 
 
+PALABRAS_INSCRIPCION = ("inscrib", "inscripcion", "anotar", "anotarme", "registrarme", "registrar a", "participar en",
+                        "como participo", "cupo", "cupos", "matricular", "apuntar")
+
+
+def _respuesta_inscripcion_evento(db, mensaje: str, traza) -> dict | None:
+    """
+    "Quiero inscribir a mis hijos en Run Run Kids" → datos EXACTOS del evento
+    + contacto del mall para la inscripción. Nunca se inventa el procedimiento
+    (antes la IA decía "lleva la cédula, paga en efectivo…" sin base).
+    """
+    msg = _sin_tildes_simple(mensaje)
+    if not any(k in msg for k in PALABRAS_INSCRIPCION):
+        return None
+    try:
+        from services.content_matching import find_event_by_message
+        ev = find_event_by_message(db, mensaje)
+    except Exception:
+        ev = None
+    if not ev:
+        return None
+    nom = nombre_cliente()
+    lineas = [f"{'¡Claro, ' + nom + '!' if nom else '¡Claro!'} Esto es lo que tengo del *{ev.name}*:"]
+    if ev.date:
+        lineas.append(f"📅 {ev.date}" + (f" · {ev.time}" if ev.time else ""))
+    if ev.location:
+        lineas.append(f"📍 {ev.location}")
+    if ev.description:
+        lineas.append(ev.description.strip())
+    lineas.append(f"\nPara inscribirte y confirmar requisitos, escribe al centro comercial: {CONTACTO_MALL} 👉 {_link_wa(CONTACTO_MALL)}"
+                  " o acércate al *Punto de Información*. Ellos te guían con el pago y la inscripción. 😊")
+    traza.paso("inscripcion", f"Inscripción al evento '{ev.name}' → datos exactos + contacto del mall (sin inventar procedimiento)")
+    return {"text": "\n".join(lineas), "image_urls": [], "location": None, "evento_id": ev.id}
+
+
 async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
     """Lista los eventos activos. Si hay pocos sorteos, los menciona
     también (para promocionar sin saturar). Manda la foto del evento de
@@ -679,7 +774,14 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
     from models.event import Event
     from models.raffle import Raffle
 
-    eventos_todos = db.query(Event).order_by(Event.priority.desc()).all()
+    insc = _respuesta_inscripcion_evento(db, mensaje, traza)
+    if insc:
+        ev = db.query(Event).filter(Event.id == insc.pop("evento_id")).first()
+        foto = _foto_de_entidad(db, "event", ev) if ev else None
+        insc["image_urls"] = [foto] if foto else []
+        return insc
+
+    eventos_todos = [e for e in db.query(Event).order_by(Event.priority.desc()).all() if e.esta_vigente()]
     if not eventos_todos:
         traza.paso("ejecucion", "No hay eventos cargados → respuesta honesta")
         return {"text": "Por ahora no tenemos eventos programados, pero te invito a estar pendiente 😊. "
@@ -705,7 +807,7 @@ async def _ejecutar_eventos(db, phone_number, mensaje, traza) -> dict:
         if e.location: d += f". Lugar: {e.location}"
         if e.description: d += f". Descripción: {e.description}"
         datos.append(d)
-    sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    sorteos = [r for r in db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all() if r.esta_vigente()]
     if sorteos and len(sorteos) <= 2:
         datos.append("Además, menciona brevemente que también hay un sorteo activo (" +
                      ", ".join(s.name for s in sorteos) + ") por si quiere preguntar por él.")
@@ -753,7 +855,7 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
     from models.raffle import Raffle
     from models.event import Event
 
-    sorteos_todos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
+    sorteos_todos = [r for r in db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all() if r.esta_vigente()]
     if not sorteos_todos:
         traza.paso("ejecucion", "No hay sorteos activos → respuesta honesta")
         return {"text": "Por ahora no tenemos sorteos activos, pero mantente atento porque siempre hay novedades 😊. "
@@ -779,7 +881,7 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
         if s.end_date: d += f". Fecha límite: {s.end_date}"
         if s.location: d += f". Lugar: {s.location}"
         datos.append(d)
-    eventos = db.query(Event).order_by(Event.priority.desc()).all()
+    eventos = [e for e in db.query(Event).order_by(Event.priority.desc()).all() if e.esta_vigente()]
     if eventos and len(eventos) <= 2:
         datos.append("Además, menciona brevemente que también hay un evento (" +
                      ", ".join(e.name for e in eventos) + ") por si quiere saber más.")
@@ -880,7 +982,7 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
 
     # Sin promos puras → mencionar honestamente eventos/sorteos como actividades
     traza.paso("ejecucion", "No hay promociones de marketing puras → se mencionan eventos/sorteos como actividades")
-    eventos = db.query(Event).order_by(Event.priority.desc()).all()
+    eventos = [e for e in db.query(Event).order_by(Event.priority.desc()).all() if e.esta_vigente()]
     sorteos = db.query(Raffle).filter(Raffle.active == True).order_by(Raffle.priority.desc()).all()
     partes = ["En este momento no tengo una promoción comercial puntual, pero sí tenemos estas actividades: 😊\n"]
     if eventos:
@@ -897,6 +999,7 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
 EJECUTORES = {
     "emergencia": _ejecutar_emergencia,
     "queja": _ejecutar_queja,
+    "administracion_mall": _ejecutar_administracion_mall,
     "numero_tienda": _ejecutar_numero_tienda,
     "cartelera_cine": _ejecutar_cartelera_cine,
     "busqueda_categoria": _ejecutar_busqueda_categoria,
@@ -949,7 +1052,8 @@ def _parece_pregunta_de_funcion(db, mensaje: str) -> bool:
     """'horarios de X', 'a qué hora dan X', 'de qué trata X', 'funciones de X' — y X no es tienda ni servicio."""
     try:
         msg = _sin_tildes_simple(mensaje)
-        if not re.search(r"\b(horarios? de|a que horas? (dan|pasan|es)|de que trata|funcion(es)? de|dan la pelicula|pasan)\b", msg):
+        es_compra = re.search(r"\b(reservar|reserva|comprar|compro|adquirir)\b", msg) and re.search(r"\b(en linea|online|boleta|boletas|entrada|entradas|funcion|silla|sillas|por internet)\b", msg)
+        if not es_compra and not re.search(r"\b(horarios? de|a que horas? (dan|pasan|es)|de que trata|funcion(es)? de|dan la pelicula|pasan)\b", msg):
             return False
         if any(k in msg for k in SERVICIOS_NO_CINE):
             return False
@@ -967,7 +1071,9 @@ def _sin_tildes_simple(t: str) -> str:
     return _sin_tildes(t or "")
 
 
-PALABRAS_CARTA = ("carta", "menú", "menu", "catálogo", "catalogo", "qué venden", "que venden", "qué tienen", "que tienen", "productos de")
+PALABRAS_CARTA = ("carta", "menú", "menu", "catálogo", "catalogo", "qué venden", "que venden", "qué tienen", "que tienen", "productos de",
+                  "instagram", "redes", "red social", "página", "pagina", "link", "enlace", "perfil")
+PALABRAS_REDES = ("instagram", "redes", "red social", "perfil", "pagina", "página")
 
 
 def _atajo_carta_link(db, mensaje: str, traza) -> dict | None:
@@ -978,14 +1084,32 @@ def _atajo_carta_link(db, mensaje: str, traza) -> dict | None:
             return None
         from services.store_transfer import find_store_by_message
         st = find_store_by_message(db, mensaje)
+        pide_redes = any(p in msg for p in PALABRAS_REDES)
+        nom = nombre_cliente()
         if not st:
+            # "¿de qué locales tienes instagram?" → no se pueden listar 100 links
+            if pide_redes and not any(p in msg for p in ("carta", "menu", "menú", "catalogo", "catálogo")):
+                from models.store import Store
+                n = db.query(Store).filter(Store.active == True, Store.catalogo_link.ilike("%instagram%")).count()
+                if n:
+                    traza.paso("atajo_redes", f"Pregunta general por Instagram → hay {n} locales con link")
+                    return {"text": (f"{nom + ', t' if nom else 'T'}engo el Instagram de {n} locales del centro comercial. "
+                                     "Dime cuál te interesa y te paso el suyo de una 😊"), "image_urls": [], "location": None}
             return None
         link = st.carta_como_link() if hasattr(st, "carta_como_link") else None
         if not link:
+            if pide_redes and not getattr(st, "catalogo_link", None):
+                # Piden el Instagram y el local no lo tiene → honesto + WhatsApp
+                texto = f"{nom + ', por' if nom else 'Por'} ahora no tengo el Instagram de *{st.name}*."
+                if st.phone:
+                    texto += f" Puedes escribirles directo 👉 {_link_wa(st.phone)}"
+                traza.paso("atajo_redes", f"'{st.name}' no tiene Instagram cargado → respuesta honesta")
+                return {"text": texto, "image_urls": [], "location": None, "mentioned_store_id": st.id}
             return None
-        nom = nombre_cliente()
         saludo = f"¡Claro, {nom}! " if nom else "¡Claro! "
-        texto = f"{saludo}Aquí puedes ver la carta/catálogo de *{st.name}* 👉 {link}"
+        es_ig = "instagram" in link.lower()
+        que = "el Instagram" if (es_ig and pide_redes) else "la carta/catálogo"
+        texto = f"{saludo}Aquí tienes {que} de *{st.name}* 👉 {link}"
         if st.phone:
             tel = re.sub(r"\D", "", st.phone)
             if tel:
@@ -1015,6 +1139,20 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
     # "catálogo de Y" → si el local tiene su carta como ENLACE (Instagram,
     # web, WhatsApp), se entrega directo, sin IA (antes la IA decía
     # "te comparto lo que tengo de su carta 👇" y no mandaba nada).
+    insc = _respuesta_inscripcion_evento(db, mensaje, traza)
+    if insc:
+        from models.event import Event as _Ev
+        ev = db.query(_Ev).filter(_Ev.id == insc.pop("evento_id")).first()
+        foto = _foto_de_entidad(db, "event", ev) if ev else None
+        insc["image_urls"] = [foto] if foto else []
+        traza.herramienta_elegida = "eventos"
+        traza.metodo_decision = "reglas"
+        traza.razon_decision = f"Inscripción a evento '{ev.name if ev else ''}' (respuesta directa con contacto del mall)"
+        traza.respuesta = insc["text"]; traza.fotos = len(insc["image_urls"]); traza.fotos_urls = insc["image_urls"]
+        traza.paso("fin", f"Respuesta lista ({len(traza.respuesta)} caracteres, {traza.fotos} fotos)")
+        traza.guardar(db)
+        return insc
+
     atajo = _atajo_carta_link(db, mensaje, traza)
     if atajo:
         traza.herramienta_elegida = "conversacion_general"
@@ -1077,8 +1215,12 @@ async def procesar_con_orquestador(db: Session, phone_number: str, mensaje: str,
     # manejando internamente (no la duplicamos).
     HERRAMIENTAS_SIN_PROMO = {
         "emergencia", "queja", "eventos", "sorteos", "promociones",
-        "conversacion_general", "gestion_domicilio",
+        "conversacion_general", "gestion_domicilio", "administracion_mall", "ubicacion_mall",
     }
+    # Tampoco se pega promo a respuestas cortas (aclaraciones): queda más
+    # largo el anuncio que la respuesta y cansa al cliente.
+    if len((resultado.get("text") or "")) < 120:
+        traza.uso_general = traza.uso_general or True
     # Si la herramienta terminó delegando en la conversación general, la IA
     # YA puso su promoción → no se agrega otra (antes salían dos seguidas).
     if traza.herramienta_elegida not in HERRAMIENTAS_SIN_PROMO and not traza.uso_general:

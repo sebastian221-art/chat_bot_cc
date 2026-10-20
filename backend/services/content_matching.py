@@ -27,7 +27,7 @@ def _contains_word(message: str, word: str) -> bool:
 
 def find_event_by_message(db: Session, message: str) -> Event | None:
     msg = message.lower()
-    events = db.query(Event).all()
+    events = [e for e in db.query(Event).all() if e.esta_vigente()]
 
     exact = [e for e in events if e.name.lower() in msg]
     if len(exact) == 1:

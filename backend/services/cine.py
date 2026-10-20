@@ -25,6 +25,73 @@ PALABRAS_TITULO_GENERICAS = {"punto", "muerto", "madre", "nueva", "parte", "gran
                              "amor", "casa", "dos", "the", "los", "las", "del", "una", "uno", "para", "con",
                              "jones", "bestia", "corazon", "isla", "caida", "zona", "street"}
 
+URL_COMPRA_CINE = "https://www.cinelandia.com.co/san-gil"
+
+DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+DIA_CORTO = {"LUNES": "Lun", "MARTES": "Mar", "MIERCOLES": "Mié", "JUEVES": "Jue", "VIERNES": "Vie", "SABADO": "Sáb", "DOMINGO": "Dom"}
+
+
+def _dias_a_texto(dias: list[str]) -> str:
+    """['JUEVES','VIERNES','SABADO','DOMINGO'] → 'Jue a Dom'; ['LUNES','MIERCOLES'] → 'Lun y Mié'."""
+    idx = sorted({DIAS.index(d) for d in dias if d in DIAS})
+    if not idx:
+        return ""
+    if len(idx) == 7:
+        return "Todos los días"
+    # ¿consecutivos?
+    if idx == list(range(idx[0], idx[-1] + 1)) and len(idx) >= 3:
+        return f"{DIA_CORTO[DIAS[idx[0]]]} a {DIA_CORTO[DIAS[idx[-1]]]}"
+    nombres = [DIA_CORTO[DIAS[i]] for i in idx]
+    return " y ".join([", ".join(nombres[:-1]), nombres[-1]]) if len(nombres) > 1 else nombres[0]
+
+
+def resumir_tarifas(bloque: str) -> str:
+    """
+    Convierte la tabla cruda de Cinelandia (28 filas tipo
+    "2D JUEVES ⏰ DESDE 03:01 PM HASTA 11:00 PM | $ 18.000 | $ 14.000 💳 | $ 25.000 | $ 18.000 💳")
+    en un resumen legible agrupado por franja y días. Columnas de la web:
+    General · General con Tarjeta Cinelandia · VIP · VIP con Tarjeta.
+    Si el formato no coincide, devuelve "" y se usa el bloque tal cual.
+    """
+    pat = re.compile(r"(2D|3D)\s+([A-ZÁÉÍÓÚ]+)\s*⏰?\s*DESDE\s+([\d:]+\s*[AP]M)\s+HASTA\s+([\d:]+\s*[AP]M)\s*\|\s*\$?\s*([\d.]+)\s*\|\s*\$?\s*([\d.]+)\s*💳?\s*\|\s*\$?\s*([\d.]+)\s*\|\s*\$?\s*([\d.]+)", re.I)
+    grupos: dict[tuple, list[str]] = {}
+    for linea in (bloque or "").split("\n"):
+        m = pat.search(linea)
+        if not m:
+            continue
+        fmt, dia, desde, hasta, g, gt, v, vt = m.groups()
+        dia = _plano(dia).upper()
+        franja = "antes de 3:00 pm" if desde.strip().upper().startswith("12:05") or "AM" in desde.upper() else "después de 3:00 pm"
+        grupos.setdefault((franja, fmt.upper(), g, gt, v, vt), []).append(dia)
+    if not grupos:
+        return ""
+
+    def _p(x):  # "18.000" → "$18.000"
+        return "$" + x.replace(",", ".")
+
+    # Agrupar por (franja, días) para juntar 2D y 3D en una misma línea
+    por_dias: dict[tuple, dict] = {}
+    for (franja, fmt, g, gt, v, vt), dias in grupos.items():
+        key = (franja, _dias_a_texto(dias))
+        por_dias.setdefault(key, {})[fmt] = (g, gt, v, vt)
+    orden = {"antes de 3:00 pm": 0, "después de 3:00 pm": 1}
+    lineas = ["General · (💳 con Tarjeta Cinelandia) · VIP"]
+    for (franja, dias_txt), fmts in sorted(por_dias.items(), key=lambda kv: (orden.get(kv[0][0], 9), kv[0][1])):
+        partes = []
+        for fmt in ("2D", "3D"):
+            if fmt in fmts:
+                g, gt, v, vt = fmts[fmt]
+                if g == gt == v == vt:
+                    partes.append(f"{fmt} {_p(g)} cualquier silla")
+                else:
+                    partes.append(f"{fmt} {_p(g)} (💳 {_p(gt)}) · VIP {_p(v)} (💳 {_p(vt)})")
+        if len(fmts) == 2 and fmts["2D"] == fmts["3D"]:
+            g, gt, v, vt = fmts["2D"]
+            partes = [f"2D y 3D {_p(g)} cualquier silla" if g == gt == v == vt else f"2D y 3D {_p(g)} (💳 {_p(gt)}) · VIP {_p(v)} (💳 {_p(vt)})"]
+        lineas.append(f"• {dias_txt} {franja}: " + " | ".join(partes))
+    return "\n".join(lineas)
+
+
 CARTELERA_KEYWORDS = [
     "cartelera", "película", "peliculas", "películas", "pelicula",
     "que dan en el cine", "qué dan en el cine", "funciones de cine",

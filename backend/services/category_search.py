@@ -47,8 +47,12 @@ CATEGORIAS_BUSQUEDA = {
 
     # ── Calzado ──
     "zapatos": ["zapato", "zapatos", "calzado"],
-    "zapatos deportivos": ["deportivo", "tenis", "zapatilla"],
-    "tenis": ["tenis", "zapatilla", "deportivo"],
+    # Tenis/deportivos: en la base casi ninguna zapatería tiene la palabra
+    # "deportivo" (D'Italy TENNIS y TENNIS van con doble n, otras solo
+    # dicen "calzado"). Para no dejar locales por fuera, se lista todo el
+    # calzado + los que digan tennis.
+    "zapatos deportivos": ["deportivo", "tenis", "tennis", "zapatilla"],
+    "tenis": ["tenis", "tennis", "zapatilla", "deportivo"],
     "zapatos formales": ["formal", "vestir", "tacón", "tacon"],
     "sandalias": ["sandalia", "sandalias"],
 
@@ -75,7 +79,7 @@ CATEGORIAS_BUSQUEDA = {
     "juguetes": ["juguete", "juguetería", "jugueteria"],
     "colchones": ["colchón", "colchon", "colchones"],
     "muebles": ["mueble", "muebles", "decoración", "decoracion"],
-    "belleza": ["belleza", "peluquería", "peluqueria", "estética", "salón", "spa"],
+    "belleza": ["belleza", "peluquería", "peluqueria", "estética", "estetica", "salón de belleza", "salon de belleza", "spa", "barbería", "barberia"],
     "gimnasio": ["gimnasio", "gym", "fitness"],
     "bancos": ["banco", "cajero", "financiera"],
 }
@@ -87,6 +91,9 @@ CATEGORIAS_BUSQUEDA = {
 # contra la base de datos para esas categorías.
 TERMINOS_DB = {
     "comida": ["restaurante", "comida", "almuerzo", "plazoleta de comidas", "cocina"],
+    # tenis/deportivos: se busca TODO el calzado (ver nota arriba)
+    "zapatos deportivos": ["deportivo", "tenis", "tennis", "zapatilla", "zapato", "calzado"],
+    "tenis": ["deportivo", "tenis", "tennis", "zapatilla", "zapato", "calzado"],
 }
 
 
@@ -163,6 +170,10 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
     if any(z in msg for z in ["zona de comida", "zona de comidas", "plazoleta de comida",
                                "plazoleta de comidas", "zona de restaurante"]):
         return None
+    # Alquilar/arrendar un salón, local o espacio es un tema de ADMINISTRACIÓN
+    # del mall, no una búsqueda de locales ("salón" disparaba peluquerías).
+    if any(z in msg for z in ["alquil", "arrend", "arriendo", "salon de eventos", "salón de eventos"]):
+        return None
 
     # ¿Hay al menos una señal de que quieren BUSCAR algo?
     hay_intencion = any(_plano(p) in msg for p in INTENCION_BUSQUEDA)
@@ -208,6 +219,34 @@ def detectar_categoria(mensaje: str, exigir_intencion: bool = True) -> tuple[str
     return coincidencias[0]
 
 
+# Nivel de cada zona del centro comercial (según la plantilla del mall).
+# Sirve para completar el nivel cuando un local lo tiene vacío o "Por
+# confirmar" pero sí tiene zona — así todas las líneas salen iguales.
+NIVEL_POR_ZONA = {
+    "pasillo barichara": "Nivel 1", "pasillo velez": "Nivel 1", "pasillo socorro": "Nivel 1",
+    "pasillo charala": "Nivel 2", "pasillo paramo": "Nivel 2", "plaza principal": "Nivel 2",
+    "pasillo curiti": "Nivel 3", "zona terrazas": "Nivel 3", "plazoleta de comidas la ceiba": "Nivel 3",
+    "plazoleta de comidas": "Nivel 3",
+}
+
+
+def ubicacion_mostrable(store) -> str:
+    """
+    "Nivel 1, Pasillo Vélez" / "Paseo de la Cruz" / "Torre Médica, Piso 4".
+    Completa el nivel desde la zona cuando falta y nunca muestra
+    "Por confirmar" ni deja la línea a medias.
+    """
+    piso = (getattr(store, "floor", "") or "").strip()
+    zona = (getattr(store, "location_hint", "") or "").strip()
+    if piso.lower() == "por confirmar":
+        piso = ""
+    if not piso and zona:
+        piso = NIVEL_POR_ZONA.get(_plano(zona), "")
+    if zona.lower().startswith("torre"):
+        return ", ".join(x for x in [zona, piso] if x)
+    return ", ".join(x for x in [piso, zona] if x)
+
+
 def construir_lista_locales(stores: list, nombre_categoria: str) -> str:
     """
     Arma el texto con TODOS los locales de la categoría — orden
@@ -220,17 +259,11 @@ def construir_lista_locales(stores: list, nombre_categoria: str) -> str:
     lineas = [f"Estos son los locales donde puedes encontrar {nombre_categoria} en el Centro Comercial El Puente:\n"]
     for s in stores:
         partes = [f"• *{s.name}*"]
-        ubic = []
-        # No mostrar "Por confirmar" al cliente (queda feo). Si el piso no
-        # está definido, se omite y se muestra solo la zona.
-        if s.floor and s.floor.strip().lower() != "por confirmar":
-            ubic.append(s.floor)
-        if s.location_hint:
-            ubic.append(s.location_hint)
+        ubic = ubicacion_mostrable(s)
         if ubic:
-            partes.append(f" — {', '.join(ubic)}")
+            partes.append(f" — {ubic}")
         if s.phone:
-            partes.append(f". Tel: {s.phone}")
+            partes.append(f" · Tel: {s.phone}")
         lineas.append("".join(partes))
 
     return "\n".join(lineas)
