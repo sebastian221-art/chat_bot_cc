@@ -25,7 +25,10 @@ const MODOS = [
   { id: 'off', label: 'Apagado', desc: 'Todo por el flujo viejo', color: 'zinc' },
   { id: 'solo_yo', label: 'Solo pruebas', desc: 'Solo mis mensajes de prueba', color: 'amber' },
   { id: 'produccion', label: 'Producción', desc: 'Todos los clientes', color: 'emerald' },
+  { id: 'agente_pruebas', label: '🧠 Agente · pruebas', desc: 'Mi número por el agente IA; los clientes siguen en el orquestador', color: 'sky' },
+  { id: 'agente_todos', label: '🧠 Agente · todos', desc: 'Todos los clientes por el agente IA', color: 'sky' },
 ]
+const MODOS_CON_TELEFONO = ['solo_yo', 'agente_pruebas']
 
 export default function OrquestadorPage() {
   const [tab, setTab] = useState<'mapa' | 'trazas'>('mapa')
@@ -142,11 +145,12 @@ export default function OrquestadorPage() {
 
   const cambiarModo = async (modo: string) => {
     if (modo === 'produccion' && !confirm('¿Seguro? Esto hará que TODOS los clientes reales pasen por el orquestador nuevo.')) return
+    if (modo === 'agente_todos' && !confirm('¿Seguro? Esto hará que TODOS los clientes reales pasen por el AGENTE IA.')) return
     setSaving(true)
     try {
-      // Al activar "Solo pruebas", guardamos también el número autorizado
+      // Al activar un modo de pruebas, guardamos también el número autorizado
       // (el tuyo por defecto) para que quede listo de una vez.
-      await setOrquestadorSwitch(modo, modo === 'solo_yo' ? telefonosPrueba : undefined)
+      await setOrquestadorSwitch(modo, MODOS_CON_TELEFONO.includes(modo) ? telefonosPrueba : undefined)
       setSwitchModo(modo)
     } catch (e: any) {
       alert('Error: ' + e.message)
@@ -180,7 +184,7 @@ export default function OrquestadorPage() {
           <Power size={16} className="text-violet-400" />
           <span className="text-white text-sm font-semibold">Interruptor de flujo</span>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           {MODOS.map(m => (
             <button key={m.id} onClick={() => cambiarModo(m.id)} disabled={saving}
               className={`text-left p-3 rounded-xl border transition-all ${
@@ -198,10 +202,22 @@ export default function OrquestadorPage() {
             <AlertTriangle size={14} /> El orquestador está atendiendo a clientes reales.
           </div>
         )}
-        {switchModo === 'solo_yo' && (
+        {switchModo === 'agente_todos' && (
+          <div className="flex items-center gap-2 mt-3 text-sky-400 text-xs">
+            <AlertTriangle size={14} /> El AGENTE IA está atendiendo a todos los clientes reales.
+          </div>
+        )}
+        {switchModo === 'agente_pruebas' && (
+          <div className="flex items-center gap-2 mt-3 text-sky-400 text-xs">
+            <AlertTriangle size={14} /> Los clientes reales siguen en el orquestador; solo tu número va por el agente IA.
+          </div>
+        )}
+        {MODOS_CON_TELEFONO.includes(switchModo) && (
           <div className="mt-4 pt-4 border-t border-zinc-800">
             <label className="text-zinc-300 text-xs font-medium block mb-2">
-              Tu número de WhatsApp de prueba (el ÚNICO que pasa por el orquestador en este modo)
+              {switchModo === 'agente_pruebas'
+                ? 'Tu número de WhatsApp de prueba (el ÚNICO que pasa por el agente IA en este modo)'
+                : 'Tu número de WhatsApp de prueba (el ÚNICO que pasa por el orquestador en este modo)'}
             </label>
             <p className="text-zinc-500 text-[11px] mb-2">
               Con código de país, sin espacios ni símbolos. Ej: 573154559242. Para varios, sepáralos con coma.

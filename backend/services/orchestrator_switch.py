@@ -13,6 +13,13 @@ NUEVO (orquestador). Tiene 3 modos:
                    flujo viejo. Ideal para probar sin riesgo.
   - "produccion" → TODOS los mensajes van por el orquestador.
 
+  MODOS DEL AGENTE (services/agente.py — la IA lleva la conversación):
+  - "agente_pruebas"    → los teléfonos de prueba van por el AGENTE; todos
+                          los demás clientes siguen por el ORQUESTADOR
+                          (como en "produccion"). Para comparar lado a lado
+                          sin tocar a los clientes reales.
+  - "agente_todos"      → TODOS los mensajes van por el agente.
+
 El estado se guarda en la base de datos (tabla orchestrator_config) para
 que se pueda cambiar desde el panel y persista entre reinicios.
 
@@ -28,11 +35,22 @@ class OrchestratorConfig(Base):
     __tablename__ = "orchestrator_config"
 
     id    = Column(Integer, primary_key=True, index=True)
-    modo  = Column(String(15), nullable=False, default="off")   # "off" | "solo_yo" | "produccion"
+    # OJO: la columna en producción es VARCHAR(15) — los nombres de modo
+    # deben tener máximo 15 caracteres (por eso "agente_todos" y no
+    # "agente_produccion"). Así no hace falta migración.
+    modo  = Column(String(15), nullable=False, default="off")   # "off" | "solo_yo" | "produccion" | "agente_pruebas" | "agente_todos"
     # Teléfono(s) de prueba que SÍ pasan por el orquestador en modo
     # "solo_yo" — separados por coma. El prefijo "htest_" y "test_"
     # siempre cuenta como prueba también.
     telefonos_prueba = Column(String(300), nullable=True, default="")
+
+
+MODOS_VALIDOS = ("off", "solo_yo", "produccion", "agente_pruebas", "agente_todos")
+
+
+def _telefonos_prueba(db: Session) -> list[str]:
+    cfg = get_config(db)
+    return [t.strip() for t in (cfg.get("telefonos_prueba") or "").split(",") if t.strip()]
 
 
 def get_modo(db: Session) -> str:
@@ -54,7 +72,7 @@ def get_config(db: Session) -> dict:
 
 
 def set_modo(db: Session, modo: str, telefonos_prueba: str = None) -> dict:
-    if modo not in ("off", "solo_yo", "produccion"):
+    if modo not in MODOS_VALIDOS:
         raise ValueError(f"Modo inválido: {modo}")
     cfg = db.query(OrchestratorConfig).filter(OrchestratorConfig.id == 1).first()
     if not cfg:
@@ -79,11 +97,34 @@ def debe_usar_orquestador(db: Session, phone_number: str) -> bool:
         return False
     if modo == "produccion":
         return True
+    if modo == "agente_pruebas":
+        # Los teléfonos de prueba van por el AGENTE (ver debe_usar_agente);
+        # el resto de clientes sigue por el orquestador, como en producción.
+        return phone_number not in _telefonos_prueba(db)
+    if modo == "agente_todos":
+        return False  # todo va por el agente
 
     # modo == "solo_yo": EXCLUSIVAMENTE los números autorizados en el
     # panel (tu línea privada de pruebas). Nada más pasa por el
     # orquestador en este modo — ni siquiera los mensajes del script de
     # prueba, si su número no está en la lista autorizada.
-    cfg = get_config(db)
-    autorizados = [t.strip() for t in (cfg.get("telefonos_prueba") or "").split(",") if t.strip()]
-    return phone_number in autorizados
+    return phone_number in _telefonos_prueba(db)
+
+
+def debe_usar_agente(db: Session, phone_number: str) -> bool:
+    """
+    ¿Este mensaje va por el AGENTE (services/agente.py)?
+    - "agente_todos"   → sí, siempre.
+    - "agente_pruebas" → solo si el número está en los teléfonos de prueba.
+    - cualquier otro   → no.
+    Si algo falla al leer el switch, devuelve False (seguro).
+    """
+    try:
+        modo = get_modo(db)
+        if modo == "agente_todos":
+            return True
+        if modo == "agente_pruebas":
+            return phone_number in _telefonos_prueba(db)
+        return False
+    except Exception:
+        return False
