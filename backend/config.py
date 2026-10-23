@@ -3,8 +3,10 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # WhatsApp
+
+
     WHATSAPP_TOKEN: str = "PENDIENTE"
-    WHATSAPP_PHONE_ID: str = "PENDIENTE"          # ID interno de Meta (para la API)
+    WHATSAPP_PHONE_ID: str = "PENDIENTE"          
     WHATSAPP_DISPLAY_NUMBER: str = "573171646124"  # número real (para generar links wa.me — QR, etc.)
     VERIFY_TOKEN: str = "mall_puente_2026"
 
