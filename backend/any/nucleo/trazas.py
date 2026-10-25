@@ -49,6 +49,40 @@ class Traza:
         return {"pasos": self.pasos, "alertas": self.alertas, "tokens": self.tokens,
                 "modelos": sorted(self.modelos), "ms_total": self.ms_total}
 
+    @staticmethod
+    def _texto(detalle, limite: int = 1500) -> str:
+        if detalle is None:
+            return ""
+        t = detalle if isinstance(detalle, str) else json.dumps(detalle, ensure_ascii=False, default=str)
+        return t if len(t) <= limite else t[:limite] + " …"
+
+    def pasos_para_panel(self) -> list[dict]:
+        """Formato que lee la página de trazas del panel: [{paso, detalle (texto), ms (acumulado)}]."""
+        salida, acumulado = [], 0.0
+        for p in self.pasos:
+            acumulado += float(p.get("ms") or 0)
+            salida.append({"paso": str(p.get("paso", "")), "detalle": self._texto(p.get("detalle")),
+                           "ms": round(acumulado, 1)})
+        salida.append({"paso": "costo", "ms": self.ms_total,
+                       "detalle": f"tokens entrada {self.tokens['entrada']} · salida {self.tokens['salida']} · "
+                                  f"modelos: {', '.join(sorted(self.modelos)) or 'ninguno'}"})
+        return salida
+
+    @staticmethod
+    def contenido_para_panel(respuesta) -> list[dict]:
+        """Lo que se agregó a la respuesta, como lista [{tipo, detalle}] (formato del panel)."""
+        extra = []
+        for a in respuesta.adjuntos:
+            tipo = {"imagen": "foto", "documento": "documento", "ubicacion": "ubicacion"}.get(a.tipo, a.tipo)
+            extra.append({"tipo": tipo, "detalle": a.url or a.titulo or a.direccion or a.leyenda or ""})
+        promo = respuesta.meta.get("promo")
+        if isinstance(promo, dict):
+            extra.append({"tipo": str(promo.get("tipo") or "promocion"),
+                          "detalle": str(promo.get("nombre") or promo.get("titulo") or Traza._texto(promo, 300))})
+        if respuesta.entidades:
+            extra.append({"tipo": "entidades", "detalle": Traza._texto(respuesta.entidades, 500)})
+        return extra
+
     def guardar(self, db, decision, respuesta):
         """Escribe la traza. Nunca rompe la respuesta si falla."""
         try:
@@ -63,11 +97,9 @@ class Traza:
                 respuesta_bot="\n\n".join(respuesta.mensajes()),
                 fotos_enviadas=len(fotos),
                 fotos_urls=json.dumps(fotos),
-                contenido_extra=json.dumps({"entidades": respuesta.entidades, "meta": respuesta.meta,
-                                            "adjuntos": [a.dict() for a in respuesta.adjuntos]},
-                                           ensure_ascii=False, default=str),
+                contenido_extra=json.dumps(self.contenido_para_panel(respuesta), ensure_ascii=False, default=str),
                 ubicacion_enviada="si" if any(a.tipo == "ubicacion" for a in respuesta.adjuntos) else "no",
-                pasos=json.dumps(self.resumen(), ensure_ascii=False, default=str),
+                pasos=json.dumps(self.pasos_para_panel(), ensure_ascii=False, default=str),
                 tiempo_total_ms=self.ms_total,
                 modo=self.modo[:10],
             )

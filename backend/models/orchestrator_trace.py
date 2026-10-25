@@ -63,6 +63,34 @@ class OrchestratorTrace(Base):
             contenido_extra = json.loads(self.contenido_extra) if self.contenido_extra else []
         except Exception:
             contenido_extra = []
+        # Tolerancia de formato: las trazas de Any 2.0 guardadas antes del 25/10/2026 traían
+        # "pasos" como objeto y "contenido_extra" como objeto; el panel espera listas de textos.
+        if isinstance(pasos, dict):
+            pasos = pasos.get("pasos") or []
+        if not isinstance(pasos, list):
+            pasos = []
+        limpios = []
+        for p in pasos:
+            if not isinstance(p, dict):
+                p = {"paso": "", "detalle": p, "ms": 0}
+            det = p.get("detalle")
+            if det is not None and not isinstance(det, str):
+                det = json.dumps(det, ensure_ascii=False, default=str)[:1500]
+            ms = p.get("ms")
+            limpios.append({"paso": str(p.get("paso") or ""), "detalle": det or "",
+                            "ms": ms if isinstance(ms, (int, float)) else 0})
+        pasos = limpios
+        if isinstance(contenido_extra, dict):
+            contenido_extra = [{"tipo": str(k), "detalle": json.dumps(v, ensure_ascii=False, default=str)[:500]}
+                               for k, v in contenido_extra.items() if v]
+        if not isinstance(contenido_extra, list):
+            contenido_extra = []
+        contenido_extra = [c if isinstance(c, dict) and isinstance(c.get("detalle", ""), str)
+                           else {"tipo": str((c or {}).get("tipo", "extra")) if isinstance(c, dict) else "extra",
+                                 "detalle": json.dumps(c, ensure_ascii=False, default=str)[:500]}
+                           for c in contenido_extra]
+        if not isinstance(fotos_urls, list):
+            fotos_urls = []
         return {
             "id": self.id,
             "phone_number": self.phone_number,
