@@ -1,0 +1,114 @@
+"""
+Router: decide qué especialista atiende el mensaje.
+
+Orden:
+  1. Reglas duras (solo lo crítico, por palabra completa): emergencia.
+  2. Flujo con estado activo (un domicilio a medias, una navegación QR):
+     el flujo dice si el mensaje sigue siendo suyo.
+  3. Router IA: devuelve JSON {flujo, entidades, es_seguimiento, consulta_reescrita, razon}.
+  4. Respaldo: si la IA falla, "conversacion" (que responde sin inventar).
+"""
+from __future__ import annotations
+import re
+
+from ..conocimiento.texto import alguna_frase
+from ..config import cfg
+from ..flujos import FLUJOS, RESPALDO, catalogo_para_router, nombres_validos
+from ..flujos.base import leer_prompt
+from ..llm import ErrorLLM, completar
+from . import mensajes
+from .tipos import Contexto, Decision
+
+# Si el cliente nombra un tema de forma inequívoca y el router lo dejó "pegado" al tema anterior,
+# gana el tema nombrado ("¿hay promociones?" después de hablar del cine → sorteos_promos).
+TEMA_NOMBRADO = {
+    "sorteos_promos": ["promocion", "promociones", "descuento", "descuentos", "sorteo", "sorteos", "registrar factura",
+                       "registro de facturas"],
+    "eventos": ["evento", "eventos", "actividades del centro comercial"],
+    "cine": ["pelicula", "peliculas", "cartelera", "cine", "boleta de cine"],
+}
+
+CLAVES_ENTIDADES = {"local", "categoria", "pelicula", "evento", "especialidad", "servicio", "zona", "pide", "tipo"}
+
+
+def regla_emergencia(texto: str) -> str | None:
+    return alguna_frase(mensajes.frases("frases_emergencia"), texto)
+
+
+async def decidir(ctx: Contexto) -> Decision:
+    # 1. Emergencia: nunca depende del modelo
+    frase = regla_emergencia(ctx.mensaje)
+    if frase:
+        return Decision("emergencia_queja", {"tipo": "emergencia"}, False, ctx.mensaje,
+                        f"regla de emergencia: «{frase}»", "regla")
+
+    # 1b. Foto del cliente y QR de zona: reglas exactas
+    if ctx.imagen:
+        return Decision("imagen", {}, False, ctx.mensaje, "el cliente envió una foto", "regla")
+    from ..flujos.navegacion_qr import codigo_qr
+    cod = codigo_qr(ctx.db, ctx.mensaje)
+    if cod:
+        return Decision("navegacion_qr", {"zona": cod}, False, ctx.mensaje, f"QR de la zona {cod}", "regla")
+
+    # 2. Flujo con estado activo
+    activo = ctx.estado.flujo_activo
+    if activo and activo in FLUJOS and hasattr(FLUJOS[activo], "sigue_en_flujo"):
+        if FLUJOS[activo].sigue_en_flujo(ctx):
+            return Decision(activo, dict(ctx.estado.ultimas_entidades), True, ctx.mensaje,
+                            f"continúa el flujo activo {activo}", "estado")
+
+    # 2b. Mensaje sin palabras ("?", "...", un emoji): se pide aclarar, sin preguntarle al modelo
+    if not re.search(r"[0-9A-Za-zÁÉÍÓÚáéíóúÑñÜü]", ctx.mensaje or ""):
+        return Decision(RESPALDO, {}, False, ctx.mensaje, "mensaje sin palabras: pedir aclaración", "regla")
+
+    # 3. Router IA
+    try:
+        return await _router_ia(ctx)
+    except ErrorLLM as e:
+        ctx.traza.alerta(f"router IA falló: {e}")
+        return Decision(RESPALDO, {}, False, ctx.mensaje, "respaldo: el router IA falló", "respaldo")
+
+
+def _historial_corto(ctx: Contexto, n: int = 6) -> str:
+    if not ctx.historial:
+        return "(sin historial: es el primer mensaje de la sesión)"
+    lineas = []
+    for t in ctx.historial[-n:]:
+        quien = "Cliente" if t.rol == "user" else "Any"
+        # la novedad del día ("De paso: …") no es el tema de la conversación: no se le muestra al router
+        texto = " ".join(l for l in t.texto.split("\n") if "de paso" not in l.lower())
+        lineas.append(f"{quien}: {texto[:300]}")
+    return "\n".join(lineas)
+
+
+async def _router_ia(ctx: Contexto) -> Decision:
+    sistema = leer_prompt("router.md").format(flujos=catalogo_para_router())
+    previo = ctx.estado.ultimo_flujo or "ninguno"
+    recordado = ctx.estado.ultimas_entidades or {}
+    activo = ""
+    if ctx.estado.flujo_activo == "domicilios":
+        activo = (f"Hay un PEDIDO A DOMICILIO a medias con {ctx.estado.datos.get('local', 'un local')}: si el mensaje "
+                  f"trae datos del pedido (nombre, celular, dirección, qué pedir, forma de pago) o habla del pedido, "
+                  f"el especialista es domicilios.\n")
+    usuario = (f"HISTORIAL:\n{_historial_corto(ctx)}\n\n{activo}"
+               f"Especialista del turno anterior: {previo}\n"
+               f"Entidades del turno anterior: {recordado}\n\n"
+               f"MENSAJE: {ctx.mensaje}")
+    r = await completar(cfg().llm_router, [{"role": "system", "content": sistema},
+                                          {"role": "user", "content": usuario}],
+                        json_salida=True, temperatura=0, max_tokens=400, razonamiento="low")
+    ctx.traza.llm("router", r)
+    j = r.json()
+    flujo = str(j.get("flujo") or "").strip().lower()
+    if flujo not in nombres_validos():
+        ctx.traza.alerta(f"router devolvió un flujo desconocido: {flujo!r}")
+        flujo = RESPALDO
+    ent = j.get("entidades") or {}
+    ent = {k: v for k, v in ent.items() if k in CLAVES_ENTIDADES and v not in (None, "", [], {})} \
+        if isinstance(ent, dict) else {}
+    nombrados = [f for f, frases in TEMA_NOMBRADO.items() if alguna_frase(frases, ctx.mensaje)]
+    if len(nombrados) == 1 and nombrados[0] != flujo and flujo in TEMA_NOMBRADO:
+        ctx.traza.alerta(f"el router dejó {flujo} pero el cliente nombró {nombrados[0]}: gana el tema nombrado")
+        flujo = nombrados[0]
+    return Decision(flujo, ent, bool(j.get("es_seguimiento")),
+                    str(j.get("consulta_reescrita") or ctx.mensaje)[:500], str(j.get("razon") or "")[:300], "ia")

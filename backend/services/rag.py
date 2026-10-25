@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from typing import List
 import chromadb
@@ -169,6 +170,54 @@ def search_stores(query: str, n_results: int = 8) -> List[str]:
         return []
 
 
+_VACIAS = {"de", "del", "la", "las", "el", "los", "para", "y", "con", "en", "un", "una", "a"}
+
+
+def _palabras(texto: str) -> list[str]:
+    """Texto → palabras sin tildes, en minúscula, sin palabras vacías."""
+    import re
+    import unicodedata
+    t = unicodedata.normalize("NFD", (texto or "").lower())
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    return [w for w in re.findall(r"[a-z0-9ñ]+", t) if w not in _VACIAS]
+
+
+def _raiz(w: str) -> str:
+    """Raíz simple: quita plural y género ("deportivos" → "deportiv", "niñas" → "nin")."""
+    if len(w) > 4 and w.endswith("es"):
+        w = w[:-2]
+    elif len(w) > 3 and w.endswith("s"):
+        w = w[:-1]
+    if len(w) > 4 and w[-1] in "aoe":
+        w = w[:-1]
+    return w
+
+
+def _coincide_palabra(t: str, palabras_local: list[str]) -> bool:
+    rt = _raiz(t)
+    for w in palabras_local:
+        if w == t or _raiz(w) == rt:
+            return True
+        # Términos escritos como raíz a propósito ("hamburgues", "tecnolog"):
+        # la palabra del local puede seguir hasta 3 letras más.
+        if w.startswith(t) and len(w) - len(t) <= 3:
+            return True
+    return False
+
+
+def _tags_sin_rubro(tags: str | None) -> str:
+    """El rubro del Excel "Droguerías, Salud y Ópticas" agrupa tres tipos de
+    local: con él, toda droguería parecía óptica al buscar "gafas". Se quita
+    solo la palabra "Ópticas" de ese rubro; el resto del rubro se conserva
+    porque muchos locales solo se encuentran por él (heladerías, peluquerías)."""
+    t = tags or ""
+    return re.sub(r"^(\s*Droguer[ií]as,\s*Salud)\s+y\s+[ÓO]pticas", r"\1", t)
+
+
+def _coincide_frase(frase: list[str], palabras_local: list[str]) -> bool:
+    return all(_coincide_palabra(t, palabras_local) for t in frase)
+
+
 def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]:
     """
     Búsqueda JUSTA por categoría/tipo — trae TODOS los locales que
@@ -189,26 +238,21 @@ def find_all_stores_by_category(db: Session, terminos: List[str]) -> List[Store]
     if not terminos:
         return []
 
-    condiciones = []
-    for t in terminos:
-        like = f"%{t.lower()}%"
-        # BÚSQUEDA PRECISA: solo buscamos el término en los campos que
-        # de verdad definen el TIPO de local — su categoría, su nombre y
-        # sus tags (palabras clave). NO buscamos en la descripción
-        # completa, porque ahí caían falsos positivos: un restaurante que
-        # menciona "para niños" en su descripción aparecía por error
-        # cuando alguien buscaba "ropa infantil". Los tags ya contienen
-        # las palabras clave correctas de cada local (cargadas del Excel).
-        condiciones.append(func.lower(Store.category).like(like))
-        condiciones.append(func.lower(Store.name).like(like))
-        condiciones.append(func.lower(Store.tags).like(like))
-
-    stores = (
-        db.query(Store)
-        .filter(or_(*condiciones))
-        .order_by(Store.name.asc())
-        .all()
-    )
+    # BÚSQUEDA POR PALABRA COMPLETA (fase 0, 24/10/2026). Antes era
+    # LIKE '%término%' y comparaba pedazos de texto: "niño" encontraba
+    # "AmericaNINO", "bar" encontraba "BARbería", y la frase "ropa
+    # infantil" NO encontraba un local con tags "ropa, infantil".
+    # Ahora cada local se parte en palabras (categoría, nombre y tags;
+    # nunca la descripción, que mete falsos positivos) y un término
+    # coincide si TODAS sus palabras están en el local. Se tolera plural
+    # y género ("deportiva" = "deportivos", "niños" = "niñas").
+    frases = [_palabras(t) for t in terminos]
+    frases = [f for f in frases if f]
+    stores = []
+    for s in db.query(Store).filter(Store.active == True).order_by(Store.name.asc()).all():
+        palabras_local = _palabras(" ".join([s.category or "", s.name or "", _tags_sin_rubro(s.tags)]))
+        if any(_coincide_frase(f, palabras_local) for f in frases):
+            stores.append(s)
     # Los consultorios/oficinas de la TORRE MÉDICA no son locales
     # comerciales: no deben aparecer en búsquedas tipo "droguerías",
     # "ópticas", etc. (antes inflaban el resultado — ej. "droguerías"

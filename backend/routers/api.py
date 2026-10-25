@@ -43,7 +43,12 @@ from services.rag import load_stores_to_rag
 from services.whatsapp import send_text_message
 
 logger = logging.getLogger("mall_bot")
-router = APIRouter(tags=["panel"])
+# Fase 0 (24/10/2026): todos los endpoints del panel exigen sesión iniciada.
+# Antes cualquiera en internet podía borrar locales, cambiar el switch del bot
+# o mandar mensajes de WhatsApp sin token. El panel ya envía el token en cada
+# petición (panel/lib/api.ts), así que para el panel no cambia nada.
+from routers.auth import get_current_user
+router = APIRouter(tags=["panel"], dependencies=[Depends(get_current_user)])
 
 # ── Pydantic schemas ──────────────────────────────────────────────
 

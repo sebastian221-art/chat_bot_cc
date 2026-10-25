@@ -1,0 +1,485 @@
+# Banco de pruebas de Any 2.0 — conversaciones reales (20 al 23 de octubre de 2026)
+# Cada conversación se reproduce en orden, con su historial, y con la fecha simulada
+# para que los eventos vigentes sean los de ese día.
+# Reglas globales que el corredor aplica a TODAS las respuestas:
+#   sin "piso"/"nivel" salvo Torre Médica · sin **negrita doble** · sin texto interno
+#   ni JSON · nunca vacía · nunca "Galería Comercial" u otros lugares inventados
+#   · listas de locales completas y en orden alfabético (equidad)
+- id: real-01
+  cliente: Juan
+  fecha_simulada: '2026-10-20'
+  turnos:
+  - pregunta: Quiero comprar unos tenis para correr
+    flujo: locales
+    debe:
+    - people plays
+    - Tennis
+    - D'ITALY
+    criterio: Lista TODOS los locales de calzado deportivo, en orden alfabético, con zona y teléfono.
+    origen: 'trazas 21-10 #40 · respondió por busqueda_categoria'
+  - pregunta: Dime todos los almacenes de zapatos
+    flujo: locales
+    debe:
+    - VILLA SHOES
+    - RIVANO
+    - Tennis
+    criterio: Lista todos los locales de calzado.
+    origen: 'trazas 21-10 #39 · respondió por busqueda_categoria'
+  - pregunta: Qué significa nivel 2
+    flujo: servicios_mall
+    no_debe:
+    - segundo piso
+    - Nivel 2 del Centro
+    - Nivel 2 agrupa
+    criterio: No explica niveles ni pisos; dice que ubica por zonas y ofrece orientar hacia el local que busca.
+    origen: 'trazas 21-10 #38 · respondió por conversacion_general'
+  - pregunta: Quiero comprar una boleta para ir a cine
+    flujo: cine
+    debe:
+    - cinelandia.com.co/san-gil
+    no_debe:
+    - Punto de Información
+    criterio: Da el link de compra y que también se compra en taquilla; no inventa pasos.
+    origen: 'trazas 21-10 #37 · respondió por cartelera_cine'
+  - pregunta: Quiero reservar en línea
+    flujo: cine
+    debe:
+    - cinelandia.com.co/san-gil
+    criterio: Entiende por el hilo que es la reserva de cine.
+    origen: 'trazas 21-10 #36 · respondió por cartelera_cine'
+  - pregunta: Cuánto vale la boleta
+    flujo: cine
+    debe:
+    - $
+    criterio: Da las tarifas vigentes (general, tarjeta Cinelandia, VIP) según día y hora.
+    origen: 'trazas 21-10 #35 · respondió por cartelera_cine'
+  - pregunta: Mero Mérito tiene instagram?
+    flujo: locales
+    debe_alguno:
+    - instagram
+    criterio: Responde sobre el Instagram de Mero Merito (lo da si existe, o dice que no lo tiene y da el WhatsApp). No responde solo con el teléfono.
+    origen: 'trazas 21-10 #34 · respondió por numero_tienda'
+  - pregunta: Tienes el instagram de Chevignon?
+    flujo: locales
+    debe:
+    - instagram.com/chevignon_ch
+    origen: 'trazas 21-10 #33 · respondió por conversacion_general'
+  - pregunta: De qué locales tienes instagram?
+    flujo: locales
+    criterio: Dice de cuántos locales tiene Instagram y pide cuál le interesa; no pega 100 links.
+    origen: 'trazas 21-10 #32 · respondió por conversacion_general'
+  - pregunta: Quiero inscribir a mis hijos en run run kids
+    flujo: eventos
+    debe:
+    - Run Run Kids
+    - '180.000'
+    criterio: Da fecha, lugar, precio y lo que incluye el kit, y el canal real de inscripción; no inventa requisitos.
+    origen: 'trazas 21-10 #31 · respondió por eventos'
+  - pregunta: Cómo participo en el concurso de disfraces
+    flujo: eventos
+    debe:
+    - '10.000'
+    - 31/10
+    criterio: 'Responde con la descripción: inscripción el mismo día por $10.000, categorías. No manda a averiguar algo que ya está en los datos.'
+    origen: 'trazas 21-10 #30 · respondió por eventos'
+  - pregunta: Quiero alquilar un salón de eventos para una fiesta
+    flujo: administracion
+    debe_alguno:
+    - '3173680165'
+    - 317 368 0165
+    no_debe:
+    - $
+    criterio: Remite a la Administración con su contacto; no inventa tarifas ni condiciones.
+    origen: 'trazas 21-10 #29 · respondió por administracion_mall'
+  - pregunta: Quiero poner publicidad en el centro comercial
+    flujo: administracion
+    debe_alguno:
+    - '3173680165'
+    - 317 368 0165
+    no_debe:
+    - $
+    origen: 'trazas 21-10 #28 · respondió por administracion_mall'
+  - pregunta: Qué eventos hay
+    flujo: eventos
+    criterio: Lista los eventos vigentes en la fecha simulada, ordenados del más próximo al más lejano, con fecha, hora y lugar.
+    origen: 'trazas 21-10 #27 · respondió por eventos'
+  - pregunta: Me puedes decir la dirección del CC
+    flujo: servicios_mall
+    debe:
+    - Calle 10
+    adjunto: ubicacion
+    criterio: Da la dirección y adjunta el pin; no agrega horario ni teléfono sin que lo pidan.
+    origen: 'trazas 21-10 #26 · respondió por ubicacion_mall'
+  - pregunta: Necesito una peluquería
+    flujo: locales
+    debe:
+    - Apice
+    - Menta Hair
+    no_debe:
+    - First class store
+    origen: 'trazas 21-10 #25 · respondió por busqueda_categoria'
+  - pregunta: Dónde puedo comer hamburguesas
+    flujo: locales
+    debe:
+    - 12B
+    - HAMBURGO 1718
+    - Zirus
+    origen: 'trazas 21-10 #24 · respondió por busqueda_categoria'
+  - pregunta: Qué películas hay
+    flujo: cine
+    criterio: 'Cartelera vigente: título, horarios y ficha corta de cada película.'
+    origen: 'trazas 21-10 #23 · respondió por cartelera_cine'
+  - pregunta: Hay promociones
+    flujo: sorteos_promos
+    criterio: Lista las promociones vigentes con su detalle y vigencia, sin mayúsculas sostenidas.
+    origen: 'trazas 21-10 #22 · respondió por promociones'
+- id: real-02
+  cliente: Contabilidad
+  fecha_simulada: '2026-10-20'
+  turnos:
+  - pregunta: POR FAVOR ME DICES QUE PLANES FAMILIARES PUEDO HACER ESTE FIN DE SEMANA EN EL CENTRO COMERCIAL EL PUENTE
+    flujo: eventos
+    criterio: Filtra por el fin de semana de la fecha simulada y por público familiar. No presenta el Festival de la Cerveza ni Cheers Runners
+      como planes familiares. Si no hay eventos familiares ese fin de semana, lo dice y sugiere opciones reales (cine, plazoleta, juegos).
+    origen: 'trazas 21-10 #21 · respondió por eventos'
+  - pregunta: sabes de alguna promoción en productos ?
+    flujo: sorteos_promos
+    origen: 'trazas 21-10 #20 · respondió por promociones'
+  - pregunta: promociones en los locales por favor
+    flujo: sorteos_promos
+    origen: 'trazas 21-10 #19 · respondió por promociones'
+- id: real-03
+  cliente: Tatiana
+  fecha_simulada: '2026-10-20'
+  turnos:
+  - pregunta: Holaaaa
+    flujo: conversacion
+    criterio: Saludo breve, cálido, con el nombre; no lista servicios.
+    origen: 'trazas 21-10 #18 · respondió por conversacion_general'
+  - pregunta: Quiero saber donde quedan las oficinas de la administracion
+    flujo: administracion   # (24-10: el router lo manda a administración; es válido)
+    no_debe:
+    - Piso 2
+    criterio: Da la zona de las oficinas de Administración y su contacto.
+    depende_de_dato: Ubicación de las oficinas de Administración
+    origen: 'trazas 21-10 #17 · respondió por conversacion_general'
+  - pregunta: Cual es el siguiente evento en el cc
+    flujo: eventos
+    criterio: 'Responde UN evento: el más próximo a la fecha simulada, con fecha, hora y lugar. No vuelca la lista.'
+    origen: 'trazas 21-10 #16 · respondió por eventos'
+  - pregunta: Y de promociones? Cuales locales tiene promociones?
+    flujo: sorteos_promos
+    origen: 'trazas 21-10 #15 · respondió por promociones'
+  - pregunta: Ese descuento en que es?
+    flujo: sorteos_promos
+    debe:
+    - Coomuldesa
+    - Cajasan
+    criterio: Entiende por el hilo que pregunta por el 20% OFF y lo explica; no repite todas las promociones.
+    origen: 'trazas 21-10 #14 · respondió por promociones'
+  - pregunta: Y de ropa?
+    flujo: locales
+    criterio: Entiende por el hilo que pide locales de ropa; lista todos los relevantes sin niveles.
+    origen: 'trazas 21-10 #13 · respondió por busqueda_categoria'
+  - pregunta: La misa a que hora es?
+    flujo: eventos
+    criterio: Da días y horas de la misa y el lugar.
+    depende_de_dato: Horario de La Santa Misa
+    origen: 'trazas 21-10 #12 · respondió por conversacion_general'
+- id: real-04
+  cliente: Delis
+  fecha_simulada: '2026-10-21'
+  turnos:
+  - pregunta: Me regalas el número de Jarris
+    flujo: locales
+    debe:
+    - '3154998922'
+    origen: 'trazas 21-10 #11 · respondió por numero_tienda'
+  - pregunta: Me regalas el número de la barra
+    flujo: locales
+    debe:
+    - '3006279829'
+    origen: 'trazas 21-10 #10 · respondió por numero_tienda'
+  - pregunta: Tienes la carta de la barra
+    flujo: locales
+    debe_alguno:
+    - wa.me/573006279829
+    - '3006279829'
+    - La Barra 1516   # (25-10: en producción sí tiene carta cargada y se adjunta)
+    no_debe:
+    - comparto lo que tengo de su carta
+    - te la comparto
+    criterio: Si La Barra 1516 no tiene carta cargada, lo dice claro y da su WhatsApp.
+    origen: 'trazas 21-10 #9 · respondió por conversacion_general'
+  - pregunta: La carta de Mercagan por fa
+    flujo: locales
+    debe:
+    - instagram.com/p/DSC-D5ekbAe
+    origen: 'trazas 21-10 #8 · respondió por conversacion_general'
+  - pregunta: Me puedes decir q locales venden hamburguesas
+    flujo: locales
+    debe:
+    - 12B
+    - HAMBURGO 1718
+    - Zirus
+    origen: 'trazas 21-10 #7 · respondió por busqueda_categoria'
+  - pregunta: Y cuales venden cerveza
+    flujo: locales
+    debe:
+    - La Barra 1516
+    no_debe:
+    - Apice
+    criterio: Lista todos los locales que venden cerveza (bares, plazoleta).
+    origen: 'trazas 21-10 #6 · respondió por busqueda_categoria'
+  - pregunta: Cuáles locales venden ropa
+    flujo: locales
+    criterio: Lista todos los locales de ropa; no incluye joyerías ni supermercados como si fueran tiendas de ropa salvo que sus datos digan que
+      venden ropa.
+    origen: 'trazas 21-10 #5 · respondió por busqueda_categoria'
+  - pregunta: Tengo un grado en q marcas puedo comprar algo para el grado
+    flujo: locales
+    criterio: Propone opciones reales (ropa formal, calzado, accesorios, regalos) con locales del centro comercial, o pregunta qué busca y da
+      ejemplos. No inventa marcas.
+    origen: 'trazas 21-10 #4 · respondió por busqueda_categoria'
+  - pregunta: Vestido
+    flujo: locales
+    debe:
+    - ESPRIT
+    - Alucinada
+    origen: 'trazas 21-10 #3 · respondió por busqueda_categoria'
+  - pregunta: Valor del parqueadero
+    flujo: servicios_mall
+    criterio: Da la tarifa de carro y moto y los minutos gratis tal como están cargados.
+    depende_de_dato: Tarifas del parqueadero confirmadas
+    origen: 'trazas 21-10 #2 · respondió por conversacion_general'
+  - pregunta: Hay hora de parqueadero gratis
+    flujo: servicios_mall
+    criterio: Responde los minutos gratis cargados, igual que en la respuesta anterior (consistencia).
+    depende_de_dato: Tarifas del parqueadero confirmadas
+    origen: 'trazas 21-10 #1 · respondió por conversacion_general'
+- id: real-05
+  cliente: Tatiana
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Hola
+    flujo: conversacion
+    criterio: Saludo breve con el nombre.
+    origen: 'trazas 24-10 #32 · respondió por agente:sin_herramientas'
+  - pregunta: Quiero saber sobra la zona de entretenimiento para adultos, cuales hay?
+    flujo: locales
+    no_debe:
+    - Apice
+    - Ortopedicos
+    criterio: Interpreta 'entretenimiento para adultos' como bares, discoteca, casino o eventos nocturnos; lista solo locales de ese tipo.
+    origen: 'trazas 24-10 #30 · respondió por agente:buscar_locales'
+  - pregunta: Carta de zirus
+    flujo: locales
+    no_debe:
+    - (la carta se envía como imagen adjunta)
+    adjunto: carta
+    criterio: Envía la carta de Zirus Pizza (PDF) y lo dice con naturalidad.
+    origen: 'trazas 24-10 #29 · respondió por agente:datos_local'
+  - pregunta: Quiero pedir un domicilio a Zirus
+    flujo: domicilios
+    debe:
+    - Zirus
+    criterio: Inicia la gestión de domicilio con Zirus Pizza o lo transfiere a su WhatsApp, según lo que defina el centro comercial.
+    origen: 'trazas 24-10 #28 · respondió por agente:datos_local'
+  - pregunta: gestiona mi domicilio
+    flujo: domicilios
+    debe:
+    - Zirus
+    criterio: Entiende por el hilo que es con Zirus Pizza e inicia la gestión.
+    origen: 'trazas 24-10 #27 · respondió por agente:sin_herramientas'
+  - pregunta: De cuales restaurantes tienes carta?
+    flujo: locales
+    no_debe:
+    - tuve un problema
+    criterio: Lista los restaurantes que tienen carta o catálogo cargado, sin error.
+    origen: 'trazas 24-10 #26 · respondió por agente:buscar_locales,datos_local'
+  - pregunta: Almacen de ropa para niños
+    flujo: locales
+    debe: &id001
+    - Offcorss
+    - Tomaticos
+    no_debe: &id002
+    - Americanino
+    - Brandstore
+    origen: 'trazas 24-10 #25 · respondió por agente:buscar_locales'
+  - pregunta: Almacen de ropa para niños
+    flujo: locales
+    debe: *id001
+    no_debe: *id002
+    origen: 'trazas 24-10 #24 · respondió por busqueda_categoria'
+  - pregunta: Quiero comprarme unos tenis
+    flujo: locales
+    debe:
+    - people plays
+    - Tennis
+    origen: 'trazas 24-10 #23 · respondió por busqueda_categoria'
+  - pregunta: Cuantos cajeros hay?
+    flujo: servicios_mall
+    no_debe:
+    - Galería Comercial
+    criterio: Da el número y bancos de los cajeros.
+    depende_de_dato: Cajeros automáticos
+    origen: 'trazas 24-10 #22 · respondió por conversacion_general'
+  - pregunta: Cuales cajeros hay?
+    flujo: servicios_mall
+    no_debe:
+    - Galería Comercial
+    criterio: Lista bancos y zona de cada cajero.
+    depende_de_dato: Cajeros automáticos
+    origen: 'trazas 24-10 #21 · respondió por conversacion_general'
+  - pregunta: Que planes puedo hacer con los niños?
+    flujo: eventos
+    no_debe:
+    - Festival de la Cerveza
+    criterio: Propone eventos y lugares aptos para niños (Run Run Kids, Concurso de Disfraces categoría niños, cine infantil, juegos).
+    origen: 'trazas 24-10 #19 · respondió por eventos'
+  - pregunta: Quiero comer una hamburguesa
+    flujo: locales
+    debe:
+    - 12B
+    - HAMBURGO 1718
+    origen: 'trazas 24-10 #18 · respondió por busqueda_categoria'
+  - pregunta: Dame la carta de 12b
+    flujo: locales
+    debe:
+    - instagram.com/12b_burger_angus
+    origen: 'trazas 24-10 #17 · respondió por conversacion_general'
+- id: real-06
+  cliente: Juan
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Hola
+    flujo: conversacion
+    criterio: Saludo breve con el nombre.
+    origen: 'trazas 24-10 #31 · respondió por agente:sin_herramientas'
+  - pregunta: que cajers hay en el mall
+    flujo: servicios_mall
+    no_debe:
+    - Galería Comercial
+    - suele haber
+    criterio: Entiende el error de tecleo; lista bancos y zona de cada cajero.
+    depende_de_dato: Cajeros automáticos
+    origen: 'trazas 24-10 #20 · respondió por busqueda_categoria'
+- id: real-07
+  cliente: Delis
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: HOLA
+    flujo: conversacion
+    no_debe:
+    - en qué más
+    criterio: Saludo de inicio; no dice 'en qué más te ayudo' si es el primer mensaje de la sesión.
+    origen: 'trazas 24-10 #16 · respondió por conversacion_general'
+  - pregunta: REGALAME EL NUMERO DE PEOPLE PLAYS
+    flujo: locales
+    debe:
+    - '3102907353'
+    origen: 'trazas 24-10 #15 · respondió por numero_tienda'
+  - pregunta: HOLA Q EVETOS TIENE EL CC
+    flujo: eventos
+    criterio: Entiende 'evetos'; lista eventos vigentes ordenados por fecha.
+    origen: 'trazas 24-10 #13 · respondió por eventos'
+- id: real-08
+  cliente: Eliana
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Quiero saber por tiendas deportivas
+    flujo: locales
+    debe:
+    - people plays
+    - D'ITALY
+    origen: 'trazas 24-10 #14 · respondió por busqueda_categoria'
+  - pregunta: Y cual otra
+    flujo: locales
+    no_debe:
+    - Nike y Adidas
+    criterio: Por el hilo, da otras tiendas deportivas reales; no inventa marcas que el local no vende.
+    origen: 'trazas 24-10 #10 · respondió por conversacion_general'
+  - pregunta: Y PEOPLE plays ?
+    flujo: locales
+    debe:
+    - Charalá
+    criterio: 'Ficha de People Plays: zona, horario, contacto y qué vende, solo con datos cargados.'
+    origen: 'trazas 24-10 #8 · respondió por conversacion_general'
+  - pregunta: Y tienes servicio de vacunación ?
+    flujo: torre_medica
+    no_debe:
+    - Piso 1
+    - no tengo datos
+    criterio: Dice qué consultorio vacuna si existe; si no hay ninguno registrado lo dice y muestra opciones de la Torre Médica.
+    depende_de_dato: Especialidades de la Torre Médica
+    origen: 'trazas 24-10 #7 · respondió por torre_medica'
+  - pregunta: Y gimnasios
+    flujo: locales
+    criterio: Si no hay gimnasio, lo dice claro sin mandar al Punto de Información; puede sugerir tiendas deportivas reales.
+    origen: 'trazas 24-10 #6 · respondió por busqueda_categoria'
+  - pregunta: Dónde puedo comprar un helado
+    flujo: locales
+    debe:
+    - popsy
+    - Badelei
+    origen: 'trazas 24-10 #1 · respondió por busqueda_categoria'
+- id: real-09
+  cliente: Arenas
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Hasta qué hora está abierto el cinema
+    flujo: cine
+    no_debe:
+    - Cartelera de
+    criterio: Responde la hora de cierre del cine, o la hora de la última función de hoy. No vuelca la cartelera.
+    depende_de_dato: Horario del cine
+    origen: 'trazas 24-10 #12 · respondió por cartelera_cine'
+  - pregunta: Son las fechas para que días?
+    flujo: cine
+    criterio: 'Interpreta por el hilo (venía hablando del cine): explica para qué días son las funciones de la cartelera, o pregunta a qué se
+      refiere. No vuelca la lista de eventos.'
+    origen: 'trazas 24-10 #11 · respondió por eventos'
+- id: real-10
+  cliente: Aura
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: cual es el horario de funcionamiento dle centro ccial
+    flujo: servicios_mall
+    debe:
+    - '10'
+    no_debe:
+    - Cartelera
+    - película
+    criterio: Da el horario del centro comercial pese al error de tecleo.
+    origen: 'trazas 24-10 #9 · respondió por cartelera_cine'
+  - pregunta: cual es el horario de funcionamiento del centro comercial
+    flujo: servicios_mall
+    debe:
+    - '10'
+    criterio: Horario de locales y plazoleta de comidas.
+    origen: 'trazas 24-10 #5 · respondió por conversacion_general'
+  - pregunta: '?'
+    flujo: conversacion
+    criterio: Pide aclaración en una línea, amable.
+    origen: 'trazas 24-10 #4 · respondió por conversacion_general'
+- id: real-11
+  cliente: Jumbo
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Q supermercados hay en el centro comercial
+    flujo: locales
+    debe:
+    - Jumbo
+    no_debe:
+    - Zirus
+    - Mercagan
+    origen: 'trazas 24-10 #3 · respondió por busqueda_categoria'
+- id: real-12
+  cliente: luisanair
+  fecha_simulada: '2026-10-23'
+  turnos:
+  - pregunta: Me das el teléfono de wokland
+    flujo: locales
+    debe:
+    - '3213907359'
+    origen: 'trazas 24-10 #2 · respondió por numero_tienda'

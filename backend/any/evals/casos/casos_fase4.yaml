@@ -1,0 +1,42 @@
+# Fase 4: domicilios de punta a punta (escritos a partir de los pedidos reales del sistema viejo).
+- id: dom-01
+  cliente: Laura
+  fecha_simulada: '2026-10-22'
+  turnos:
+  - pregunta: Hola, quiero pedir a domicilio de 12B Burger
+    flujo: domicilios
+    debe:
+    - 12B
+    no_debe:
+    - wa.me/573219181497?text
+    criterio: Arranca el pedido con 12B Burger Angus y pide en un solo mensaje lo que falta (nombre, celular, dirección, pedido, pago).
+  - pregunta: 'Soy Laura, mi cel 300 111 2233, calle 15 # 9-30 barrio La Playa, una hamburguesa clásica y pago por nequi'
+    flujo: domicilios
+    debe:
+    - ¿Lo confirmas?
+    - Transferencia
+    - calle 15
+    criterio: Muestra el resumen exacto y pide confirmar con SÍ o NO.
+  - pregunta: si
+    flujo: domicilios
+    debe:
+    - wa.me/573219181497?text=
+    criterio: Entrega el link al WhatsApp del local con el pedido escrito; no promete precio ni tiempo.
+- id: dom-02
+  cliente: Pedro
+  fecha_simulada: '2026-10-22'
+  turnos:
+  - pregunta: me gestionas un domicilio de zirus pizza
+    flujo: domicilios
+    debe:
+    - Zirus
+  - pregunta: oye y hay wifi en el centro comercial?
+    flujo: servicios_mall
+    debe:
+    - sigue abierto
+    criterio: Responde lo del wifi y recuerda que el pedido sigue abierto.
+  - pregunta: cancelar
+    flujo: domicilios
+    no_debe:
+    - wa.me/
+    criterio: Cancela el pedido sin enviar nada.

@@ -25,13 +25,15 @@ import io
 import logging
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from PIL import Image
 from config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger("mall_bot")
-router = APIRouter(prefix="/uploads", tags=["uploads"])
+# Fase 0: subir archivos exige sesión iniciada.
+from routers.auth import get_current_user
+router = APIRouter(prefix="/uploads", tags=["uploads"], dependencies=[Depends(get_current_user)])
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}
 MAX_IMAGE_MB = 25   # aceptamos imágenes grandes; las comprimimos nosotros

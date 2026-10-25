@@ -165,11 +165,18 @@ async def _cabeceras_seguridad(request, call_next):
     resp.headers["X-XSS-Protection"] = "1; mode=block"        # protección básica XSS
     return resp
 
+# Any 2.0 como sistema principal: con ANY_PRINCIPAL=1 en Railway responde Any 2.0 en el mismo /webhook.
+# Sin la variable, responde el bot viejo como siempre (volver atrás = quitar la variable).
+from any.entrada import es_principal as _any_principal, principal as _any_router_principal
+if _any_principal():
+    app.include_router(_any_router_principal)
+    logging.getLogger("mall_bot").warning("Any 2.0 es el sistema principal: /webhook lo atiende Any 2.0")
 app.include_router(webhook.router)
 app.include_router(api_router)
 app.include_router(orders_router)
 app.include_router(auth_router)
 app.include_router(uploads_router)
+app.include_router(__import__("any.entrada", fromlist=["router"]).router)  # Any 2.0 (/any/*)
 
 static_path = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_path, exist_ok=True)

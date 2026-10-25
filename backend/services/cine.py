@@ -170,11 +170,11 @@ def bloque_info_extra(store: Store, clave: str) -> str:
 def build_cartelera_message(store: Store | None) -> str:
     """Arma la respuesta completa de la cartelera actual — con datos reales, sin que la IA tenga que adivinar."""
     if not store:
-        return "No tengo registrado el local del cine en el directorio todavía — te recomiendo preguntar en el Punto de Información (Piso 1). 😊"
+        return "No tengo registrado el local del cine en el directorio todavía — te recomiendo preguntar en el Punto de Información (Pasillo Barichara). 😊"
 
     funciones = [f for f in store.cine_funciones if f.active]
     if not funciones:
-        return f"Por ahora no tengo la cartelera de *{store.name}* cargada. Te recomiendo llamar al {store.phone or 'cine'} o preguntar en el Punto de Información (Piso 1) para la programación más actualizada. 🎬"
+        return f"Por ahora no tengo la cartelera de *{store.name}* cargada. Te recomiendo llamar al {store.phone or 'cine'} o preguntar en el Punto de Información (Pasillo Barichara) para la programación más actualizada. 🎬"
 
     lines = [f"🎬 Cartelera de *{store.name}*:\n"]
     for f in funciones:

@@ -432,7 +432,7 @@ def _handle_idle(db: Session, s: DeliverySession, message: str) -> str:
         return (
             "🛵 Me encantaría ayudarte con un domicilio, pero aún no hay "
             "locales registrados con ese servicio.\n"
-            "Visita el *Punto de Información* en el Piso 1 para más ayuda 😊"
+            "Visita el *Punto de Información* en el Pasillo Barichara para más ayuda 😊"
         )
 
     s.step          = "asking_store"

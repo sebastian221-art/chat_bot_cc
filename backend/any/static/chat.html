@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Any 2.0 · Chat de prueba</title>
+<style>
+  :root { --fondo:#f4f1ea; --panel:#fff; --tinta:#1f2421; --suave:#6b716d; --linea:#e2ded4;
+          --any:#0f6e56; --any-claro:#e3f1ec; --yo:#dcf4c9; --alerta:#a33a1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--fondo); color:var(--tinta); }
+  header { padding:12px 16px; background:var(--any); color:#fff; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header b { font-size:17px; }
+  header input { padding:6px 8px; border-radius:6px; border:0; font:inherit; width:150px; }
+  header button, .boton { padding:6px 12px; border-radius:6px; border:0; background:#fff; color:var(--any); font:inherit; font-weight:600; cursor:pointer; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,420px); gap:0; height:calc(100vh - 56px); }
+  #chat { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--linea); }
+  #mensajes { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .burbuja { max-width:78%; padding:8px 12px; border-radius:10px; white-space:pre-wrap; word-wrap:break-word; box-shadow:0 1px 1px rgba(0,0,0,.06); }
+  .yo { align-self:flex-end; background:var(--yo); }
+  .any { align-self:flex-start; background:var(--panel); cursor:pointer; }
+  .any.activa { outline:2px solid var(--any); }
+  .etiqueta { font-size:11px; color:var(--suave); margin-top:4px; }
+  .adjunto { font-size:13px; color:var(--any); margin-top:6px; }
+  form#enviar { display:flex; gap:8px; padding:12px; background:var(--panel); border-top:1px solid var(--linea); }
+  form#enviar input { flex:1; padding:10px 12px; border:1px solid var(--linea); border-radius:20px; font:inherit; }
+  form#enviar button { padding:0 18px; border-radius:20px; border:0; background:var(--any); color:#fff; font-weight:600; cursor:pointer; }
+  #traza { overflow-y:auto; padding:16px; background:var(--panel); }
+  #traza h2 { font-size:14px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.04em; color:var(--suave); }
+  .paso { border-left:3px solid var(--linea); padding:4px 0 8px 10px; margin-left:4px; }
+  .paso b { font-size:13px; }
+  .paso.alerta { border-color:var(--alerta); }
+  .paso.alerta b { color:var(--alerta); }
+  .paso pre { margin:4px 0 0; font-size:12px; white-space:pre-wrap; word-break:break-word; color:#333; background:#faf9f6; padding:6px; border-radius:4px; max-height:220px; overflow:auto; }
+  .ms { color:var(--suave); font-size:12px; font-weight:400; }
+  .chip { display:inline-block; background:var(--any-claro); color:var(--any); border-radius:10px; padding:1px 8px; font-size:12px; font-weight:600; }
+  #login { max-width:340px; margin:12vh auto; background:var(--panel); padding:24px; border-radius:12px; display:flex; flex-direction:column; gap:10px; }
+  #login input { padding:10px; border:1px solid var(--linea); border-radius:8px; font:inherit; }
+  #login button { padding:10px; border:0; border-radius:8px; background:var(--any); color:#fff; font-weight:600; cursor:pointer; }
+  .error { color:var(--alerta); font-size:13px; }
+  @media (max-width: 760px) { main { grid-template-columns:1fr; height:auto; } #chat { height:70vh; } }
+</style>
+</head>
+<body>
+<div id="login" hidden>
+  <b>Any 2.0 · chat de prueba</b>
+  <span class="etiqueta">Entra con tu usuario del panel.</span>
+  <input id="usuario" placeholder="Usuario" autocomplete="username">
+  <input id="clave" type="password" placeholder="Contraseña" autocomplete="current-password">
+  <button id="entrar">Entrar</button>
+  <span id="error-login" class="error"></span>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <b>Any 2.0</b><span>chat de prueba</span>
+    <label>Teléfono <input id="telefono" value="prueba-any2"></label>
+    <label>Nombre <input id="nombre" value="Juan"></label>
+    <label>Fecha simulada <input id="fecha" placeholder="2026-10-21 15:30"></label>
+    <button id="reiniciar" type="button">Reiniciar conversación</button>
+  </header>
+  <main>
+    <section id="chat">
+      <div id="mensajes"></div>
+      <form id="enviar"><label class="boton" title="Enviar una foto" style="display:flex;align-items:center;border:1px solid var(--linea)">📷<input id="foto" type="file" accept="image/*" hidden></label><input id="texto" placeholder="Escribe como si fueras un cliente…" autocomplete="off"><button>Enviar</button></form>
+    </section>
+    <aside id="traza"><h2>Recorrido del mensaje</h2><p class="etiqueta">Toca una respuesta de Any para ver por dónde pasó.</p></aside>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = "";
+try { token = sessionStorage.getItem("any2_token") || ""; } catch (e) {}
+
+async function api(ruta, opciones = {}) {
+  const r = await fetch(ruta, { ...opciones, headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) } });
+  if (r.status === 401) { mostrarLogin(); throw new Error("Sesión vencida"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ("Error " + r.status));
+  return r.json();
+}
+function mostrarLogin() { $("login").hidden = false; $("app").hidden = true; }
+function mostrarApp() { $("login").hidden = true; $("app").hidden = false; $("texto").focus(); }
+
+$("entrar").onclick = async () => {
+  $("error-login").textContent = "";
+  try {
+    const r = await fetch("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("usuario").value, password: $("clave").value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || "No se pudo entrar");
+    token = j.token; try { sessionStorage.setItem("any2_token", token); } catch (e) {}
+    mostrarApp();
+  } catch (e) { $("error-login").textContent = e.message; }
+};
+
+function burbuja(texto, clase, etiqueta) {
+  const d = document.createElement("div");
+  d.className = "burbuja " + clase;
+  d.textContent = texto;
+  if (etiqueta) { const s = document.createElement("div"); s.className = "etiqueta"; s.textContent = etiqueta; d.appendChild(s); }
+  $("mensajes").appendChild(d);
+  $("mensajes").scrollTop = $("mensajes").scrollHeight;
+  return d;
+}
+
+function pintarTraza(r) {
+  const t = r.traza || {};
+  const cont = $("traza");
+  cont.innerHTML = "";
+  const h = document.createElement("h2"); h.textContent = "Recorrido del mensaje"; cont.appendChild(h);
+  const res = document.createElement("p");
+  res.innerHTML = `<span class="chip"></span> <span class="ms"></span>`;
+  res.querySelector(".chip").textContent = "flujo: " + r.flujo;
+  res.querySelector(".ms").textContent = ` ${t.ms_total || 0} ms · tokens ${(t.tokens||{}).entrada||0}/${(t.tokens||{}).salida||0} · ${(t.modelos||[]).join(", ")}`;
+  cont.appendChild(res);
+  (t.pasos || []).forEach((p) => {
+    const d = document.createElement("div");
+    d.className = "paso" + (p.paso === "alerta" ? " alerta" : "");
+    const b = document.createElement("b"); b.textContent = p.paso + " ";
+    const ms = document.createElement("span"); ms.className = "ms"; ms.textContent = p.ms + " ms";
+    b.appendChild(ms); d.appendChild(b);
+    if (p.detalle !== null && p.detalle !== undefined) {
+      const pre = document.createElement("pre");
+      pre.textContent = typeof p.detalle === "string" ? p.detalle : JSON.stringify(p.detalle, null, 1);
+      d.appendChild(pre);
+    }
+    cont.appendChild(d);
+  });
+}
+
+$("enviar").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const texto = $("texto").value.trim();
+  const archivo = $("foto").files[0];
+  if (!texto && !archivo) return;
+  $("texto").value = "";
+  let imagen = null;
+  if (archivo) {
+    imagen = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(archivo); });
+    $("foto").value = "";
+  }
+  burbuja((archivo ? "📷 [foto] " : "") + texto, "yo");
+  const espera = burbuja("…", "any");
+  try {
+    const r = await api("/any/prueba", { method: "POST", body: JSON.stringify({
+      mensaje: texto, telefono: $("telefono").value || "prueba-any2", nombre: $("nombre").value,
+      fecha: $("fecha").value.trim() || null, imagen_base64: imagen }) });
+    espera.remove();
+    const msgs = r.mensajes.length ? r.mensajes : ["(Any no respondió: bot en pausa)"];
+    msgs.forEach((m, i) => {
+      const b = burbuja(m, "any", i === msgs.length - 1 ? "flujo: " + r.flujo : "");
+      if (i === msgs.length - 1) {
+        (r.adjuntos || []).forEach((a) => {
+          const s = document.createElement("div"); s.className = "adjunto";
+          s.textContent = "📎 " + a.tipo + ": " + (a.url || a.titulo || "") + (a.direccion ? " — " + a.direccion : "");
+          b.appendChild(s);
+        });
+      }
+      b.onclick = () => { document.querySelectorAll(".any").forEach((x) => x.classList.remove("activa")); b.classList.add("activa"); pintarTraza(r); };
+    });
+    pintarTraza(r);
+  } catch (e) { espera.textContent = "⚠️ " + e.message; }
+};
+
+$("reiniciar").onclick = async () => {
+  const tel = $("telefono").value || "prueba-any2";
+  try { await api("/any/prueba/" + encodeURIComponent(tel), { method: "DELETE" }); $("mensajes").innerHTML = ""; }
+  catch (e) { alert(e.message); }
+};
+
+// Si la prueba está abierta (ANY_PRUEBA_ABIERTA=1) o ya hay sesión, se entra directo
+token ? mostrarApp() : fetch("/any/prueba", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+  .then((r) => (r.status === 401 ? mostrarLogin() : mostrarApp())).catch(mostrarLogin);
+</script>
+</body>
+</html>

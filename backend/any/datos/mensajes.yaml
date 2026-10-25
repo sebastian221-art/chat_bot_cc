@@ -1,0 +1,99 @@
+# Mensajes fijos de Any 2.0. SOLO lo que por ley o por seguridad debe decirse
+# siempre igual. Todo lo demás lo redacta la IA con datos reales.
+# Variables entre llaves: {nombre}, {correo}, {linea}, {linea_link}.
+# Más adelante se editarán desde el panel (con versión y aprobación).
+
+correo_datos: info.jelcom@gmail.com
+linea_mall: "317 432 0138"
+linea_mall_link: https://wa.me/573174320138
+punto_informacion: Pasillo Barichara
+
+# Canales oficiales (se usan tal cual; nunca se inventan otros)
+cine_compra_url: https://www.cinelandia.com.co/san-gil
+registro_facturas_url: https://www.elpuente.com.co/registro-de-facturas
+
+aviso_privacidad:
+  version: "2026-10"
+  texto: >-
+    🔒 Un aviso rápido antes de seguir: al continuar esta conversación autorizas el
+    tratamiento de tus datos personales para atenderte y mejorar el servicio, conforme
+    a la *Ley 1581 de 2012*. Puedes consultar, actualizar o eliminar tus datos cuando
+    quieras: escribe *"eliminar mis datos"* o escribe a *{correo}*.
+
+borrado_confirmar: >-
+  Entiendo que quieres eliminar tus datos personales 🔒. Esto borra tu historial de
+  conversación y lo que sé de ti; la próxima vez que escribas será como empezar de cero.
+
+  ¿Confirmas? Responde *"sí, eliminar"* para confirmar, o cualquier otra cosa para cancelar.
+
+borrado_hecho: >-
+  ✅ Listo. Tus datos personales fueron eliminados. Si vuelves a escribir, empezamos de cero.
+  Para cualquier otra solicitud sobre tus datos: *{correo}*.
+
+borrado_cancelado: "Perfecto, no borré nada. ¿En qué te ayudo?"
+
+# Respaldo cuando el modelo no responde: corto y con un canal real.
+error_tecnico: >-
+  Uy, tuve un problema técnico para responderte 😅. Intenta de nuevo en un momento,
+  o escribe a la línea del centro comercial: {linea_link}
+
+# Temas cuyo especialista aún no está construido (solo mientras se completa Any 2.0).
+tema_pendiente: >-
+  Ese tema todavía no lo tengo conectado con datos exactos 🙏. Para no darte información
+  equivocada, escríbele a la línea del centro comercial: *{linea}* 👉 {linea_link}
+
+# Emergencia: si el modelo falla, esto sale tal cual (nunca se queda sin respuesta).
+emergencia: >-
+  🚨 Si estás en peligro o hay alguien herido, busca de inmediato al *personal de seguridad*
+  más cercano o ve al *Punto de Información* en el *Pasillo Barichara*. También puedes
+  escribir o llamar a la línea del centro comercial: *{linea}* 👉 {linea_link}
+
+frases_borrado:
+  - eliminar mis datos
+  - borrar mis datos
+  - borra mis datos
+  - elimina mis datos
+  - suprimir mis datos
+  - eliminar mi informacion
+  - borrar mi informacion
+  - no quiero que guarden mis datos
+
+frases_confirmar_borrado:
+  - si eliminar
+  - si, eliminar
+  - si borrar
+  - confirmo
+  - si confirmo
+  - si elimina
+
+# Palabras de emergencia (por palabra completa). Ante la duda, se atiende como emergencia.
+frases_emergencia:
+  - emergencia
+  - auxilio
+  - me robaron
+  - nos robaron
+  - robaron
+  - robo
+  - ladron
+  - incendio
+  - se esta quemando
+  - humo
+  - accidente
+  - herido
+  - herida
+  - sangrando
+  - desmayo
+  - se desmayo
+  - inconsciente
+  - ambulancia
+  - pelea
+  - me estan acosando
+  - acoso
+  - perdi a mi hijo
+  - perdi a mi hija
+  - niño perdido
+  - niña perdida
+  - mi hijo se perdio
+  - mi hija se perdio
+  - temblor
+  - me cai

@@ -1,0 +1,14 @@
+# Reglas de negocio de Any 2.0 que se ajustan sin tocar código.
+# (En la fase 7 se editarán desde el panel.)
+
+promociones:
+  # Pedido del centro comercial (25-10): cada respuesta lleva una novedad
+  # (evento, sorteo o promoción vigente), rotando para que todas se muestren.
+  # Solo NO va en estos temas:
+  flujos_sin_promo: [emergencia_queja, privacidad, pausa_humana, eventos, sorteos_promos, domicilios]
+  en_primer_mensaje: true       # también en el saludo de una sesión nueva
+  tope_por_sesion: 12           # máximo de novedades en una misma sesión (4 h)
+  espaciado_mensajes: 0         # 0 = en cada mensaje; 2 = una sí, dos no; etc.
+  # Si ya se mostraron todas las vigentes en la sesión, se vuelve a empezar
+  # por la que se mostró hace más tiempo.
+  repetir_cuando_se_acaben: true

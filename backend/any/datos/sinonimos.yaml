@@ -1,0 +1,48 @@
+# Sinónimos de Any 2.0 — se aplican por PALABRA COMPLETA (nunca por pedazos).
+# Cada grupo: palabras que significan lo mismo para buscar. Se puede editar
+# sin tocar código; más adelante se moverá a una tabla editable desde el panel.
+# Escribe en minúscula; las tildes y los plurales se manejan solos.
+
+servicios:
+  baño: [baño, baños, sanitario, sanitarios, wc, servicio sanitario]
+  wifi: [wifi, wi-fi, internet, red inalambrica]
+  parqueadero: [parqueadero, parqueo, parking, estacionamiento, aparcadero, parquear, carro, moto]
+  cajero: [cajero, cajeros, atm, retirar plata, retirar dinero, sacar plata, sacar dinero]
+  mascota: [mascota, mascotas, perro, perrito, gato, pet friendly]
+  horario: [horario, hora, abren, cierran, abierto, cerrado, atienden, funcionamiento]
+  ubicacion: [ubicacion, direccion, como llego, como llegar, donde queda el centro, donde estan]
+  punto_informacion: [punto de informacion, informacion, recepcion]
+  administracion: [administracion, oficina administrativa, oficinas administrativas]
+  enfermeria: [enfermeria, primeros auxilios]
+
+locales:
+  # Un grupo puede ser una lista (todas las palabras valen lo mismo) o tener
+  # "generales" (amplían a todo el grupo) y "especificos" (se buscan solos;
+  # solo si ningún local los tiene, se amplía al grupo).
+  # Ej.: "zapatos" trae todo el calzado; "sandalias" trae solo quien vende sandalias.
+  calzado:
+    generales: [zapato, zapatos, calzado, zapateria]
+    especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  tenis:
+    generales: [tenis, tennis, sneakers, zapatilla, zapatillas, zapatillas deportivas]
+    amplia_a: calzado   # el juez también revisa todo el calzado (una tienda deportiva vende tenis)
+  ropa:
+    generales: [ropa, vestuario, moda, prenda, prendas, almacen de ropa]
+    especificos: [vestido, vestidos, camisa, camisas, pantalon, pantalones, jean, jeans, falda, faldas, blusa, blusas, chaqueta, chaquetas]
+  infantil: [niño, niños, niña, niñas, bebe, bebes, infantil, infantiles, kids]
+  deportivo: [deporte, deportes, deportiva, deportivas, deportivo, deportivos, correr, running]
+  comida:
+    generales: [comida, comer, almorzar, almuerzo, cenar, cena, restaurante, restaurantes, hambre]
+    especificos: [pizza, pizzas, sushi, pollo, broaster, arepa, arepas, empanada, empanadas, wok, comida china, comida arabe]
+  hamburguesa: [hamburguesa, hamburguesas, burger, burgers]
+  helado: [helado, helados, heladeria, paleta, paletas]
+  cafe: [cafe, cafes, cafeteria, tinto, capuchino]
+  celular: [celular, celulares, telefono movil, smartphone, iphone, android]
+  tecnologia: [tecnologia, computador, portatil, laptop, electronica, accesorios para celular]
+  drogueria: [drogueria, droguerias, farmacia, medicamento, medicamentos, remedio, remedios]
+  optica: [optica, opticas, gafas, lentes, anteojos, examen visual]
+  belleza:
+    generales: [belleza, salon de belleza, estetica]
+    especificos: [peluqueria, peluquerias, uñas, manicure, maquillaje, cosmeticos, barberia, barberias]
+  supermercado: [supermercado, mercado, viveres, mercar]
+  licores: [licor, licores, trago, cerveza, cervezas, vino, vinos, whisky, aguardiente, bar, bares]

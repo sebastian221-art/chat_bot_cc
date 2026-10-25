@@ -173,7 +173,7 @@ async def continue_management(db: Session, session: DeliveryManagement, message:
 
     link = build_personalized_link(store, session)
     if not link:
-        return f"Ya tengo todos tus datos, pero {store.name} no tiene un número de WhatsApp registrado — pásate por el Punto de Información (Piso 1) para que te ayuden a contactarlos."
+        return f"Ya tengo todos tus datos, pero {store.name} no tiene un número de WhatsApp registrado — pásate por el Punto de Información (Pasillo Barichara) para que te ayuden a contactarlos."
 
     session.status = "completed"
     session.generated_link = link

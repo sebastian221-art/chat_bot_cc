@@ -16,3 +16,56 @@ panel/.env.local
 *.log
 .DS_Store
 Thumbs.db
+
+backend/venv/
+backend/local_stubs/
+backend/requirements_local.txt
+# ════════════ Secretos (NUNCA subir) ════════════
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+panel/.env*
+*.pem
+*.key
+
+# ════════════ Backend (Python) ════════════
+__pycache__/
+*.py[cod]
+*.pyo
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+# entorno local de Sebastián (solo para su PC, no van a Railway)
+backend/local_stubs/
+backend/requirements_local.txt
+# bases de datos locales (copias de Railway con datos de clientes)
+*.db
+*.sqlite
+*.sqlite3
+backend/data/chroma_db/
+# reportes que generan las pruebas
+backend/reporte*.md
+.pytest_cache/
+
+# ════════════ Panel (Next.js) ════════════
+node_modules/
+panel/.next/
+panel/out/
+panel/build/
+.next/
+*.tsbuildinfo
+
+# ════════════ Editores y sistema ════════════
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ════════════ Logs ════════════
+*.log
+npm-debug.log*

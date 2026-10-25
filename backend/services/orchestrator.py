@@ -166,10 +166,16 @@ Responde SOLO con el nombre exacto de una herramienta de la lista (una palabra).
         # El modelo a veces devuelve el nombre dentro de una frase — buscamos
         # cuál de las herramientas reales aparece en su respuesta.
         eleccion = None
-        for h in HERRAMIENTAS:
-            if h["nombre"] in limpio:
-                eleccion = h["nombre"]
-                break
+        nombres = [h["nombre"] for h in HERRAMIENTAS]
+        if limpio.strip(" .'\"`") in nombres:
+            eleccion = limpio.strip(" .'\"`")
+        else:
+            # Fase 0: antes ganaba el primero de la LISTA que apareciera en la
+            # frase ("no es emergencia → conversacion_general" elegía emergencia).
+            # Ahora gana el que la IA nombró de último, que es su conclusión.
+            pos = [(limpio.rfind(n), n) for n in nombres if n in limpio]
+            if pos:
+                eleccion = max(pos)[1]
         if eleccion:
             traza.paso("decision_ia", f"La IA eligió la herramienta '{eleccion}' (respuesta cruda: '{limpio[:40]}')")
             return eleccion
@@ -221,19 +227,19 @@ async def _ejecutar_emergencia(db, phone_number, mensaje, traza) -> dict:
     variantes = [
         (
             "🚨 Entiendo que es una situación urgente. Por favor, dirígete de inmediato al *Punto de "
-            "Información* (Piso 1) o busca al personal de *seguridad* más cercano — ellos pueden actuar "
+            "Información* (Pasillo Barichara) o busca al personal de *seguridad* más cercano — ellos pueden actuar "
             "al instante.\n\n"
             f"También puedes llamar directamente a la administración del centro comercial al *{CONTACTO_MALL}*.\n\n"
             "Estamos para ayudarte."
         ),
         (
             "🚨 Lo primero es mantener la calma — estamos aquí para ayudarte. Acércate lo más rápido "
-            "posible al *Punto de Información* (Piso 1) o busca al *personal de seguridad*, que está "
+            "posible al *Punto de Información* (Pasillo Barichara) o busca al *personal de seguridad*, que está "
             "capacitado para atender este tipo de situaciones de inmediato.\n\n"
             f"Si lo prefieres, llama directo a la administración al *{CONTACTO_MALL}*. No estás solo en esto."
         ),
         (
-            "🚨 Entiendo la urgencia y vamos a ayudarte. Dirígete ya al *Punto de Información* (Piso 1) "
+            "🚨 Entiendo la urgencia y vamos a ayudarte. Dirígete ya al *Punto de Información* (Pasillo Barichara) "
             "o al *personal de seguridad* más cercano — ellos pueden actuar en el momento.\n\n"
             f"También tienes la línea directa de la administración: *{CONTACTO_MALL}*. Cuenta con nosotros."
         ),
@@ -316,14 +322,14 @@ async def _ejecutar_queja(db, phone_number, mensaje, traza) -> dict:
             "tu comentario es importante para el centro comercial. 🙏\n\n"
             "Para que tu queja quede registrada formalmente y le den seguimiento, te recomiendo "
             f"comunicarte con la administración al *{CONTACTO_MALL}*, o acercarte al *Punto de "
-            "Información* (Piso 1). Ahí podrán ayudarte de manera directa.\n\n"
+            "Información* (Pasillo Barichara). Ahí podrán ayudarte de manera directa.\n\n"
             "¿Hay algo más en lo que te pueda apoyar mientras tanto?"
         ),
         (
             "Siento mucho que hayas vivido esa experiencia, y de verdad agradezco que nos lo cuentes — "
             "así el centro comercial puede mejorar. 🙏\n\n"
             "Para que tu caso quede registrado y le hagan seguimiento, lo mejor es que te comuniques con "
-            f"la administración al *{CONTACTO_MALL}* o pases por el *Punto de Información* (Piso 1), donde "
+            f"la administración al *{CONTACTO_MALL}* o pases por el *Punto de Información* (Pasillo Barichara), donde "
             "te atenderán directamente.\n\n"
             "¿Puedo ayudarte con algo más mientras tanto?"
         ),
@@ -331,7 +337,7 @@ async def _ejecutar_queja(db, phone_number, mensaje, traza) -> dict:
             "Lamento lo sucedido y te agradezco la confianza de contárnoslo. Tu opinión nos ayuda a "
             "mejorar la experiencia en el centro comercial. 🙏\n\n"
             f"Para darle trámite formal a tu queja, comunícate con la administración al *{CONTACTO_MALL}* "
-            "o acércate al *Punto de Información* (Piso 1); ellos podrán gestionarla como corresponde.\n\n"
+            "o acércate al *Punto de Información* (Pasillo Barichara); ellos podrán gestionarla como corresponde.\n\n"
             "Quedo atenta por si necesitas algo más."
         ),
     ]
@@ -599,6 +605,10 @@ async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     #    Los consultorios se cargan como locales con zona 'Torre Médica',
     #    así que la misma búsqueda de tiendas los encuentra.
     store = find_store_by_message(db, mensaje)
+    # Fase 0: antes decía "X se encuentra en la Torre Médica" para CUALQUIER
+    # local nombrado (ej. una droguería del centro comercial).
+    if store and "torre" not in (store.location_hint or "").lower():
+        store = None
     if store:
         traza.paso("ejecucion", f"Servicio médico puntual encontrado en locales: '{store.name}'")
         partes = [f"🏥 *{store.name}* se encuentra en la *Torre Médica* del Centro Comercial El Puente."]
@@ -619,19 +629,59 @@ async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     medicos = db.query(_Store).filter(
         _Store.active == True, _Store.location_hint.ilike("%torre%")
     ).all()
+    # Limpieza defensiva (fase 0): la sincronización de la web creó filas
+    # basura llamadas "Teléfono:" y hay consultorios duplicados (uno vacío).
+    vistos = {}
+    for m in medicos:
+        nm = (m.name or "").strip()
+        if not nm or nm.endswith(":"):
+            continue
+        k = nm.lower()
+        if k not in vistos or (m.description and not vistos[k].description):
+            vistos[k] = m
+    medicos = sorted(vistos.values(), key=lambda m: m.name.lower())
+
+    def _linea_consultorio(m):
+        det = f"• *{m.name}*"
+        piso = (m.floor or "").strip()
+        if piso.lower().startswith("piso"):
+            det += f" — {piso}"  # en la Torre sí se dice el piso (única excepción)
+        if m.phone:
+            det += f" — 📞 {m.phone}"
+        return det
+
+    # ── 1a) ¿Lo que pide coincide con la especialidad de algún consultorio?
+    #    Antes solo se miraba la Torre si el mensaje decía "médico",
+    #    "consultorio"…; "¿tienen vacunación?" respondía "no tengo datos"
+    #    teniendo 29 consultorios cargados (traza #7, 23/10).
+    from services.rag import _palabras, _coincide_palabra
+    genericas = {"tienes", "tienen", "tiene", "hay", "servicio", "servicios", "quiero", "necesito", "donde",
+                 "queda", "algun", "alguna", "cita", "sacar", "medico", "medica", "doctor", "doctora",
+                 "consultorio", "consultorios", "torre", "salud", "para", "como", "puedo", "busco"}
+    claves = [w for w in _palabras(mensaje) if len(w) >= 4 and w not in genericas]
+    if medicos and claves:
+        hallados = [m for m in medicos if any(
+            _coincide_palabra(c, _palabras(f"{m.name} {m.tags or ''} {m.description or ''}")) for c in claves)]
+        if hallados:
+            traza.paso("ejecucion", f"Torre médica → {len(hallados)} consultorio(s) coinciden con {claves}")
+            lineas = ["🏥 Para eso, en la *Torre Médica* del Centro Comercial El Puente encuentras:\n"]
+            lineas += [_linea_consultorio(m) for m in hallados]
+            lineas.append("\nTe recomiendo llamar antes para confirmar disponibilidad. 😊")
+            return {"text": "\n".join(lineas), "image_urls": [], "location": None}
+
     pide_lista = any(p in mensaje.lower() for p in (
         "torre", "medic", "médic", "consultorio", "salud", "doctor", "especialista", "cita"
     ))
-    if medicos and pide_lista:
+    if medicos:
+        # Si eligieron la Torre pero no hubo coincidencia puntual, se muestran
+        # los consultorios cargados en vez de "no tengo datos".
         traza.paso("ejecucion", f"Torre médica → se listan {len(medicos)} consultorios/servicios cargados")
-        lineas = ["🏥 En la *Torre Médica* del Centro Comercial El Puente encuentras:\n"]
-        for m in medicos:
-            det = f"• *{m.name}*"
-            if m.schedule:
-                det += f" — 🕒 {m.schedule}"
-            if m.phone:
-                det += f" — 📞 {m.phone}"
-            lineas.append(det)
+        if pide_lista:
+            lineas = ["🏥 En la *Torre Médica* del Centro Comercial El Puente encuentras:\n"]
+        else:
+            lineas = ["No encontré ese servicio exacto entre los consultorios registrados. "
+                      "Estos son los de la *Torre Médica*, por si alguno te sirve:\n"]
+        lineas += [_linea_consultorio(m) for m in medicos]
         lineas.append("\n¿Buscas alguno en particular? Dime el nombre y te paso sus datos. 😊")
         return {"text": "\n".join(lineas), "image_urls": [], "location": None}
 
@@ -667,7 +717,7 @@ async def _ejecutar_torre_medica(db, phone_number, mensaje, traza) -> dict:
     texto = (
         "El Centro Comercial El Puente cuenta con una *Torre Médica y Empresarial* donde hay varios "
         "consultorios y servicios de salud. Para orientarte al consultorio exacto que necesitas, te "
-        "recomiendo acercarte al *Punto de Información* (Piso 1) o llamar a la administración al "
+        "recomiendo acercarte al *Punto de Información* (Pasillo Barichara) o llamar a la administración al "
         f"*{CONTACTO_MALL}* — con gusto te indican dónde dirigirte. 😊"
     )
     return {"text": texto, "image_urls": [], "location": None}
@@ -920,7 +970,9 @@ async def _ejecutar_sorteos(db, phone_number, mensaje, traza) -> dict:
     else:
         traza.paso("foto", f"El sorteo '{sorteos[0].name}' no tiene foto → no se manda ninguna")
 
-    return {"text": "\n\n".join(lineas), "image_urls": fotos, "location": None}
+    # Fase 0: antes devolvía "\n\n".join(lineas), que no existe cuando la IA
+    # redactó bien el texto → NameError y el cliente se quedaba sin respuesta.
+    return {"text": texto, "image_urls": fotos, "location": None}
 
 
 async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
@@ -990,7 +1042,7 @@ async def _ejecutar_promociones(db, phone_number, mensaje, traza) -> dict:
         partes.append(f"🎉 Evento: *{eventos[0].name}*" + (f" — {eventos[0].date}" if eventos[0].date else ""))
     if sorteos:
         partes.append(f"🎁 Sorteo: *{sorteos[0].name}*" + (f" — hasta {sorteos[0].end_date}" if sorteos[0].end_date else ""))
-    partes.append("\nPara ofertas puntuales de las tiendas, te recomiendo pasar por el Punto de Información (Piso 1). 😊")
+    partes.append("\nPara ofertas puntuales de las tiendas, te recomiendo pasar por el Punto de Información (Pasillo Barichara). 😊")
     return {"text": "\n".join(partes), "image_urls": [], "location": None}
 
 
@@ -1057,6 +1109,12 @@ def _parece_pregunta_de_funcion(db, mensaje: str) -> bool:
         if not es_compra and not re.search(r"\b(horarios? de|a que horas? (dan|pasan|es)|de que trata|funcion(es)? de|dan la pelicula|pasan)\b", msg):
             return False
         if any(k in msg for k in SERVICIOS_NO_CINE):
+            return False
+        # Preguntas por el horario del CENTRO COMERCIAL (escrito de cualquier
+        # forma: "centro ccial", "el cc", "el mall", "horario de funcionamiento")
+        # no son de cine. Antes "horario de funcionamiento del centro ccial"
+        # se mandaba a la cartelera porque "ccial" no estaba en la lista (traza #9, 23/10).
+        if re.search(r"\b(centro|cc|ccial|comercial|mall|puente|funcionamiento|atencion|abren|cierran|local|tienda)\b", msg):
             return False
         from services.store_transfer import find_store_by_message
         if find_store_by_message(db, mensaje):
