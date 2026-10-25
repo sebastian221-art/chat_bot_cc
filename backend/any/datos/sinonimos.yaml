@@ -6,7 +6,9 @@
 servicios:
   baño: [baño, baños, sanitario, sanitarios, wc, servicio sanitario]
   wifi: [wifi, wi-fi, internet, red inalambrica]
-  parqueadero: [parqueadero, parqueo, parking, estacionamiento, aparcadero, parquear, carro, moto]
+  parqueadero: [parqueadero, parqueo, parking, estacionamiento, aparcadero, parquear, carro, moto, mensualidad, cortesia, hora gratis, horas gratis, parqueadero gratis, tarjeta de parqueadero, validar parqueadero]
+  salon_eventos: [auditorio, salon de eventos, salones, salon, alquilar salon, alquiler de salon, reunion, reuniones, fiesta, fiestas, graduacion, graduaciones, grado, conferencia, evento empresarial, eventos empresariales]
+  bono_regalo: [bono regalo, bonos regalo, bono, bonos, tarjeta regalo, tarjetas regalo, tarjeta de regalo, tarjeta bono, que regalar]
   cajero: [cajero, cajeros, atm, retirar plata, retirar dinero, sacar plata, sacar dinero]
   mascota: [mascota, mascotas, perro, perrito, gato, pet friendly]
   horario: [horario, hora, abren, cierran, abierto, cerrado, atienden, funcionamiento]

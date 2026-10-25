@@ -574,8 +574,11 @@ async def sincronizar_mall(db: Session) -> dict:
     def _upsert_conocimiento(titulo: str, contenido: str):
         k = db.query(KnowledgeEntry).filter(KnowledgeEntry.title.ilike(titulo)).first()
         if k:
+            # Si el administrador la corrigió a mano (ya no tiene la marca "Fuente: elpuente.com.co")
+            # o la desactivó, la web NO la vuelve a sobrescribir ni a activar.
+            if "elpuente.com.co" not in (k.content or "") or k.active is False:
+                return
             k.content = contenido
-            k.active = True
         else:
             db.add(KnowledgeEntry(title=titulo[:150], content=contenido, active=True))
 

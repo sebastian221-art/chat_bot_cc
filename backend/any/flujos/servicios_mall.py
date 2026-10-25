@@ -15,7 +15,8 @@ from .base import Datos, Flujo
 class ServiciosMall(Flujo):
     nombre = "servicios_mall"
     descripcion = ("información general del centro comercial: horario general, dirección y cómo llegar, "
-                   "parqueadero, wifi, baños, cajeros, mascotas, punto de información, pisos/niveles")
+                   "parqueadero (tarifas, mensualidad, horas gratis por compras), wifi, baños, cajeros, mascotas, "
+                   "punto de información, tarjetas bono regalo, auditorio y salones para eventos, pisos/niveles")
     temperatura = 0.4
 
     def _consulta(self, ctx: Contexto) -> str:

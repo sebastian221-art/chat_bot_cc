@@ -1,19 +1,31 @@
 // 📄 ARCHIVO: panel/app/dashboard/page.tsx
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { getStats, StatsData } from '@/lib/api'
+import { getStats, StatsData, descargarRespaldo } from '@/lib/api'
 import StatCard from '@/components/StatCard'
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
-import { MessageSquare, Users, TrendingUp, Store, RefreshCw } from 'lucide-react'
+import { MessageSquare, Users, TrendingUp, Store, RefreshCw, Download } from 'lucide-react'
 
 export default function DashboardPage() {
   const [data, setData]       = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
+  const [exportando, setExportando] = useState(false)
+
+  const exportar = async () => {
+    setExportando(true)
+    try {
+      await descargarRespaldo()
+    } catch (e) {
+      alert('No se pudo generar el respaldo: ' + (e as Error).message)
+    } finally {
+      setExportando(false)
+    }
+  }
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -65,6 +77,15 @@ export default function DashboardPage() {
           <span className="text-xs text-zinc-500">
             Actualizado: {lastUpdate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
           </span>
+          <button
+            onClick={exportar}
+            disabled={exportando}
+            title="Descarga un Excel con todo lo que tiene el bot y el panel, y una hoja de revisión con lo que falta o está mal"
+            className="flex items-center gap-1.5 text-xs text-white bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+          >
+            <Download size={12} className={exportando ? 'animate-pulse' : ''} />
+            {exportando ? 'Generando…' : 'Exportar respaldo (Excel)'}
+          </button>
           <button
             onClick={() => load(true)}
             disabled={refreshing}

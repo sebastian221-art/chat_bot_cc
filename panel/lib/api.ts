@@ -80,6 +80,10 @@ export const deleteUser = (id: number) =>
 // ── Stats generales ──────────────────────────────────────────────
 export const getStats = () => req('/stats')
 
+// ── Respaldo completo (Excel con todo el bot y el panel + revisión de datos) ──
+export const descargarRespaldo = () =>
+  downloadFile('/respaldo/excel', `respaldo_any_${new Date().toISOString().slice(0, 10)}.xlsx`)
+
 // ── Conversaciones ───────────────────────────────────────────────
 export const getConversations       = () => req('/conversations')
 export const getConversationHistory = (phone: string) =>
