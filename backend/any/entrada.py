@@ -228,10 +228,25 @@ if not os.environ.get("META_APP_SECRET"):
 # main.py incluye este router ANTES del webhook viejo, por eso gana.
 
 def es_principal() -> bool:
-    return os.environ.get("ANY_PRINCIPAL", "").strip().lower() in {"1", "true", "si", "sí", "on"}
+    return os.environ.get("ANY_PRINCIPAL", "").strip().strip("'\"").strip().lower() in {"1", "true", "si", "sí", "on"}
 
 
 principal = APIRouter(tags=["any2-principal"])
+
+
+@router.get("/estado")
+async def estado_del_cambio():
+    """Para confirmar desde el navegador si Any 2.0 es la que responde (no muestra secretos)."""
+    solo = numeros_de_prueba()
+    return {
+        "any2_desplegada": True,
+        "any2_responde_whatsapp": es_principal(),
+        "modo": ("solo números de prueba" if solo else "todos los clientes") if es_principal() else "responde el bot viejo",
+        "numeros_de_prueba": [f"…{n[-4:]}" for n in sorted(solo)],
+        "modelo": cfg().llm_flujos,
+        "respaldo": cfg().llm_respaldo or "ninguno",
+        "groq_configurado": bool(os.environ.get("GROQ_API_KEY", "").strip() not in ("", "PENDIENTE")),
+    }
 
 
 def _numero(n: str) -> str:
