@@ -44,9 +44,15 @@ class ServiciosMall(Flujo):
                 datos.adjuntos.append(Adjunto(tipo="ubicacion", latitud=info["latitud"], longitud=info["longitud"],
                                               titulo=info.get("nombre", "Centro Comercial El Puente"),
                                               direccion=info.get("direccion", "")))
-        if grupos & {"baño", "cajero"} and not frags:
-            hechos["nota"] = ("No hay información verificada de esto: di que no tienes la ubicación exacta y que el "
-                              "personal del centro comercial o la línea te orientan. No inventes ubicaciones.")
+        sin_dato = {"wifi": not info.get("wifi"), "cajero": True, "baño": True}
+        faltan = [g for g in ("wifi", "cajero", "baño") if g in grupos and sin_dato[g]]
+        if faltan and not frags and len(grupos - set(faltan) - {"punto_informacion"}) == 0:
+            # Nadie cargó ese dato: respuesta fija y honesta (la IA tendía a afirmar "sí, hay wifi gratis")
+            que = {"wifi": "del wifi", "cajero": "de los cajeros", "baño": "de la ubicación de los baños"}
+            datos.respuesta_directa = (f"No tengo información {' ni '.join(que[g] for g in faltan)} del centro "
+                                       f"comercial. El personal del centro comercial te orienta, o escribe a la línea "
+                                       f"*317 432 0138* 👉 https://wa.me/573174320138")
+            return datos
         if not frags and len(hechos) == 1:
             hechos["nota"] = "No hay información verificada para esta pregunta."
             hechos["linea_centro_comercial"] = "317 432 0138 · https://wa.me/573174320138"

@@ -30,7 +30,7 @@ from ..nucleo.tipos import Adjunto, Contexto
 from .base import Datos, Flujo, leer_prompt
 
 MARCA_LISTA = "{LISTA}"
-_MARCA_VARIANTES = re.compile(r"[\{\[]\s*(?:LISTA|LIST|lista|list)\s*[\}\]]")
+_MARCA_VARIANTES = re.compile(r"[\{\[][^\}\]\n]{0,60}?\b(?:LISTA|LIST|lista|list|Lista|List)\b[^\}\]\n]{0,80}[\}\]]")
 
 
 def poner_lista(texto: str, lista: str) -> str:

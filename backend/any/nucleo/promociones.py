@@ -85,8 +85,14 @@ def vigentes(db, hoy: date) -> list[tuple]:
         nombres = []
     for e in db.query(Event).all():
         if vigente(e.date, hoy):
-            out.append(("event", e.id, e.priority or 3, fecha_inicio(e.date) or hoy + timedelta(days=365),
-                        {"tipo": "evento", "nombre": e.name, "fecha": e.date, "hora": e.time, "lugar": e.location}))
+            ini = fecha_inicio(e.date)
+            cuando = None
+            if ini:
+                dias = (ini - hoy).days
+                cuando = "hoy" if dias == 0 else ("mañana" if dias == 1 else (f"en {dias} días" if dias > 1 else "en curso"))
+            out.append(("event", e.id, e.priority or 3, ini or hoy + timedelta(days=365),
+                        {"tipo": "evento", "nombre": e.name, "fecha": e.date, "hora": e.time, "lugar": e.location,
+                         "cuando": cuando}))
     for r in db.query(Raffle).filter(Raffle.active.is_(True)).all():
         if vigente(r.end_date, hoy):
             out.append(("raffle", r.id, r.priority or 3, hoy,

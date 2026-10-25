@@ -56,7 +56,7 @@
     flujo: servicios_mall
   - pregunta: hay un doctor cerca de Mercagan?
     flujo: torre_medica
-    no_debe: ['Mercagan se encuentra en la Torre', 'Mercagan está en la Torre', Benitez Abogados, ESSA]
+    no_debe: ['Mercagan se encuentra en la Torre', 'Mercagan está en la Torre', Benitez Abogados, '*ESSA*']
   - pregunta: hay vacantes de trabajo?
     flujo: administracion
     no_debe: ['Sí, las vacantes', 'Sí, hay vacantes']

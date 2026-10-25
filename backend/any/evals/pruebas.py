@@ -300,6 +300,37 @@ def test_guardias_pulido_25_10():
     assert "cuesta:" not in r.texto or "•" in r.texto
 
 
+def test_guardias_ronda_3():
+    from any.nucleo.guardias import revisar_salida
+    from any.nucleo.tipos import Respuesta
+    ctx = _Ctx({"hechos": {"evento": {"nombre": "La Santa Misa"}}})
+    r = revisar_salida(ctx, Respuesta("*La Santa Misa* es a las 11:30 a.m.", "eventos"))
+    assert r.texto.startswith("*La Santa Misa*")                         # los asteriscos no se rompen
+    r = revisar_salida(ctx, Respuesta("Hay vacunación. {Lista: Piso ?, Consultorio X}\n• *FOSCAL*", "torre_medica"))
+    assert "{" not in r.texto and "FOSCAL" in r.texto
+
+
+def test_servicio_sin_datos_no_lo_inventa():
+    from any.flujos.servicios_mall import ServiciosMall
+    from any.nucleo.tipos import Decision
+    from any.nucleo.trazas import Traza
+
+    class E:
+        flujo_activo, ultimo_flujo, ultimas_entidades = None, None, {}
+
+    class C:
+        pass
+    c = C()
+    c.mensaje, c.historial, c.estado, c.traza = "hay wifi?", [], E(), Traza("x", "x", "prueba")
+    c.db = _db()
+    c.decision = Decision("servicios_mall", {"servicio": "wifi"}, False, "hay wifi?")
+    d = _correr(ServiciosMall().reunir(c))
+    from any.conocimiento.servicios import info_mall
+    if not info_mall(c.db).get("wifi") and not d.hechos.get("fragmentos_relevantes"):
+        assert d.respuesta_directa and "No tengo información de el wifi" not in d.respuesta_directa
+        assert "wifi" in d.respuesta_directa
+
+
 def test_lista_con_marca_mal_escrita():
     from any.flujos.locales import poner_lista
     lista = "• *A*\n• *B*"

@@ -283,7 +283,7 @@ def _corregir_nombres(ctx: Contexto, t: str) -> str:
         palabras_t = re.findall(r"\S+", t)
         for i in range(len(palabras_t) - n + 1):
             trozo = " ".join(palabras_t[i:i + n]).strip("*.,;:()¡!¿?")
-            if len(trozo) < 6 or trozo == nombre or normalizar(trozo) in exactos:
+            if len(trozo) < 6 or trozo == nombre or "*" in trozo or "⟦" in trozo or normalizar(trozo) in exactos:
                 continue   # otro nombre real de los datos no se toca
             a, b = normalizar(trozo), normalizar(nombre)
             # parecido en conjunto Y palabra por palabra ("no tengo información" no es "Punto de Información")
@@ -310,6 +310,9 @@ def _sin_entradas_colgando(t: str) -> str:
 def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = r.texto or ""
     t = _ID_INTERNO.sub("", t)
+    if re.search(r"(?i)[\{\[][^\}\]\n]{0,60}?\blista?\b[^\}\]\n]{0,80}[\}\]]", t):   # marca de lista que quedó suelta
+        ctx.traza.alerta("marca de lista suelta en el texto: se quitó")
+        t = re.sub(r"(?i)[ \t]*[\{\[][^\}\]\n]{0,60}?\blista?\b[^\}\]\n]{0,80}[\}\]][ \t]*", "", t)
     t = formato_whatsapp(t)
 
     if r.flujo != "torre_medica" and (_PISO.search(t) or _PISO_ORDINAL.search(t)):

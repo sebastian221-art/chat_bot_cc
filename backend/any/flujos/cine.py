@@ -18,7 +18,7 @@ from .base import Datos, Flujo
 def _tema(texto: str) -> set:
     t = normalizar(texto)
     temas = set()
-    if re.search(r"\b(precio|precios|vale|valen|cuesta|cuestan|cuanto|tarifa|tarifas|boleta|boletas|entrada|entradas|promocion|promociones|descuento|descuentos|2x1|tarjeta)\b", t):
+    if re.search(r"\b(precio|precios|vale|valen|cuesta|cuestan|cuanto|tarifa|tarifas|boleta|boletas|entrada|entradas|promocion|promociones|descuento|descuentos|2x1|tarjeta|informacion|info)\b", t):
         temas.add("tarifas")
     if re.search(r"\b(comprar|compro|reservar|reserva|boleta|boletas|en linea|online|taquilla)\b", t):
         temas.add("compra")
@@ -59,6 +59,7 @@ class Cine(Flujo):
             if poster:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=poster, leyenda=peli.title))
         elif not temas or "cartelera" in normalizar(texto) or re.search(r"pel[ií]cula", texto, re.I):
+            hechos["cartelera_es_de"] = f"hoy, {ctx.ahora:%d/%m/%Y} (los horarios de otros días no están cargados)"
             hechos["cartelera"] = [{"titulo": f.title, "funciones": f.showtimes or "", "estreno": bool(f.is_premiere)}
                                    for f in funciones] or "la cartelera no está cargada en este momento"
         nombre_peli = d.entidades.get("pelicula") if d else None

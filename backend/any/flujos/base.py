@@ -106,7 +106,8 @@ class Flujo:
             hechos["novedad_de_pasada"] = ctx.promo["datos"]
             hechos["como_mencionar_la_novedad"] = ("Al final, en UNA línea aparte que empiece con \"De paso:\", menciona "
                                                     "esta novedad con su nombre y sus datos clave. Sin exagerar y sin "
-                                                    "inventar nada más.")
+                                                    "inventar nada más. Si trae \"cuando\", úsalo tal cual (hoy, mañana, "
+                                                    "en N días); nunca digas que ya pasó.")
         sistema = persona(ctx) + "\n\n" + self.instrucciones()
         msgs = [{"role": "system", "content": sistema},
                 {"role": "system", "content": "DATOS VERIFICADOS (única fuente de verdad para este turno):\n"
