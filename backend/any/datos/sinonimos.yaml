@@ -46,3 +46,8 @@ locales:
     especificos: [peluqueria, peluquerias, uñas, manicure, maquillaje, cosmeticos, barberia, barberias]
   supermercado: [supermercado, mercado, viveres, mercar]
   licores: [licor, licores, trago, cerveza, cervezas, vino, vinos, whisky, aguardiente, bar, bares]
+  vida_nocturna: [entretenimiento para adultos, plan para adultos, planes para adultos, para adultos, rumba, rumbear, discoteca, discotecas, vida nocturna, salir de noche, gastrobar, casino, casinos, karaoke]
+  gimnasio: [gimnasio, gimnasios, gym, crossfit, hacer ejercicio]
+  ocasion_formal:
+    generales: [grado, grados, graduacion, ceremonia, matrimonio, boda, fiesta formal, ropa formal, traje, vestido de gala]
+    amplia_a: ropa   # el juez elige entre las tiendas de ropa las que sirven para la ocasión

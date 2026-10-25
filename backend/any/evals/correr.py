@@ -67,6 +67,12 @@ def reglas_globales(texto: str, flujo: str, telefonos_reales: set) -> list[str]:
         fallas.append("ID interno visible")
     if texto.strip().startswith("{") or '"flujo"' in texto:
         fallas.append("JSON o texto interno visible")
+    if re.search(r"[\{\[]\s*LISTA?\s*[\}\]]", texto, re.I):
+        fallas.append("marca {LISTA} visible")
+    if re.search(r"(?i)\bel puente de informaci[oó]n\b", texto):
+        fallas.append("«El Puente de Información» (es Punto de Información)")
+    if re.search(r"\b(recib[ií]s|ten[eé]s|pod[eé]s|quer[eé]s)\b", texto):
+        fallas.append("voseo (en Colombia es tuteo)")
     n = _norm(texto)
     for l in LUGARES_INVENTADOS:
         if l in n:

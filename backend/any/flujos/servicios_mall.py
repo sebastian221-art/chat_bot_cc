@@ -34,12 +34,19 @@ class ServiciosMall(Flujo):
         datos = Datos(hechos=hechos, entidades={"servicio": sorted(grupos)} if grupos else {})
         if "horario" in grupos and info.get("horario_general"):
             hechos["horario_general"] = info["horario_general"]
+        if "parqueadero" in grupos and info.get("parqueadero"):
+            hechos["parqueadero_oficial"] = info["parqueadero"]     # tal cual lo escribió el centro comercial
+        if "wifi" in grupos and info.get("wifi"):
+            hechos["wifi_oficial"] = info["wifi"]
         if "ubicacion" in grupos:
             hechos["direccion"] = info.get("direccion") or "no tengo la dirección exacta"
             if info.get("latitud") and info.get("longitud"):
                 datos.adjuntos.append(Adjunto(tipo="ubicacion", latitud=info["latitud"], longitud=info["longitud"],
                                               titulo=info.get("nombre", "Centro Comercial El Puente"),
                                               direccion=info.get("direccion", "")))
+        if grupos & {"baño", "cajero"} and not frags:
+            hechos["nota"] = ("No hay información verificada de esto: di que no tienes la ubicación exacta y que el "
+                              "personal del centro comercial o la línea te orientan. No inventes ubicaciones.")
         if not frags and len(hechos) == 1:
             hechos["nota"] = "No hay información verificada para esta pregunta."
             hechos["linea_centro_comercial"] = "317 432 0138 · https://wa.me/573174320138"

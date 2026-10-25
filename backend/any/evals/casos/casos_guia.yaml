@@ -1,0 +1,103 @@
+# Preguntas de la guía de pruebas que no estaban en el banco (25/10/2026).
+- id: guia-01
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: hola, a qué hora abren?
+    flujo: servicios_mall
+    debe_alguno: ['10', 'am']
+    criterio: Saluda y da el horario en el mismo mensaje (el bot viejo solo saludaba).
+  - pregunta: cuéntame un chiste de política
+    flujo: conversacion
+    criterio: No lo hace; redirige a lo que sí puede ayudar.
+  - pregunta: gracias, chao
+    flujo: conversacion
+- id: guia-02
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: tiendas de ropa en el centro comercial
+    flujo: locales
+    no_debe: ['Zirus', '12B', 'Hamburgo']
+    criterio: Locales de ropa, ningún restaurante ("comer" dentro de "comercial").
+  - pregunta: Y gimnasios
+    flujo: locales
+    criterio: Dice que no hay gimnasio; no manda al Punto de Información.
+  - pregunta: en qué piso queda Jarris
+    flujo: locales
+    debe: ['Plazoleta']
+    criterio: Responde con la zona, nunca un piso.
+  - pregunta: cuál es el número de local de Jarris
+    flujo: locales
+    criterio: Entiende que pregunta dónde queda.
+- id: guia-03
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: hay combos de crispetas?
+    flujo: cine
+    criterio: Combos de confitería con precio, tal cual están cargados.
+  - pregunta: hay promociones en el cine?
+    criterio: No inventa 2x1 ni precios que no estén.
+  - pregunta: qué sorteos hay
+    flujo: sorteos_promos
+    criterio: Solo sorteos vigentes con premio y fecha.
+  - pregunta: cómo registro mis facturas para el sorteo
+    flujo: sorteos_promos
+- id: guia-04
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: hay wifi?
+    flujo: servicios_mall
+  - pregunta: dónde hay baños
+    flujo: servicios_mall
+  - pregunta: hay un doctor cerca de Mercagan?
+    flujo: torre_medica
+    no_debe: ['Mercagan se encuentra en la Torre', 'Mercagan está en la Torre']
+  - pregunta: hay vacantes de trabajo?
+    flujo: administracion
+- id: guia-05
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: quiero pedir información del cine
+    flujo: cine
+    no_debe: ['wa.me/573']
+    criterio: No arranca un domicilio ("quiero pedir" engañaba al bot viejo).
+  - pregunta: estoy en la zona de comidas, dónde queda Zirus
+    flujo: locales
+    debe: ['Zirus']
+    criterio: No lo trata como QR.
+- id: guia-06
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: quiero un domicilio de Zirus
+    flujo: domicilios
+    debe: ['Zirus']
+  - pregunta: 'Ana, carrera 9 # 12-40, una pizza mediana, efectivo'
+    flujo: domicilios
+    debe: ['¿Lo confirmas?', 'Efectivo']
+  - pregunta: 'no'
+    flujo: domicilios
+  - pregunta: 'mejor a la calle 12 # 8-10'
+    flujo: domicilios
+    debe: ['calle 12']
+    criterio: Muestra el resumen nuevo con la dirección corregida.
+  - pregunta: cancelar
+    flujo: domicilios
+    no_debe: ['wa.me/']
+- id: guia-07
+  cliente: Juan
+  fecha_simulada: '2026-10-25'
+  turnos:
+  - pregunta: me robaron el celular en el baño
+    flujo: emergencia_queja
+    debe: ['317 432 0138']
+    no_debe: ['De paso']
+  - pregunta: se perdio mi hija
+    flujo: emergencia_queja
+    debe: ['317 432 0138']
+  - pregunta: pésimo servicio, nadie me ayuda en el parqueadero
+    flujo: emergencia_queja

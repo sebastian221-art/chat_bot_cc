@@ -103,12 +103,22 @@ LINEA_MALL = "3174320138"
 PASOS_CON_DATOS = ("datos_reunidos", "herramienta", "promocion_elegida", "domicilio_datos", "vision")
 _PISO = re.compile(r"\s*\(?\b(?:en el |en |del )?(?:piso|nivel|planta)\s+(?:\d+|uno|dos|tres|cuatro|cinco|seis)\b\)?",
                    re.IGNORECASE)
+_PISO_ORDINAL = re.compile(r"\s*\(?\b(?:en el |en |del |el )?(?:\d+\s?(?:\.?\s?[º°o]|er|do|ro|to)|primer|primero|segundo|"
+                          r"tercer|tercero|cuarto|quinto|sexto)\s+(?:piso|nivel|planta)\b\)?", re.IGNORECASE)
 _ID_INTERNO = re.compile(r"\[(?:TIENDA|ID|LOCAL)[^\]]*\]|\bID:\s*\d+\b", re.IGNORECASE)
 _TELEFONO = re.compile(r"(?<!\d)(?:\+?57[\s-]?)?3\d{2}[\s-]?\d{3}[\s-]?\d{4}(?!\d)")
 
 
+_VOSEO = {"recibís": "recibes", "tenés": "tienes", "podés": "puedes", "querés": "quieres", "sabés": "sabes",
+          "registrálas": "regístralas", "registralas": "regístralas", "mirá": "mira", "fijate": "fíjate",
+          "escribí": "escribe", "acercate": "acércate", "participá": "participa", "aprovechá": "aprovecha"}
+
+
 def formato_whatsapp(t: str) -> str:
-    t = re.sub(r"[\u200b-\u200f\u2060\ufeff]", "", t)          # caracteres invisibles ("Barichar\u200ba")
+    t = re.sub(r"[\u200b\u200c\u200e\u200f\u2060\ufeff\u00ad]", "", t)   # invisibles ("Barichar\u200ba"); el \u200d une emojis
+    t = re.sub(r"(\b[Pp]asillo\s+\*?[A-Za-zÁÉÍÓÚáéíóúÑñ]+)\*([a-záéíóúñ]{1,3})\b", r"\1\2*", t)   # "*Pasillo Barichar*a"
+    for vos, tu in _VOSEO.items():                                 # "recibís" → "recibes" (tuteo colombiano)
+        t = re.sub(rf"(?i)\b{vos}\b", lambda m, tu=tu: tu.capitalize() if m.group(0)[0].isupper() else tu, t)
     t = re.sub(r"\*\*(.+?)\*\*", r"*\1*", t)                     # **x** → *x*
     t = re.sub(r"__(.+?)__", r"*\1*", t)
     t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.MULTILINE)   # títulos
@@ -127,13 +137,25 @@ def formato_whatsapp(t: str) -> str:
     return t.strip()
 
 
-_DINERO = re.compile(r"\$\s?\d[\d.,]*|\b\d{1,3}(?:[.,]\d{3})+\b|\b\d+(?:[.,]\d+)?\s?%")
+_DINERO = re.compile(r"\$\s?\d[\d.,]*(?:\s?(?:millones|millón|millon|mil)\b)?|\b\d{1,3}(?:[.,]\d{3})+\b|"
+                     r"\b\d+(?:[.,]\d+)?\s?%")
 
 
 def _cifra(x: str) -> str:
-    """'$ 18.000' → '18000' · '20 %' → '20%' · '$47,500' → '47500'."""
+    """'$ 18.000' → '18000' · '20 %' → '20%' · '$47,500' → '47500' · '$13 millones' → '13000000' · '$2 mil' → '2000'."""
     pct = "%" if "%" in x else ""
-    d = re.sub(r"[^\d]", "", x.split("%")[0])
+    base = x.split("%")[0]
+    m = re.search(r"(millones|millón|millon|mil)\b", base, re.I)
+    if m:
+        num = re.search(r"\d+(?:[.,]\d+)?", base)
+        if num:
+            n = num.group(0)
+            if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", n):     # "$1.500 millones": el punto es de miles
+                v = float(re.sub(r"[.,]", "", n))
+            else:
+                v = float(n.replace(",", "."))
+            return str(int(round(v * (1_000 if m.group(1).lower() == "mil" else 1_000_000))))
+    d = re.sub(r"[^\d]", "", base)
     return d + pct
 
 
@@ -240,8 +262,19 @@ def _nombres_de_los_datos(ctx: Contexto) -> set[str]:
 def _corregir_nombres(ctx: Contexto, t: str) -> str:
     """'Plazaleta Guamerá' → 'Plazoleta Guanentá': un nombre de los datos mal copiado se devuelve a como es."""
     import difflib
+    if re.search(r"(?i)\bel puente de informaci[oó]n\b", t):     # confusión conocida del modelo
+        ctx.traza.alerta("nombre mal copiado «El Puente de Información» → Punto de Información")
+        t = re.sub(r"(?i)\bel puente de informaci[oó]n\b", "Punto de Información", t)
     nombres = _nombres_de_los_datos(ctx) | NOMBRES_FIJOS
     exactos = {normalizar(n) for n in nombres}
+    protegidos: list[str] = []
+
+    def _proteger(m):
+        protegidos.append(m.group(0))
+        return f"⟦N{len(protegidos) - 1}⟧"
+    for nombre in sorted(nombres, key=len, reverse=True):
+        if len(nombre) >= 6:
+            t = re.sub(re.escape(nombre), _proteger, t, flags=re.IGNORECASE)
     for nombre in sorted(nombres, key=len, reverse=True):
         if nombre in t:
             continue
@@ -257,7 +290,20 @@ def _corregir_nombres(ctx: Contexto, t: str) -> str:
                     difflib.SequenceMatcher(None, x, y).ratio() >= 0.6 for x, y in zip(a.split(), b.split())):
                 ctx.traza.alerta(f"nombre mal copiado «{trozo}» → {nombre}")
                 t = t.replace(trozo, nombre)
-    return t
+    return re.sub(r"⟦N(\d+)⟧", lambda m: protegidos[int(m.group(1))], t)
+
+
+def _sin_entradas_colgando(t: str) -> str:
+    """Quita una línea que termina en ':' si lo que la seguía (la lista) fue retirado por una guardia."""
+    lineas = t.split("\n")
+    out = []
+    for i, l in enumerate(lineas):
+        if l.rstrip().endswith(":"):
+            siguiente = next((x for x in lineas[i + 1:] if x.strip()), "")
+            if not siguiente.lstrip().startswith(("•", "-", "*", "1", "2", "3", "4", "5", "6", "7", "8", "9")):
+                continue
+        out.append(l)
+    return "\n".join(out).strip()
 
 
 def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
@@ -265,9 +311,9 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = _ID_INTERNO.sub("", t)
     t = formato_whatsapp(t)
 
-    if r.flujo != "torre_medica" and _PISO.search(t):
-        ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t)}")
-        t = _PISO.sub("", t)
+    if r.flujo != "torre_medica" and (_PISO.search(t) or _PISO_ORDINAL.search(t)):
+        ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t) + _PISO_ORDINAL.findall(t)}")
+        t = _PISO_ORDINAL.sub("", _PISO.sub("", t))
 
     # links de WhatsApp de mentira (el modelo copió un ejemplo "57XXXXXXXXXX")
     if re.search(r"wa\.me/\S*[xX]{3,}", t):
@@ -321,6 +367,8 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
         t = "\n".join(lineas).strip()
 
     t = re.sub(r"⟦L(\d+)⟧", lambda m: links[int(m.group(1))], t)   # se devuelven los links
+    if malas or malas_f or inventados:
+        t = _sin_entradas_colgando(t)
 
     faltantes = [n for n in r.meta.get("lista_equidad", []) if normalizar(n) not in normalizar(t)]
     if faltantes:

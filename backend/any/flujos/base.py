@@ -20,6 +20,7 @@ El resto lo pone esta base, igual para todos:
 from __future__ import annotations
 
 import json
+import re
 import os
 from dataclasses import dataclass, field
 
@@ -50,7 +51,15 @@ def persona(ctx: Contexto) -> str:
     cliente = f"- El cliente se llama {nombre}." if nombre else "- No sabes el nombre del cliente: no uses ninguno."
     return leer_prompt("persona.md").format(
         saludo=saludo, dia_semana=_DIAS[a.weekday()], fecha=f"{a.day} de {_MESES[a.month - 1]} de {a.year}",
-        hora=a.strftime("%I:%M %p").lstrip("0").lower(), cliente=cliente)
+        hora=a.strftime("%I:%M %p").lstrip("0").lower(), cliente=cliente, fin_de_semana=fin_de_semana(a.date()))
+
+
+def fin_de_semana(hoy) -> str:
+    """'sábado 24/10 y domingo 25/10' — el fin de semana de esta semana (o el que está en curso)."""
+    from datetime import timedelta
+    sab = hoy + timedelta(days=(5 - hoy.weekday()) % 7) if hoy.weekday() != 6 else hoy - timedelta(days=1)
+    dom = sab + timedelta(days=1)
+    return f"sábado {sab:%d/%m} y domingo {dom:%d/%m}"
 
 
 @dataclass
@@ -103,7 +112,11 @@ class Flujo:
                 {"role": "system", "content": "DATOS VERIFICADOS (única fuente de verdad para este turno):\n"
                                               + json.dumps(hechos, ensure_ascii=False, indent=1, default=str)}]
         for t in ctx.historial[-cfg().historial_mensajes:]:
-            msgs.append({"role": t.rol, "content": t.texto})
+            texto = t.texto
+            if t.rol != "user":   # la novedad del día, el aviso de datos y el recordatorio del pedido no son el tema
+                texto = "\n".join(l for l in texto.split("\n")
+                                  if not re.search(r"(?i)de paso|ley 1581|sigue abierto", l)).strip() or texto
+            msgs.append({"role": t.rol, "content": texto})
         consulta = ctx.decision.consulta if ctx.decision and ctx.decision.consulta else ""
         contenido = ctx.mensaje
         if consulta and consulta.strip().lower() != ctx.mensaje.strip().lower():

@@ -37,7 +37,38 @@ def ficha_evento(e, hoy) -> dict:
     faltan = dias_para(e.date, hoy)
     if faltan is not None:
         d["dias_para_el_evento"] = faltan
+    # el código decide si cae hoy o este fin de semana (el modelo se equivocaba contando días)
+    from datetime import timedelta
+    sab = hoy + timedelta(days=(5 - hoy.weekday()) % 7) if hoy.weekday() != 6 else hoy - timedelta(days=1)
+    dias = _dias_del_evento(e.date, hoy)
+    if dias is not None:
+        d["es_hoy"] = hoy in dias
+        d["es_este_fin_de_semana"] = bool({sab, sab + timedelta(days=1)} & dias)
+    else:   # recurrentes: "todos los domingos"
+        import re
+        f = (e.date or "").lower()
+        nombres = ["lunes", "martes", "miercoles", "miércoles", "jueves", "viernes", "sabado", "sábado", "domingo"]
+        dia_hoy = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][hoy.weekday()]
+        if any(n in f for n in nombres):
+            d["es_hoy"] = dia_hoy in f or (dia_hoy == "miércoles" and "miercoles" in f) or (dia_hoy == "sábado" and "sabado" in f)
+            d["es_este_fin_de_semana"] = bool(re.search(r"s[aá]bado|domingo|fin de semana", f))
     return {k: v for k, v in d.items() if v not in (None, "")}
+
+
+def _dias_del_evento(fecha_texto, hoy):
+    """Días en que ocurre el evento (rango 'del 23/10 al 25/10' o una fecha); None si es recurrente o no se entiende."""
+    from datetime import timedelta
+    from ..conocimiento.vigencia import fecha_inicio, fecha_final as fecha_fin
+    try:
+        ini, fin = fecha_inicio(fecha_texto), fecha_fin(fecha_texto)
+    except Exception:
+        return None
+    if not ini:
+        return None
+    fin = fin or ini
+    if (fin - ini).days > 60:
+        return None
+    return {ini + timedelta(days=i) for i in range((fin - ini).days + 1)}
 
 
 class Eventos(Flujo):

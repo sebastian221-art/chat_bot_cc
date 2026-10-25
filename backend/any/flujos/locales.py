@@ -30,9 +30,29 @@ from ..nucleo.tipos import Adjunto, Contexto
 from .base import Datos, Flujo, leer_prompt
 
 MARCA_LISTA = "{LISTA}"
+_MARCA_VARIANTES = re.compile(r"[\{\[]\s*(?:LISTA|LIST|lista|list)\s*[\}\]]")
+
+
+def poner_lista(texto: str, lista: str) -> str:
+    """Pone la lista donde el modelo escribió la marca ({LISTA}, {LIST}, [LISTA]…); si no la puso,
+    después del primer párrafo y siempre ANTES de la línea "De paso"."""
+    texto = _MARCA_VARIANTES.sub(MARCA_LISTA, (texto or "").strip())
+    if MARCA_LISTA in texto:
+        antes, despues = texto.split(MARCA_LISTA, 1)
+        return (antes.rstrip() + "\n" + lista + ("\n" + despues.lstrip() if despues.strip() else "")).replace(MARCA_LISTA, "").strip()
+    if not texto:
+        return lista
+    lineas = texto.split("\n")
+    i_paso = next((i for i, l in enumerate(lineas) if "de paso" in l.lower()), None)
+    if i_paso is not None:
+        cuerpo, cola = "\n".join(lineas[:i_paso]).strip(), "\n".join(lineas[i_paso:]).strip()
+        return "\n".join(x for x in [cuerpo, lista] if x) + "\n\n" + cola
+    partes = texto.split("\n\n", 1)
+    return "\n\n".join([partes[0], lista] + partes[1:])
 MAX_CANDIDATOS_JUEZ = 60
 
 _PIDE = [
+    ("ubicacion", r"\bnumero (?:de|del) (?:local|almacen|tienda)\b"),
     ("telefono", r"\b(numero|telefono|celular|whatsapp|wasap|contacto|llamar|escribir)\b"),
     ("carta", r"\b(carta|menu|catalogo|precios?)\b"),
     ("instagram", r"\b(instagram|insta|redes)\b"),
@@ -168,8 +188,16 @@ class Locales(Flujo):
             extra = []   # "ropa para niños": ya cumplen las dos cosas; no se abre a toda la ropa
         else:
             extra = [r.local for r in res if r.local.id not in ids and (r.cercanos or r.fuertes)]
-        if len(seleccion) + len(extra) >= 4:
-            seleccion = await self._juez(ctx, termino, seleccion, extra[:MAX_CANDIDATOS_JUEZ]) or seleccion
+        if seleccion and mx == 0:
+            # Nadie declara venderlo: solo lo menciona su descripción ("gimnasio" en un parque infantil).
+            # No es seguro: el juez decide si de verdad lo ofrecen; si dice que ninguno, no hay.
+            juzgado = await self._juez(ctx, termino, [], (seleccion + extra)[:MAX_CANDIDATOS_JUEZ])
+            if juzgado is not None:
+                seleccion = juzgado
+        elif len(seleccion) + len(extra) >= 4:
+            juzgado = await self._juez(ctx, termino, seleccion, extra[:MAX_CANDIDATOS_JUEZ])
+            if juzgado:
+                seleccion = juzgado
         if pide == "carta":
             seleccion = [l for l in seleccion if any(carta_de(l))]
         elif pide == "instagram":
@@ -190,7 +218,8 @@ class Locales(Flujo):
                              f"opcional: una línea final corta. NO escribas tú los locales.",
         }
         if pide == "carta":
-            hechos["filtro"] = "solo locales con carta cargada"
+            hechos["filtro"] = ("TODOS los locales de la lista TIENEN carta cargada (por eso están). Dilo así: "
+                                "\"estos tienen carta\" y que te pidan la de cuál. Nunca digas que no hay cartas.")
         return Datos(hechos=hechos, entidades={"categoria": termino},
                      meta={"lista_equidad": [l.nombre for l in seleccion], "lineas_equidad": lineas,
                            "lista": "\n".join(lineas.values()),
@@ -233,7 +262,7 @@ class Locales(Flujo):
             quedan = seguros
         ctx.traza.paso("juez_locales", {"quitados": [l.nombre for l in seguros if l not in quedan],
                                         "agregados": [l.nombre for l in entran], "razon": j.get("razon")})
-        return (quedan + entran) or None
+        return quedan + entran   # [] = el juez revisó y ninguno sirve; None = el juez falló
 
     # ── Componer ──────────────────────────────────────────────────
 
@@ -241,13 +270,7 @@ class Locales(Flujo):
         lista = datos.meta.get("lista")
         if not lista:
             return texto
-        texto = (texto or "").strip()
-        if MARCA_LISTA in texto:
-            antes, despues = texto.split(MARCA_LISTA, 1)
-            return (antes.rstrip() + "\n" + lista + ("\n" + despues.lstrip() if despues.strip() else "")).replace(MARCA_LISTA, "").strip()
-        # el modelo no puso la marca: la lista va después del primer párrafo
-        partes = texto.split("\n\n", 1)
-        return "\n\n".join([partes[0], lista] + partes[1:]) if texto else lista
+        return poner_lista(texto, lista)
 
     def respaldo(self, ctx: Contexto, datos: Datos) -> str | None:
         h = datos.hechos

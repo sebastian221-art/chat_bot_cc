@@ -125,6 +125,7 @@ todos todas cuales cual cuantos cuantas venden vende venta ventas numero telefon
 carta menu instagram insta foto fotos imagen horario horarios abre abren cierra cierran ubicacion
 queda quedan ubicado ubicada direccion regalame regalas dame das pasame pasas tienes tiene hay
 porfa xfa fa q k ver info informacion mas otro otra otros otras donde zona sobre sobra saber
+servicio servicios atencion consultorio consultorios cerca cercano cercana marca marcas comprar compro algo puedo
 """.split())
 
 

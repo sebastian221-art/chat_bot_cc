@@ -146,6 +146,7 @@ class Domicilios(Flujo):
                 e.activar(self.nombre, d)
                 return await self._redactar(ctx, {"situacion": "el cliente quiere corregir el pedido; pregúntale qué "
                                                                "quiere cambiar", "pedido_actual": d["campos"]})
+        d["recordatorios"] = 0
         await self._extraer(ctx, d)
         e.activar(self.nombre, d)
         return await self._pedir_faltantes(ctx, loc, d)
@@ -315,6 +316,10 @@ def recordatorio(ctx: Contexto) -> str | None:
     """Línea que se agrega cuando el cliente pregunta otra cosa a mitad de un pedido."""
     d = ctx.estado.datos
     if ctx.estado.flujo_activo != "domicilios" or not d.get("local"):
+        return None
+    n = int(d.get("recordatorios") or 0)
+    d["recordatorios"] = n + 1          # se recuerda la 1.ª vez y luego cada 3 mensajes (no en todos)
+    if n % 3:
         return None
     return (f"_Tu pedido a *{d['local']}* sigue abierto: cuando quieras seguimos, o escribe *cancelar* "
             f"para cerrarlo._")

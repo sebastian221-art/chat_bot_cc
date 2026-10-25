@@ -45,12 +45,44 @@ def _utc(dt):
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
+FIJOS = ["Punto de Información", "Centro Comercial El Puente", "El Puente", "Plazoleta de Comidas La Ceiba"]
+
+
+def suavizar(texto: str, nombres: list[str]) -> str:
+    """Palabras escritas EN MAYÚSCULAS en el panel → minúscula normal, respetando nombres de locales
+    ("JUMBO" → "Jumbo") y siglas cortas (VIP, EPS, 2D)."""
+    if not texto:
+        return texto
+    import re
+    propios = {n.lower(): (n.capitalize() if n.isupper() else n) for n in nombres if len(n) >= 3}
+
+    siglas = {"VIP", "EPS", "PSE", "SOAT", "ATM", "IVA", "NIT", "QR", "CC"}
+    todas = re.findall(r"[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,}", texto)
+    gritado = bool(todas) and sum(w.isupper() for w in todas) / len(todas) >= 0.3
+
+    def palabra(m):
+        w = m.group(0)
+        if not w.isupper() or w in siglas or (len(w) <= 3 and not gritado):
+            return w
+        return propios.get(w.lower(), w.lower())
+    t = re.sub(r"[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+", palabra, texto)
+    for f in FIJOS + [n for n in nombres if " " in n]:
+        t = re.sub(rf"(?i)\b{re.escape(f)}\b", f, t)
+    t = re.sub(r"(^|[.!?¡¿]\s*)([a-záéíóúñ])", lambda m: m.group(1) + m.group(2).upper(), t)
+    return t.replace("!.", "!").replace("?.", "?")
+
+
 def vigentes(db, hoy: date) -> list[tuple]:
     """[(entity_type, id, prioridad, fecha_orden, datos)] de todo lo que se puede promocionar hoy."""
     from models.event import Event
     from models.marketing import Marketing
     from models.raffle import Raffle
     out = []
+    try:
+        from ..conocimiento.catalogo import locales
+        nombres = [l.nombre for l in locales(db)]
+    except Exception:
+        nombres = []
     for e in db.query(Event).all():
         if vigente(e.date, hoy):
             out.append(("event", e.id, e.priority or 3, fecha_inicio(e.date) or hoy + timedelta(days=365),
@@ -58,11 +90,11 @@ def vigentes(db, hoy: date) -> list[tuple]:
     for r in db.query(Raffle).filter(Raffle.active.is_(True)).all():
         if vigente(r.end_date, hoy):
             out.append(("raffle", r.id, r.priority or 3, hoy,
-                        {"tipo": "sorteo", "nombre": r.name, "premio": r.prize, "hasta": r.end_date}))
+                        {"tipo": "sorteo", "nombre": r.name, "premio": suavizar(r.prize, nombres), "hasta": r.end_date}))
     for m in db.query(Marketing).filter(Marketing.active.is_(True)).all():
         if vigente(m.valid_until, hoy):
             out.append(("marketing", m.id, m.priority or 3, hoy,
-                        {"tipo": "promocion", "nombre": m.title, "detalle": (m.description or "")[:160],
+                        {"tipo": "promocion", "nombre": m.title, "detalle": suavizar((m.description or "")[:160], nombres),
                          "hasta": m.valid_until}))
     return out
 
@@ -111,7 +143,9 @@ def linea(datos: dict) -> str:
         detalle = " · ".join(x for x in [datos.get("fecha"), datos.get("hora"), datos.get("lugar")] if x)
         return f"🎉 De paso: *{n}*" + (f" — {detalle}" if detalle else "")
     if datos.get("tipo") == "sorteo":
-        partes = [f"premio: {datos['premio']}" if datos.get("premio") else "", f"hasta el {datos['hasta']}" if datos.get("hasta") else ""]
+        premio = datos.get("premio") or ""
+        etiqueta = "" if premio.lower().startswith(("por cada", "cada ", "por compras")) else "premio: "
+        partes = [f"{etiqueta}{premio}" if premio else "", f"hasta el {datos['hasta']}" if datos.get("hasta") else ""]
         detalle = ", ".join(p for p in partes if p)
         return f"🎁 De paso: participa en *{n}*" + (f" — {detalle}" if detalle else "")
     detalle = datos.get("detalle", "")

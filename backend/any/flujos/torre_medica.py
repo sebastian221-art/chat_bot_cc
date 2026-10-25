@@ -6,6 +6,8 @@ orden alfabético y armado en código, igual que la lista de locales.
 """
 from __future__ import annotations
 
+import re
+
 from ..conocimiento.buscador import buscar_conocimiento, buscar_locales, seleccionar_relevantes, encontrar_local
 from ..conocimiento.catalogo import Local, locales
 from ..conocimiento.texto import normalizar
@@ -19,6 +21,22 @@ def linea_consultorio(l: Local) -> str:
     lugar = ", ".join(x for x in [l.piso, f"consultorio {l.numero}" if l.numero and l.numero.upper() != "S/N" else ""] if x)
     s = f"• *{l.nombre}*" + (f" — {lugar}" if lugar else "")
     return s + (f" · 👉 {l.whatsapp}" if l.whatsapp else "")
+
+
+_SALUD = re.compile(r"medic|odont|ortodon|dermat|salud|clinic|cirug|cirujan|renal|nefro|dialisis|respirat|nutric|"
+                    r"ecograf|veterin|internista|ginec|obstet|urolog|oncolog|pediatr|eps\b|sura|sanitas|vacun|enfermer|"
+                    r"terapi|psicolog|laborator|optometr|fisioter|maxilofacial|implante|citolog|doctor|\bdra?\b")
+_NO_SALUD = re.compile(r"abogad|juridic|derecho|contador|contable|electrificadora|\bessa\b|electricidad")
+
+
+def busca_salud(texto: str) -> bool:
+    return bool(re.search(r"doctor|medic|salud|consulta|cita|especialista|enferm|dolor|vacun|odont|dentist|pediatr|"
+                          r"ginec|laborator|examen|terapia|clinic", normalizar(texto)))
+
+
+def es_de_salud(l: Local) -> bool:
+    t = normalizar(f"{l.nombre} {l.descripcion} {' '.join(l.productos)} {l.rubro or ''}")
+    return bool(_SALUD.search(t)) and not _NO_SALUD.search(t)
 
 
 class TorreMedica(Flujo):
@@ -47,6 +65,8 @@ class TorreMedica(Flujo):
             hechos["busqueda"] = termino
         else:
             sel = torre
+            if busca_salud(f"{ctx.mensaje} {termino}"):
+                sel = [l for l in torre if es_de_salud(l)] or torre   # "doctor": no se muestran abogados ni oficinas
             hechos["modo"] = "sin_coincidencia"
             hechos["busqueda"] = termino
             hechos["nota"] = ("Ningún consultorio menciona eso; se muestra el directorio completo de la torre "
@@ -65,12 +85,8 @@ class TorreMedica(Flujo):
         lista = datos.meta.get("lista")
         if not lista:
             return texto
-        texto = (texto or "").strip()
-        if MARCA in texto:
-            antes, despues = texto.split(MARCA, 1)
-            return (antes.rstrip() + "\n" + lista + ("\n" + despues.lstrip() if despues.strip() else "")).replace(MARCA, "").strip()
-        partes = texto.split("\n\n", 1)
-        return "\n\n".join([partes[0], lista] + partes[1:]) if texto else lista
+        from .locales import poner_lista
+        return poner_lista(texto, lista)
 
     def respaldo(self, ctx, datos):
         return f"En la *Torre Médica y Empresarial* están estos consultorios:\n{MARCA}" if datos.meta.get("lista") else None
