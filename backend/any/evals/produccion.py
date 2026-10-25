@@ -44,6 +44,18 @@ def _login(cliente: httpx.Client, url: str) -> str:
     return token
 
 
+def _datos_de(traza: dict) -> str:
+    """Los datos que el flujo le entregó a la IA en ese turno (para comprobar que la respuesta no inventa)."""
+    import json
+    for p in (traza or {}).get("pasos") or []:
+        if p.get("paso") == "datos_reunidos" and isinstance(p.get("detalle"), dict):
+            h = p["detalle"].get("hechos") or {}
+            h = {k: v for k, v in h.items() if k not in ("como_escribir", "como_mencionar_la_novedad")}
+            t = json.dumps(h, ensure_ascii=False, default=str)
+            return t if len(t) <= 1800 else t[:1800] + " …"
+    return ""
+
+
 def _promo_de(traza: dict) -> str | None:
     for p in (traza or {}).get("pasos") or []:
         if p.get("paso") == "promocion_mostrada" and isinstance(p.get("detalle"), dict):
@@ -118,7 +130,7 @@ def correr(args) -> dict:
             res = {"conversacion": conv["id"], "turno": i + 1, "pregunta": turno["pregunta"],
                    "flujo_esperado": esperado, "flujo": flujo, "construido": True, "ok": not fallas,
                    "fallas": fallas, "respuesta": texto, "criterio": turno.get("criterio", ""),
-                   "adjuntos": [a.get("tipo") for a in adj], "promo": promo,
+                   "adjuntos": [a.get("tipo") for a in adj], "promo": promo, "datos": _datos_de(traza),
                    "alertas": traza.get("alertas"), "ms": round((time.time() - t0) * 1000),
                    "tokens": traza.get("tokens")}
             resultados.append(res)
@@ -156,6 +168,8 @@ def reporte(res: dict, url: str) -> str:
         if r["alertas"]:
             l.append(f"- correcciones de las guardias: {'; '.join(map(str, r['alertas']))}")
         l += ["", "```", r["respuesta"] or "(sin respuesta)", "```", ""]
+        if r.get("datos"):
+            l += ["<details><summary>datos que recibió</summary>", "", "```json", r["datos"], "```", "</details>", ""]
     return "\n".join(l)
 
 

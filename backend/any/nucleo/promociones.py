@@ -99,6 +99,19 @@ def vigentes(db, hoy: date) -> list[tuple]:
     return out
 
 
+def _veces_hoy(db, ahora) -> dict:
+    """Cuántas veces se mostró hoy cada novedad, sumando todos los clientes."""
+    from models.promotion_shown import PromotionShown
+    inicio = _utc(ahora) - timedelta(hours=24)
+    veces: dict = {}
+    try:
+        for m in db.query(PromotionShown).filter(PromotionShown.shown_at >= inicio).all():
+            veces[(m.entity_type, m.entity_id)] = veces.get((m.entity_type, m.entity_id), 0) + 1
+    except Exception:
+        db.rollback()
+    return veces
+
+
 def elegir(ctx, flujo: str) -> dict | None:
     rg = reglas()
     if flujo in set(rg.get("flujos_sin_promo") or []):
@@ -127,7 +140,10 @@ def elegir(ctx, flujo: str) -> dict | None:
         vistas[clave] = max(vistas.get(clave, _utc(m.shown_at)), _utc(m.shown_at))
     nuevas = [c for c in candidatos if (c[0], c[1]) not in vistas]
     if nuevas:
-        elegida = sorted(nuevas, key=lambda c: (-c[2], c[3]))[0]
+        # Rotación pareja ENTRE clientes: primero la que menos se ha mostrado hoy en todo el centro
+        # comercial; a igual cantidad, la de mayor prioridad y luego la más próxima.
+        hoy_veces = _veces_hoy(db, ctx.ahora) if rg.get("rotar_entre_clientes", True) else {}
+        elegida = sorted(nuevas, key=lambda c: (hoy_veces.get((c[0], c[1]), 0), -c[2], c[3]))[0]
     elif rg.get("repetir_cuando_se_acaben", True):
         elegida = sorted(candidatos, key=lambda c: vistas[(c[0], c[1])])[0]
     else:

@@ -37,6 +37,11 @@ def poner_lista(texto: str, lista: str) -> str:
     """Pone la lista donde el modelo escribió la marca ({LISTA}, {LIST}, [LISTA]…); si no la puso,
     después del primer párrafo y siempre ANTES de la línea "De paso"."""
     texto = _MARCA_VARIANTES.sub(MARCA_LISTA, (texto or "").strip())
+    nombres = [normalizar(m) for m in re.findall(r"^• \*([^*]+)\*", lista, flags=re.M)]
+    if nombres:   # el modelo no debe escribir la lista: sus viñetas con nombres de la lista se quitan
+        texto = "\n".join(l for l in texto.split("\n")
+                          if not (l.lstrip().startswith(("•", "-", "*")) and any(n in normalizar(l) for n in nombres)))
+        texto = re.sub(r"\n{3,}", "\n\n", texto).strip()
     if MARCA_LISTA in texto:
         antes, despues = texto.split(MARCA_LISTA, 1)
         return (antes.rstrip() + "\n" + lista + ("\n" + despues.lstrip() if despues.strip() else "")).replace(MARCA_LISTA, "").strip()
@@ -135,7 +140,8 @@ class Locales(Flujo):
                 return exactos[0].local
         # "¿y el horario?" justo después de hablar de un local
         recordado = ctx.estado.ultimas_entidades.get("local")
-        if recordado and pide and not ent.get("categoria") and ctx.decision and ctx.decision.es_seguimiento:
+        plural = re.search(r"\b(locales|tiendas|restaurantes|almacenes|negocios|cuales|cuantos)\b", normalizar(ctx.mensaje))
+        if recordado and pide and not plural and not ent.get("categoria") and ctx.decision and ctx.decision.es_seguimiento:
             return encontrar_local(db, recordado, incluir_torre=False)
         return None
 
@@ -176,7 +182,7 @@ class Locales(Flujo):
             termino, res = consulta, buscar_locales(db, consulta)
 
         # "¿De qué locales tienes Instagram / carta?" sin decir de qué tipo
-        if pide in ("carta", "instagram") and not conceptos(_quita_pedido(termino), "locales"):
+        if pide in ("carta", "instagram") and not conceptos(_quita_pedido(ctx.mensaje), "locales"):
             return self._conteo(db, pide)
 
         relevantes = seleccionar_relevantes(res)
@@ -218,8 +224,9 @@ class Locales(Flujo):
                              f"opcional: una línea final corta. NO escribas tú los locales.",
         }
         if pide == "carta":
-            hechos["filtro"] = ("TODOS los locales de la lista TIENEN carta cargada (por eso están). Dilo así: "
-                                "\"estos tienen carta\" y que te pidan la de cuál. Nunca digas que no hay cartas.")
+            hechos["filtro"] = ("Los locales de la lista tienen carta o menú en línea (por eso están). Dilo así: "
+                                "\"estos tienen carta\" y que te pidan la de cuál. No digas que TODOS los del centro "
+                                "comercial la tienen ni que no hay cartas.")
         return Datos(hechos=hechos, entidades={"categoria": termino},
                      meta={"lista_equidad": [l.nombre for l in seleccion], "lineas_equidad": lineas,
                            "lista": "\n".join(lineas.values()),

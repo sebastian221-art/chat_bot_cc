@@ -137,7 +137,8 @@ def formato_whatsapp(t: str) -> str:
     return t.strip()
 
 
-_DINERO = re.compile(r"\$\s?\d[\d.,]*(?:\s?(?:millones|millón|millon|mil)\b)?|\b\d{1,3}(?:[.,]\d{3})+\b|"
+_DINERO = re.compile(r"\$\s?\d{1,3}(?:[ \u00a0\u202f.,]\d{3})+(?!\d)(?:\s?(?:millones|millón|millon|mil)\b)?|"
+                     r"\$\s?\d[\d.,]*(?:\s?(?:millones|millón|millon|mil)\b)?|\b\d{1,3}(?:[.,]\d{3})+\b|"
                      r"\b\d+(?:[.,]\d+)?\s?%")
 
 

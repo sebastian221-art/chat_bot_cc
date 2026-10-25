@@ -22,6 +22,7 @@
     criterio: Locales de ropa, ningún restaurante ("comer" dentro de "comercial").
   - pregunta: Y gimnasios
     flujo: locales
+    no_debe: [Maxiland Kids]
     criterio: Dice que no hay gimnasio; no manda al Punto de Información.
   - pregunta: en qué piso queda Jarris
     flujo: locales
@@ -41,6 +42,7 @@
     criterio: No inventa 2x1 ni precios que no estén.
   - pregunta: qué sorteos hay
     flujo: sorteos_promos
+    no_debe: [El Puente de Información]
     criterio: Solo sorteos vigentes con premio y fecha.
   - pregunta: cómo registro mis facturas para el sorteo
     flujo: sorteos_promos
@@ -54,16 +56,17 @@
     flujo: servicios_mall
   - pregunta: hay un doctor cerca de Mercagan?
     flujo: torre_medica
-    no_debe: ['Mercagan se encuentra en la Torre', 'Mercagan está en la Torre']
+    no_debe: ['Mercagan se encuentra en la Torre', 'Mercagan está en la Torre', Benitez Abogados, ESSA]
   - pregunta: hay vacantes de trabajo?
     flujo: administracion
+    no_debe: ['Sí, las vacantes', 'Sí, hay vacantes']
 - id: guia-05
   cliente: Juan
   fecha_simulada: '2026-10-25'
   turnos:
   - pregunta: quiero pedir información del cine
     flujo: cine
-    no_debe: ['wa.me/573']
+    no_debe: ['wa.me/573', 'No dispongo de', 'no tengo la lista de combos']
     criterio: No arranca un domicilio ("quiero pedir" engañaba al bot viejo).
   - pregunta: estoy en la zona de comidas, dónde queda Zirus
     flujo: locales
@@ -76,7 +79,7 @@
   - pregunta: quiero un domicilio de Zirus
     flujo: domicilios
     debe: ['Zirus']
-  - pregunta: 'Ana, carrera 9 # 12-40, una pizza mediana, efectivo'
+  - pregunta: 'Ana, cel 301 222 3344, carrera 9 # 12-40, una pizza mediana, efectivo'
     flujo: domicilios
     debe: ['¿Lo confirmas?', 'Efectivo']
   - pregunta: 'no'
@@ -94,8 +97,8 @@
   turnos:
   - pregunta: me robaron el celular en el baño
     flujo: emergencia_queja
-    debe: ['317 432 0138']
-    no_debe: ['De paso']
+    debe: ['317 432 0138', 'Pasillo Barichara']
+    no_debe: ['De paso', 'Barichara*a', 'ya ha sido notificado', 'ya fue notificado']
   - pregunta: se perdio mi hija
     flujo: emergencia_queja
     debe: ['317 432 0138']

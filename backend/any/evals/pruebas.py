@@ -277,6 +277,69 @@ def test_guardias_precios_inventados():
     assert "Popcorn" not in r.texto and "10 %" not in r.texto
 
 
+def test_guardias_pulido_25_10():
+    """Errores vistos en producción el 25/10."""
+    from any.nucleo.guardias import revisar_salida
+    from any.nucleo.tipos import Respuesta
+    ctx = _Ctx({"hechos": {"sorteo": {"nombre": "El Latido Millonario", "premio": "$13.000.000"},
+                           "lugar": {"nombre": "El Puente"}, "parqueadero": "Carro $3.000 la hora"}})
+    # "el Punto de Información" no se "corrige" a "El Puente"
+    r = revisar_salida(ctx, Respuesta("Regístrala en el Punto de Información (Pasillo Barichara).", "sorteos_promos"))
+    assert "Punto de Información" in r.texto and "Puente de" not in r.texto
+    # "$13 millones" es el mismo premio que "$13.000.000"
+    r = revisar_salida(ctx, Respuesta("De paso: El Latido Millonario, premio de $13 millones.", "locales"))
+    assert "13 millones" in r.texto
+    r = revisar_salida(ctx, Respuesta("De paso: El Latido Millonario, premio de $13\u202f000\u202f000.", "locales"))
+    assert "Latido" in r.texto
+    # piso con ordinal, voseo y la marca del pasillo partida
+    r = revisar_salida(ctx, Respuesta("Pagas en los módulos del 2.º piso. Recibís un número. Ve al *Pasillo Barichar*a.",
+                                      "servicios_mall"))
+    assert "piso" not in r.texto and "recibes" in r.texto.lower() and "Barichara*." in r.texto
+    # si se quita la línea de un precio inventado, no queda la frase de entrada colgando
+    r = revisar_salida(ctx, Respuesta("El parqueadero cuesta:\nMoto $9.999 la hora.\nCarro $3.000 la hora.", "servicios_mall"))
+    assert "cuesta:" not in r.texto or "•" in r.texto
+
+
+def test_lista_con_marca_mal_escrita():
+    from any.flujos.locales import poner_lista
+    lista = "• *A*\n• *B*"
+    t = poner_lista("Te paso los locales:\n{LIST}\nDe paso: algo.", lista)
+    assert "{LIST" not in t and t.index("• *A*") < t.index("De paso")
+    t = poner_lista("Te paso los locales.\nDe paso: algo.", lista)
+    assert t.index("• *A*") < t.index("De paso")
+    t = poner_lista("Aquí tienes:\n• *A* — Pasillo X\n• *B* — Pasillo Y\n\nDe paso: algo.", lista)
+    assert t.count("*A*") == 1 and t.count("*B*") == 1      # el modelo escribió la lista: no sale doble
+
+
+def test_promo_sin_mayusculas_sostenidas():
+    from any.nucleo.promociones import suavizar
+    t = suavizar("POR CADA $100.000 en marcas o $300.000 acumulados en JUMBO reciba 1 NÚMERO", ["Jumbo"])
+    assert t.startswith("Por cada") and "Jumbo" in t and "número" in t
+
+
+def test_torre_solo_salud_cuando_buscan_doctor():
+    from any.flujos.torre_medica import busca_salud, es_de_salud
+
+    class L:
+        def __init__(self, n, d):
+            self.nombre, self.descripcion, self.productos, self.rubro = n, d, [], ""
+    assert busca_salud("hay un doctor cerca de Mercagan?")
+    assert es_de_salud(L("FOSCAL", "Citología / Vacunación / Atención por enfermería"))
+    assert not es_de_salud(L("Benitez Abogados", "Abogados | Torre Médica y Empresarial"))
+
+
+def test_eventos_fin_de_semana_lo_calcula_el_codigo():
+    from datetime import date
+    from any.flujos.eventos import ficha_evento
+
+    class E:
+        name, time, location, description = "x", "", "", ""
+    e = E(); e.date = "31/10/2026"
+    assert ficha_evento(e, date(2026, 10, 20))["es_este_fin_de_semana"] is False
+    e.date = "23/10/2026 al 25/10/2026"
+    assert ficha_evento(e, date(2026, 10, 20))["es_este_fin_de_semana"] is True
+
+
 # ── Entrada de Meta ───────────────────────────────────────────────
 
 def test_entrada_lote_completo():

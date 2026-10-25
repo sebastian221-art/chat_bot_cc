@@ -71,7 +71,6 @@
   - pregunta: Quiero inscribir a mis hijos en run run kids
     flujo: eventos
     debe:
-    - Run Run Kids
     - '180.000'
     criterio: Da fecha, lugar, precio y lo que incluye el kit, y el canal real de inscripción; no inventa requisitos.
     origen: 'trazas 21-10 #31 · respondió por eventos'
@@ -179,6 +178,7 @@
     origen: 'trazas 21-10 #14 · respondió por promociones'
   - pregunta: Y de ropa?
     flujo: locales
+    no_debe: [Zara, H&M, H & M]
     criterio: Entiende por el hilo que pide locales de ropa; lista todos los relevantes sin niveles.
     origen: 'trazas 21-10 #13 · respondió por busqueda_categoria'
   - pregunta: La misa a que hora es?
@@ -238,6 +238,7 @@
     origen: 'trazas 21-10 #5 · respondió por busqueda_categoria'
   - pregunta: Tengo un grado en q marcas puedo comprar algo para el grado
     flujo: locales
+    no_debe: [Gari Sushi, '{LIST']
     criterio: Propone opciones reales (ropa formal, calzado, accesorios, regalos) con locales del centro comercial, o pregunta qué busca y da
       ejemplos. No inventa marcas.
     origen: 'trazas 21-10 #4 · respondió por busqueda_categoria'
@@ -270,6 +271,9 @@
     no_debe:
     - Apice
     - Ortopedicos
+    - Maxiland Kids
+    - Jugueteria
+    - Happylandia
     criterio: Interpreta 'entretenimiento para adultos' como bares, discoteca, casino o eventos nocturnos; lista solo locales de ese tipo.
     origen: 'trazas 24-10 #30 · respondió por agente:buscar_locales'
   - pregunta: Carta de zirus
@@ -407,14 +411,17 @@
     origen: 'trazas 24-10 #8 · respondió por conversacion_general'
   - pregunta: Y tienes servicio de vacunación ?
     flujo: torre_medica
+    debe: [FOSCAL]
     no_debe:
     - Piso 1
     - no tengo datos
+    - Benitez Abogados
     criterio: Dice qué consultorio vacuna si existe; si no hay ninguno registrado lo dice y muestra opciones de la Torre Médica.
     depende_de_dato: Especialidades de la Torre Médica
     origen: 'trazas 24-10 #7 · respondió por torre_medica'
   - pregunta: Y gimnasios
     flujo: locales
+    no_debe: [Maxiland Kids]
     criterio: Si no hay gimnasio, lo dice claro sin mandar al Punto de Información; puede sugerir tiendas deportivas reales.
     origen: 'trazas 24-10 #6 · respondió por busqueda_categoria'
   - pregunta: Dónde puedo comprar un helado
