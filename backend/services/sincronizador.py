@@ -543,7 +543,8 @@ def _buscar_store_parecido(db, nombre: str, zona: str = "torre"):
     """Encuentra un local existente con el mismo nombre (sin tildes) o que comparta un token distintivo."""
     from models.store import Store
     n = _norm(nombre)
-    cands = db.query(Store).filter(Store.active == True).all()
+    # También los desactivados: si el administrador apagó un registro, la web no debe volver a crearlo.
+    cands = sorted(db.query(Store).all(), key=lambda s: not s.active)
     for s in cands:
         if _norm(s.name) == n:
             return s
@@ -611,6 +612,10 @@ async def sincronizar_mall(db: Session) -> dict:
     try:
         ents = leer_torre(await _get(URL_TORRE))
         for e_ in ents:
+            nombre_ok = (e_.get("nombre") or "").strip()
+            if len(nombre_ok) < 3 or nombre_ok.endswith(":") or re.match(r"(?i)^tel[eé]fonos?\b", _norm(nombre_ok)):
+                res["errores"].append(f"Torre médica: se omitió un registro con nombre inválido «{nombre_ok}»")
+                continue
             tel_principal = e_["telefonos"][0] if e_["telefonos"] else ""
             desc = e_["detalle"]
             if e_["telefonos"]:

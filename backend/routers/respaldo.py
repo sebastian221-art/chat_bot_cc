@@ -229,8 +229,15 @@ def revisar(db: Session) -> list[list]:
     por_tema = defaultdict(list)
     for k in entradas:
         c = k.content or ""
-        precios_carro = set(re.findall(r"carros?\s*:?\s*\$\s?([\d.,]+)", c, re.I))
-        precios_moto = set(re.findall(r"motos?\s*:?\s*\$\s?([\d.,]+)", c, re.I))
+        def _tarifas(patron):   # solo tarifas por hora (menos de $20.000); la mensualidad no cuenta
+            out = set()
+            for x in re.findall(patron, c, re.I):
+                v = re.sub(r"\D", "", x)
+                if v and int(v) < 20000:
+                    out.add(v)
+            return out
+        precios_carro = _tarifas(r"carros?\s*(?:particular)?\s*:?\s*\$\s?([\d.,]+)")
+        precios_moto = _tarifas(r"motos?\s*:?\s*\$\s?([\d.,]+)")
         if len(precios_carro) > 1 or len(precios_moto) > 1:
             rv.add("Alta", "Conocimiento", k.title,
                    f"Se contradice: tarifas de carro {sorted(precios_carro)} / moto {sorted(precios_moto)}.",
