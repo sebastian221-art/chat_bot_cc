@@ -71,11 +71,30 @@ def _dias_del_evento(fecha_texto, hoy):
     return {ini + timedelta(days=i) for i in range((fin - ini).days + 1)}
 
 
+MAX_AFICHES = 4
+
+
 class Eventos(Flujo):
     nombre = "eventos"
     descripcion = "eventos y actividades del centro comercial (concursos, carreras, ferias, misa) e inscripciones"
     temperatura = 0.5
     max_tokens = 600
+
+    def componer(self, ctx, datos, texto):
+        """Adjunta el afiche de cada evento que la respuesta nombra (máximo 4, en el orden en que aparecen)."""
+        from ..conocimiento.texto import normalizar
+        afiches = datos.meta.get("afiches") or {}
+        if afiches and texto:
+            t = normalizar(texto)
+            ya = {a.url for a in datos.adjuntos}
+            def nucleo(n):   # "Run Run Kids 2026" también vale escrito "Run Run Kids"
+                import re
+                return re.sub(r"\s*\b\d{4}\b\s*$", "", normalizar(n)).strip()
+            nombrados = sorted((t.find(nucleo(n)), n) for n in afiches if nucleo(n) and nucleo(n) in t)
+            for _, n in nombrados[:MAX_AFICHES]:
+                if afiches[n] not in ya:
+                    datos.adjuntos.append(Adjunto(tipo="imagen", url=afiches[n], leyenda=n))
+        return texto
 
     async def reunir(self, ctx: Contexto) -> Datos:
         db, hoy = ctx.db, ctx.ahora.date()
@@ -97,6 +116,15 @@ class Eventos(Flujo):
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=e.name))
         else:
             hechos["eventos_vigentes"] = [ficha_evento(x, hoy) for x in evs] or "no hay eventos programados por ahora"
+            # Afiches: se envían solo los de los eventos que la respuesta termine nombrando (ver componer)
+            afiches = {}
+            for x in evs:
+                f = foto_principal(db, "event", x.id, respaldo=x.photo_url)
+                if f:
+                    afiches[x.name] = f
+            datos.meta["afiches"] = afiches
+            if afiches:
+                hechos["afiches"] = "los afiches de los eventos que menciones se envían aparte, como imágenes"
             nombre = d.entidades.get("evento") if d else None
             if nombre:
                 hechos["evento_pedido_no_encontrado"] = nombre

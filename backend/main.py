@@ -178,6 +178,8 @@ app.include_router(auth_router)
 app.include_router(uploads_router)
 from routers.respaldo import router as respaldo_router
 app.include_router(respaldo_router)            # GET /respaldo/excel — respaldo completo en Excel
+from routers.verificacion import router as verificacion_router
+app.include_router(verificacion_router)        # planilla de verificación de datos (descargar / importar)
 app.include_router(__import__("any.entrada", fromlist=["router"]).router)  # Any 2.0 (/any/*)
 
 static_path = os.path.join(os.path.dirname(__file__), "static")

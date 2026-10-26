@@ -83,6 +83,9 @@ export const getStats = () => req('/stats')
 // ── Respaldo completo (Excel con todo el bot y el panel + revisión de datos) ──
 export const descargarRespaldo = () =>
   downloadFile('/respaldo/excel', `respaldo_any_${new Date().toISOString().slice(0, 10)}.xlsx`)
+export const descargarVerificacion = () =>
+  downloadFile('/verificacion/excel', `verificacion_any_${new Date().toISOString().slice(0, 10)}.xlsx`)
+export const importarVerificacion = (file: File) => uploadFile('/verificacion/importar', file)
 
 // ── Conversaciones ───────────────────────────────────────────────
 export const getConversations       = () => req('/conversations')

@@ -1,13 +1,13 @@
 // 📄 ARCHIVO: panel/app/dashboard/page.tsx
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { getStats, StatsData, descargarRespaldo } from '@/lib/api'
+import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
+import { getStats, StatsData, descargarRespaldo, descargarVerificacion, importarVerificacion } from '@/lib/api'
 import StatCard from '@/components/StatCard'
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
-import { MessageSquare, Users, TrendingUp, Store, RefreshCw, Download } from 'lucide-react'
+import { MessageSquare, Users, TrendingUp, Store, RefreshCw, Download, Upload, ClipboardCheck } from 'lucide-react'
 
 export default function DashboardPage() {
   const [data, setData]       = useState<StatsData | null>(null)
@@ -15,6 +15,29 @@ export default function DashboardPage() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [exportando, setExportando] = useState(false)
+
+  const [verificando, setVerificando] = useState(false)
+
+  const bajarVerificacion = async () => {
+    setVerificando(true)
+    try { await descargarVerificacion() }
+    catch (e) { alert('No se pudo generar la planilla: ' + (e as Error).message) }
+    finally { setVerificando(false) }
+  }
+
+  const subirVerificacion = async (ev: ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0]
+    ev.target.value = ''
+    if (!file) return
+    setVerificando(true)
+    try {
+      const r = await importarVerificacion(file)
+      const errores = (r.errores || []).length ? `\n\nAvisos:\n- ${r.errores.slice(0, 10).join('\n- ')}` : ''
+      alert(`Planilla aplicada: ${r.cambios} cambios guardados, ${r.revisados} registros marcados como revisados.${errores}`)
+    } catch (e) {
+      alert('No se pudo importar la planilla: ' + (e as Error).message)
+    } finally { setVerificando(false) }
+  }
 
   const exportar = async () => {
     setExportando(true)
@@ -77,6 +100,23 @@ export default function DashboardPage() {
           <span className="text-xs text-zinc-500">
             Actualizado: {lastUpdate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
           </span>
+          <button
+            onClick={bajarVerificacion}
+            disabled={verificando}
+            title="Planilla para revisar y corregir locales, eventos, sorteos, promociones, conocimiento e información general"
+            className="flex items-center gap-1.5 text-xs text-white bg-sky-700 hover:bg-sky-600 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+          >
+            <ClipboardCheck size={12} />
+            Planilla de verificación
+          </button>
+          <label
+            title="Sube la planilla corregida: solo se aplica lo que cambió"
+            className={`flex items-center gap-1.5 text-xs text-white bg-sky-900 hover:bg-sky-800 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${verificando ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            <Upload size={12} />
+            {verificando ? 'Procesando…' : 'Importar verificación'}
+            <input type="file" accept=".xlsx" className="hidden" onChange={subirVerificacion} />
+          </label>
           <button
             onClick={exportar}
             disabled={exportando}
@@ -174,4 +214,4 @@ export default function DashboardPage() {
       </div>
     </div>
   )
-} 
+}

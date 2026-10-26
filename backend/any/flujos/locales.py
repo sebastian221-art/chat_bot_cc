@@ -85,7 +85,7 @@ def instagram_de(loc: Local) -> str | None:
     for texto in (loc.carta_link or "", loc.descripcion or ""):
         m = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/[A-Za-z0-9_.\-/?=&]+", texto)
         if m:
-            url = m.group(0).rstrip(".,)")
+            url = m.group(0).rstrip(".,)").split("?")[0]          # sin ?hl=es ni rastreadores
             return url if url.startswith("http") else "https://" + url
     return None
 
@@ -96,13 +96,21 @@ def carta_de(loc: Local) -> tuple[str | None, str | None]:
     return archivo, (loc.carta_link or None)
 
 
+def _es_imagen(url: str | None) -> bool:
+    return bool(url) and not url.lower().split("?")[0].endswith(".pdf")
+
+
 def linea_lista(loc: Local) -> str:
-    partes = [f"• *{loc.nombre}*"]
-    if loc.zona:
-        partes.append(f" — {loc.zona}")
+    """• *Nombre* — Zona
+         👉 WhatsApp · 📸 Instagram   (los dos contactos, siempre que existan)"""
+    linea = f"• *{loc.nombre}*" + (f" — {loc.zona}" if loc.zona else "")
+    contactos = []
     if loc.whatsapp:
-        partes.append(f" · 👉 {loc.whatsapp}")
-    return "".join(partes)
+        contactos.append(f"👉 {loc.whatsapp}")
+    ig = instagram_de(loc)
+    if ig:
+        contactos.append(f"📸 {ig}")
+    return linea + ("\n   " + " · ".join(contactos) if contactos else "")
 
 
 def _quita_pedido(texto: str) -> str:
@@ -167,11 +175,19 @@ class Locales(Flujo):
             ig = instagram_de(loc)
             hechos["instagram"] = ig or "no tengo el Instagram de este local: dilo y ofrece su WhatsApp"
         elif pide == "foto":
-            foto = loc.fotos.get("portada") or loc.fotos.get("otra")
+            foto = next((f for f in (loc.fotos.get("portada"), loc.fotos.get("otra")) if _es_imagen(f)), None)
             if foto:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=loc.nombre))
             else:
                 hechos["foto"] = "no tengo foto de este local"
+        # Al hablar de un local concreto va su foto de portada (para que lo reconozcan) y su Instagram
+        if pide != "foto" and not any(a.tipo == "imagen" for a in datos.adjuntos):
+            portada = loc.fotos.get("portada")
+            if _es_imagen(portada):
+                datos.adjuntos.append(Adjunto(tipo="imagen", url=portada, leyenda=loc.nombre))
+        ig = instagram_de(loc)
+        if ig and "instagram" not in hechos:
+            hechos["instagram"] = ig
         return datos
 
     async def _lista(self, ctx: Contexto, ent: dict, consulta: str, pide: str | None) -> Datos:
