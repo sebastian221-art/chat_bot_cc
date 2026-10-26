@@ -35,6 +35,16 @@ FRASES_SI = ["si", "sí", "si confirmo", "confirmo", "dale", "listo", "de una", 
 FRASES_NO = ["no", "no gracias", "corregir", "cambiar", "esta mal", "no es asi"]
 
 
+def _quiere_cancelar(texto: str) -> bool:
+    """«cancelar», «cancélalo», «cancela el pedido», «anúlalo», «olvídalo»… (mensajes cortos)."""
+    t = normalizar(texto).strip(" .!¡?¿")
+    if re.search(r"\bno\s+(lo\s+|la\s+|me\s+)?(cancel|anul)", t):
+        return False                                       # «no lo canceles»
+    if _es(FRASES_CANCELAR, texto):
+        return True
+    return len(t.split()) <= 6 and bool(re.search(r"\b(cancel\w*|anul\w*|olvid\w*)\b", t))
+
+
 def _es(frases: list[str], texto: str) -> bool:
     t = normalizar(texto).strip(" .!¡?¿")
     return t in {normalizar(f) for f in frases} or bool(alguna_frase(frases, t) and len(t.split()) <= 4)
@@ -101,7 +111,7 @@ class Domicilios(Flujo):
     # El router consulta esto cuando hay un pedido a medias
     def sigue_en_flujo(self, ctx: Contexto) -> bool:
         paso = ctx.estado.datos.get("paso")
-        if _es(FRASES_CANCELAR, ctx.mensaje):
+        if _quiere_cancelar(ctx.mensaje):
             return True
         if paso == "confirmar" and (_es(FRASES_SI, ctx.mensaje) or _es(FRASES_NO, ctx.mensaje)):
             return True
@@ -112,7 +122,7 @@ class Domicilios(Flujo):
         d = e.datos if e.flujo_activo == self.nombre else {}
         if not d:
             d = {"paso": "local", "campos": {}}
-        if d and _es(FRASES_CANCELAR, ctx.mensaje) and e.flujo_activo == self.nombre:
+        if d and _quiere_cancelar(ctx.mensaje) and e.flujo_activo == self.nombre:
             self._cerrar_gestion(ctx, d, "cancelled")
             e.terminar_flujo()
             return await self._redactar(ctx, {"situacion": "el cliente canceló el pedido; confírmalo en una línea "

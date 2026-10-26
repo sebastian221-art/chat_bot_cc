@@ -126,7 +126,7 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
 
     # ── Salida ──
     r = guardias.revisar_salida(ctx, r)
-    if estado.flujo_activo == "domicilios" and r.flujo != "domicilios" and r.texto:
+    if estado.flujo_activo == "domicilios" and r.flujo not in ("domicilios", "emergencia_queja") and r.texto:
         from ..flujos.domicilios import recordatorio
         nota = recordatorio(ctx)
         if nota:

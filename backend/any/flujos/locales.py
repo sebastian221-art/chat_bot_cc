@@ -93,7 +93,10 @@ def instagram_de(loc: Local) -> str | None:
 def carta_de(loc: Local) -> tuple[str | None, str | None]:
     """(foto o PDF de la carta, link de la carta)."""
     archivo = loc.fotos.get("carta")
-    return archivo, (loc.carta_link or None)
+    link = loc.carta_link or None
+    if link and re.search(r"instagram\.com|wa\.me/|whatsapp", link, re.I):
+        link = None       # un Instagram o un WhatsApp no es la carta (el Instagram ya va aparte)
+    return archivo, link
 
 
 def _es_imagen(url: str | None) -> bool:
@@ -140,18 +143,27 @@ class Locales(Flujo):
 
     def _local_nombrado(self, ctx: Contexto, ent: dict, consulta: str, pide: str | None) -> Local | None:
         db = ctx.db
+        recordado = ctx.estado.ultimas_entidades.get("local")
+        # Lo que el cliente escribió manda: si nombra un local exacto ("FDS dame información"), es ese,
+        # aunque el modelo haya creído que seguía hablando del anterior.
+        if not ent.get("categoria"):
+            exactos = [r for r in buscar_locales(db, ctx.mensaje) if r.nombre_exacto]
+            if len(exactos) == 1:
+                return exactos[0].local
         if ent.get("local"):
-            loc = encontrar_local(db, str(ent["local"]), incluir_torre=False)
+            loc = encontrar_local(db, str(ent["local"]), incluir_torre=False) or \
+                encontrar_local(db, str(ent["local"]), incluir_torre=True)       # "Benítez abogados" es de la Torre
             if loc:
                 return loc
-        for texto in (() if ent.get("categoria") else (ctx.mensaje, consulta)):   # "unos tennis" ≠ el local Tennis
+        for texto in (() if ent.get("categoria") else (consulta,)):   # "unos tennis" ≠ el local Tennis
             exactos = [r for r in buscar_locales(db, texto) if r.nombre_exacto]
             if len(exactos) == 1:
                 return exactos[0].local
-        # "¿y el horario?" justo después de hablar de un local
-        recordado = ctx.estado.ultimas_entidades.get("local")
+        # "¿y el horario?" justo después de hablar de un local (pero no si el cliente nombró OTRO local)
+        nombro_otro = ent.get("local") and recordado and normalizar(str(ent["local"])) != normalizar(recordado)
         plural = re.search(r"\b(locales|tiendas|restaurantes|almacenes|negocios|cuales|cuantos)\b", normalizar(ctx.mensaje))
-        if recordado and pide and not plural and not ent.get("categoria") and ctx.decision and ctx.decision.es_seguimiento:
+        if recordado and pide and not plural and not nombro_otro and not ent.get("categoria") and \
+                ctx.decision and ctx.decision.es_seguimiento:
             return encontrar_local(db, recordado, incluir_torre=False)
         return None
 
@@ -172,7 +184,8 @@ class Locales(Flujo):
             elif link:
                 hechos["carta_link"] = link
             else:
-                hechos["carta"] = "este local no tiene carta cargada: dilo claro y ofrece su WhatsApp para pedirla"
+                hechos["carta"] = ("este local no tiene carta cargada: dilo claro; si tiene Instagram, dile que ahí "
+                                   "puede ver sus productos, y ofrece su WhatsApp para pedirla")
         elif pide == "instagram":
             ig = instagram_de(loc)
             hechos["instagram"] = ig or "no tengo el Instagram de este local: dilo y ofrece su WhatsApp"

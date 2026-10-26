@@ -12,6 +12,8 @@ Se guarda en memoria 60 s para no consultar la base en cada mensaje.
 """
 from __future__ import annotations
 
+import re
+
 import time
 from dataclasses import dataclass, field
 
@@ -75,8 +77,8 @@ class Local:
         if completa:
             d.update({"rubro": self.rubro, "que_vende": ", ".join(self.productos[:25]),
                       "descripcion": self.descripcion, "horario": self.horario})
-            if self.carta_link:
-                d["carta_o_catalogo"] = self.carta_link
+            if self.carta_link and not re.search(r"instagram\.com|wa\.me/|whatsapp", self.carta_link, re.I):
+                d["carta_o_catalogo"] = self.carta_link     # un Instagram no es la carta: va como "instagram"
         return {k: v for k, v in d.items() if v}
 
 

@@ -11,7 +11,7 @@ Orden:
 from __future__ import annotations
 import re
 
-from ..conocimiento.texto import alguna_frase
+from ..conocimiento.texto import alguna_frase, normalizar
 from ..config import cfg
 from ..flujos import FLUJOS, RESPALDO, catalogo_para_router, nombres_validos
 from ..flujos.base import leer_prompt
@@ -33,6 +33,32 @@ CLAVES_ENTIDADES = {"local", "categoria", "pelicula", "evento", "especialidad", 
 
 def regla_emergencia(texto: str) -> str | None:
     return alguna_frase(mensajes.frases("frases_emergencia"), texto)
+
+
+_VERBO_ALQUILER = re.compile(r"\b(alquil|arriend|arrend|rent|reserv|cotiz|hacer|realizar|organizar|celebrar)\w*")
+_COSA_EVENTO = re.compile(r"\b(salon|salones|capacitacion\w*|conferencia\w*|graduacion\w*|grado|fiesta\w*|"
+                          r"reunion\w*|evento empresarial|eventos empresariales)\b")
+# nombres de locales que también son palabras comunes de una respuesta ("claro", "tennis")
+_NOMBRES_AMBIGUOS = {"claro", "tennis", "si", "no", "ok", "rich"}
+
+
+def regla_salon_eventos(texto: str) -> bool:
+    n = normalizar(texto or "")
+    return bool(re.search(r"\bauditorio\b", n) or (_VERBO_ALQUILER.search(n) and _COSA_EVENTO.search(n)))
+
+
+def local_por_nombre_exacto(ctx: Contexto):
+    n = normalizar(ctx.mensaje or "").strip(" .!¡?¿,")
+    if len(n) < 3 or n in _NOMBRES_AMBIGUOS or len(n.split()) > 6:
+        return None
+    try:
+        from ..conocimiento.catalogo import locales
+        for l in locales(ctx.db):
+            if not (l.es_servicio or l.es_cine) and normalizar(l.nombre).strip(" .") == n:
+                return l
+    except Exception:
+        return None
+    return None
 
 
 async def decidir(ctx: Contexto) -> Decision:
@@ -60,6 +86,18 @@ async def decidir(ctx: Contexto) -> Decision:
     # 2b. Mensaje sin palabras ("?", "...", un emoji): se pide aclarar, sin preguntarle al modelo
     if not re.search(r"[0-9A-Za-zÁÉÍÓÚáéíóúÑñÜü]", ctx.mensaje or ""):
         return Decision(RESPALDO, {}, False, ctx.mensaje, "mensaje sin palabras: pedir aclaración", "regla")
+
+    # 2c. Alquiler del auditorio / salones para eventos: siempre al flujo de servicios (trae los números
+    #     de reservas). El modelo lo mandaba a Administración, que no tiene esos datos.
+    if regla_salon_eventos(ctx.mensaje):
+        return Decision("servicios_mall", {"servicio": "salon_eventos"}, False, ctx.mensaje,
+                        "alquiler de salón / auditorio para eventos", "regla")
+
+    # 2d. El mensaje es solo el nombre de un local ("FDS", "Enjoy"): ficha de ese local, sin adivinar
+    loc = None if ctx.estado.flujo_activo else local_por_nombre_exacto(ctx)   # con un pedido a medias decide la IA
+    if loc:
+        return Decision("torre_medica" if loc.es_torre else "locales", {"local": loc.nombre}, False, ctx.mensaje,
+                        f"el mensaje es el nombre del local «{loc.nombre}»", "regla")
 
     # 3. Router IA
     try:

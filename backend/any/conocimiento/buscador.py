@@ -218,8 +218,12 @@ def encontrar_local(db: Session, nombre: str, incluir_torre: bool = True) -> Loc
         if ln == n:
             return loc
         p = 0.0
+        tn = {w for w in palabras(n) if w not in VACIAS}
+        tl = {w for w in palabras(ln) if w not in VACIAS}
         if contiene_frase(n, ln) or contiene_frase(ln, n):
             p = 0.9 + min(len(n), len(ln)) / max(len(n), len(ln)) / 10
+        elif len(tn) >= 2 and tn <= tl:
+            p = 0.88          # "Benítez abogados" → "Benítez y Bravo Abogados" (todas sus palabras están)
         else:
             p = difflib.SequenceMatcher(None, n, ln).ratio()
             primera = next((w for w in palabras(ln) if w not in VACIAS), "")

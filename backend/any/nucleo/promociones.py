@@ -15,6 +15,8 @@ Cómo funciona:
 """
 from __future__ import annotations
 
+import re
+
 import os
 from datetime import date, timedelta, timezone
 
@@ -177,9 +179,11 @@ def linea(datos: dict) -> str:
 
 def asegurar(ctx, promo: dict, texto: str) -> tuple[str, bool]:
     """Garantiza que la novedad aparezca y la registra. Devuelve (texto, agregada_por_codigo)."""
-    nombre = normalizar(promo["datos"].get("nombre", ""))
+    def _plano(x: str) -> str:      # "20% OFF" y "20 % off" son lo mismo
+        return re.sub(r"[^a-z0-9]", "", normalizar(x))
+    nombre = _plano(promo["datos"].get("nombre", ""))
     agregada = False
-    if nombre and nombre not in normalizar(texto):
+    if nombre and nombre not in _plano(texto):
         texto = (texto.rstrip() + "\n\n" + linea(promo["datos"])).strip()
         agregada = True
     from models.promotion_shown import PromotionShown

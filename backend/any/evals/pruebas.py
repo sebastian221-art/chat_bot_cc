@@ -33,6 +33,32 @@ def _correr(coro):
 
 # ── Texto ─────────────────────────────────────────────────────────
 
+def test_ajustes_prueba_jefe():
+    """Lo que falló en la prueba del 26/10: cancélalo, De paso repetido, salón, nombre solo, Benítez."""
+    from any.flujos.domicilios import _quiere_cancelar
+    assert _quiere_cancelar("cancelalo") and _quiere_cancelar("Cancélalo por favor") and _quiere_cancelar("anúlalo")
+    assert _quiere_cancelar("cancelar") and not _quiere_cancelar("no lo canceles") and not _quiere_cancelar("una pizza")
+    from any.nucleo import promociones
+    class _C:  # contexto mínimo para asegurar()
+        telefono, ahora = "prueba-promo", __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        db = _db()
+    texto, agregada = promociones.asegurar(_C, {"entity_type": "marketing", "entity_id": 0,
+                                                "datos": {"tipo": "promocion", "nombre": "20% OFF"}},
+                                           "Precios...\n\nDe paso: aprovecha el 20 % OFF hasta el 31/10")
+    assert not agregada and texto.count("De paso") == 1
+    from any.nucleo.router import regla_salon_eventos
+    assert regla_salon_eventos("quiero alquilar un salón para una graduación")
+    assert regla_salon_eventos("Quiero hacer una capacitacion en el centro comercial")
+    assert regla_salon_eventos("cuanto vale el auditorio")
+    assert not regla_salon_eventos("qué eventos hay") and not regla_salon_eventos("quiero hacer un pedido")
+    from any.conocimiento.buscador import encontrar_local
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    nombres = {l.nombre for l in locales(db)}
+    if "Benítez y Bravo Abogados" in nombres:
+        assert encontrar_local(db, "Benítez abogados").nombre == "Benítez y Bravo Abogados"
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"
