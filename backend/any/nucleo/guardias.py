@@ -39,12 +39,38 @@ def bot_en_pausa(db: Session, telefono: str, ahora: datetime) -> bool:
     return hasta > ahora.astimezone(timezone.utc)
 
 
+_VERBO_BORRAR = re.compile(r"\b(borr|elimin|elimn|suprim|quit)\w*")
+_COSA_DATOS = re.compile(r"\b(datos?|informacion|historial|conversacion(es)?|chat|mensajes)\b")
+_SI = re.compile(r"^(si|sii+|claro|dale|ok|okay|listo|confirmo|de una|hagale|hazlo|por favor|obvio|correcto)\b")
+
+
+def pide_borrado(texto: str) -> bool:
+    """«borrar mis datos», «eliminar datos», «quiero que borren mi información»…"""
+    n = normalizar(texto or "")
+    return bool(alguna_frase(mensajes.frases("frases_borrado"), texto)) or \
+        bool(_VERBO_BORRAR.search(n) and _COSA_DATOS.search(n))
+
+
+def confirma_borrado(texto: str) -> bool:
+    """«sí, eliminar», «si borralos», «sí», «dale», «bórralos», «elimínalos»… pero no «no»."""
+    n = normalizar(texto or "").strip(" .!¡?¿,")
+    if re.search(r"\bno\b", n) or re.search(r"\b(mejor no|cancel|espera)\w*", n):
+        return False
+    return bool(alguna_frase(mensajes.frases("frases_confirmar_borrado"), texto) or _SI.search(n) or
+                (len(n.split()) <= 4 and _VERBO_BORRAR.search(n)))
+
+
+def _acaba_de_negarse(ctx: Contexto) -> bool:
+    """El último mensaje de Any fue la pregunta o la cancelación del borrado (el cliente insiste)."""
+    ultimo = next((t.texto for t in reversed(ctx.historial) if t.rol == "assistant"), "")
+    return "no borré nada" in ultimo or "¿Confirmas?" in ultimo
+
+
 def privacidad(ctx: Contexto) -> Respuesta | None:
     """Pedido de borrado y su confirmación. Devuelve la respuesta si el mensaje era de privacidad."""
     e = ctx.estado
     if e.datos.get("borrado_pendiente") and e.flujo_activo == "privacidad":
-        if alguna_frase(mensajes.frases("frases_confirmar_borrado"), ctx.mensaje) and \
-                not re.search(r"\bno\b", normalizar(ctx.mensaje)):
+        if confirma_borrado(ctx.mensaje):
             tablas = borrar_datos(ctx.db, ctx.telefono)
             ctx.traza.paso("privacidad_borrado", {"tablas": tablas})
             e.terminar_flujo()
@@ -54,7 +80,8 @@ def privacidad(ctx: Contexto) -> Respuesta | None:
         ctx.traza.paso("privacidad_cancelado")
         return None if len(ctx.mensaje.split()) > 3 else \
             Respuesta(mensajes.texto("borrado_cancelado"), "privacidad", meta={"sin_promo": True})
-    if alguna_frase(mensajes.frases("frases_borrado"), ctx.mensaje):
+    insiste = _acaba_de_negarse(ctx) and _VERBO_BORRAR.search(normalizar(ctx.mensaje or ""))
+    if pide_borrado(ctx.mensaje) or insiste:
         e.activar("privacidad", {"borrado_pendiente": True})
         return Respuesta(mensajes.texto("borrado_confirmar"), "privacidad", meta={"sin_promo": True})
     return None
@@ -306,6 +333,34 @@ def _sin_entradas_colgando(t: str) -> str:
                 continue
         out.append(l)
     return "\n".join(out).strip()
+
+
+# Nombres de local que también son palabras comunes: solo se ponen en mayúscula cuando van en *negrita*
+_NOMBRES_PALABRA = {"claro", "merecido", "rich", "tru", "densa", "pintemos", "tennis", "enjoy", "popsy"}
+
+
+def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
+    """Pedido del centro comercial: los nombres de los locales van siempre en MAYÚSCULA (ZIRUS PIZZA)."""
+    if not texto:
+        return texto
+    try:
+        from ..conocimiento.catalogo import locales
+        nombres = sorted({l.nombre.strip() for l in locales(ctx.db) if not l.es_servicio and len(l.nombre.strip()) >= 3},
+                         key=len, reverse=True)
+    except Exception:
+        return texto
+    links: list[str] = []
+
+    def _apartar(m):
+        links.append(m.group(0))
+        return f"⟦U{len(links) - 1}⟧"
+    t = re.sub(r"https?://\S+", _apartar, texto)
+    for n in nombres:
+        patron = r"(?<![\wÁÉÍÓÚÑáéíóúñ])" + re.escape(n).replace(r"\ ", r"\s+") + r"(?![\wÁÉÍÓÚÑáéíóúñ])"
+        if normalizar(n) in _NOMBRES_PALABRA:
+            patron = r"(?<=\*)" + patron + r"(?=\*)"        # «¡Claro!» no es el local CLARO
+        t = re.sub(patron, lambda m: m.group(0).upper(), t, flags=re.IGNORECASE)
+    return re.sub(r"⟦U(\d+)⟧", lambda m: links[int(m.group(1))], t)
 
 
 def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:

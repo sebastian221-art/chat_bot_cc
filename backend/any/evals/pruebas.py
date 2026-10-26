@@ -59,6 +59,28 @@ def test_ajustes_prueba_jefe():
         assert encontrar_local(db, "Benítez abogados").nombre == "Benítez y Bravo Abogados"
 
 
+def test_borrado_de_datos_flexible():
+    from any.nucleo.guardias import confirma_borrado, pide_borrado
+    for m in ["borrar mis datos", "eliminar datos", "quiero que borren mi información", "borra mi historial"]:
+        assert pide_borrado(m), m
+    assert not pide_borrado("quiero eliminar un pedido") and not pide_borrado("borrador de tesis")
+    for m in ["sí, eliminar", "si borralos", "sí", "dale", "bórralos", "eliminalos", "si por favor"]:
+        assert confirma_borrado(m), m
+    for m in ["no", "mejor no", "no los borres", "espera", "qué películas hay"]:
+        assert not confirma_borrado(m), m
+
+
+def test_categoria_web_no_dice_que_vende():
+    from any.conocimiento.catalogo import _rubro_y_productos
+    rubro, prods = _rubro_y_productos("Calzado, Marroquinería y Accesorios, Bolsos, carteras, MANTRA", "MANTRA")
+    assert rubro == "Calzado, Marroquinería y Accesorios" and prods == ["Bolsos", "carteras"]
+    from any.nucleo.guardias import nombres_en_mayuscula
+    class _C:
+        db = _db()
+    t = nombres_en_mayuscula(_C, "¡Claro! *Tennis* https://wa.me/573001112233")
+    assert t.startswith("¡Claro!") and "*TENNIS*" in t and "wa.me/573001112233" in t
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"
@@ -550,7 +572,7 @@ def test_locales_lista_la_pone_el_codigo():
         simulado.MANEJADOR = None
     t = r.texto
     assert "{LISTA}" not in t and "Inventada" not in t
-    assert t.index("*Badelei*") < t.index("*popsy*")                      # orden alfabético
+    assert t.index("*DOTOS*") < t.index("*POPSY*") and "*BADELEI*" not in t     # alfabético; Badelei no vende helado
     assert "wa.me/57" in t and "¿Te paso la carta de alguno?" in t   # al final puede ir la novedad del día
     borrar_datos(db, "prueba-helado")
 
@@ -769,7 +791,7 @@ def test_imagen_usa_la_busqueda_de_locales():
         r = _correr(procesar(db, "prueba-foto", "Ana", "", imagen=b"\xff\xd8\xff\xe0 foto falsa"))
     finally:
         simulado.MANEJADOR = None
-    assert r.flujo == "imagen" and "*Tennis*" in r.texto and "{LISTA}" not in r.texto
+    assert r.flujo == "imagen" and "*TENNIS*" in r.texto and "{LISTA}" not in r.texto
     borrar_datos(db, "prueba-foto")
 
 

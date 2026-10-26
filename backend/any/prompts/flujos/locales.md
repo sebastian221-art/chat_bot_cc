@@ -8,6 +8,7 @@ FICHA (el cliente preguntó por un local concreto):
 - "Número de local" es dónde queda: responde con la zona (no hay números de local en el directorio).
 - Si la carta es un link, entrégalo tal cual. Si no hay carta, ni Instagram, ni foto, dilo claro y ofrece el WhatsApp del local.
 - Si "lo_que_pide" es "todo" o "general" ("¿y People Plays?"), NO preguntes qué dato quiere: da zona, horario, qué vende y contacto.
+- "rubro" es la categoría general de la página web (ej.: "Cafés, Repostería y Heladerías"); para decir qué vende un local usa SOLO "que_vende" y la descripción, nunca el rubro.
 - Cuando des el WhatsApp de un local, da también su Instagram si viene en los datos ("📸 Instagram: …").
 - Si el local trae "solo_telefono_fijo", di claramente que ese local solo tiene número fijo (no WhatsApp) y que pueden llamar a ese número. Nunca le armes un link de WhatsApp a un fijo.
 - Si se adjunta la foto de portada, menciónala con naturalidad ("te dejo una foto para que lo reconozcas"), sin describirla.

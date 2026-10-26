@@ -82,11 +82,27 @@ class Local:
         return {k: v for k, v in d.items() if v}
 
 
+# Categorías de la página web que juntan varias cosas ("Calzado, Marroquinería y Accesorios"): un local de
+# esa categoría puede vender solo una de ellas (MANTRA solo bolsos), así que la categoría NO basta para
+# decir que vende zapatos — eso lo tiene que decir su propio "qué vende".
+CATEGORIAS_COMPUESTAS = {normalizar(c) for c in [
+    "Calzado, Marroquinería y Accesorios", "Cafés, Repostería y Heladerías", "Vehículos, Concesionarios y Accesorios",
+    "Hogar, Decoración y Colchones", "Droguerías, Salud y Ópticas", "Entretenimiento, Cines y Juegos",
+    "Belleza, Cosméticos y Peluquerías", "Tecnología, Audio y Telecomunicaciones",
+]}
+
+
+def es_categoria_compuesta(rubro: str) -> bool:
+    return normalizar(rubro) in CATEGORIAS_COMPUESTAS
+
+
 def _rubro_y_productos(tags: str, nombre: str) -> tuple[str, list[str]]:
     partes = [p.strip() for p in (tags or "").split(",") if p.strip()]
     if not partes:
         return "", []
     nom = normalizar(nombre)
+    if len(partes) >= 2 and es_categoria_compuesta(f"{partes[0]}, {partes[1]}"):
+        partes = [f"{partes[0]}, {partes[1]}"] + partes[2:]      # la categoría de la web va completa
     rubro = partes[0] if normalizar(partes[0]) not in TAGS_GENERICOS else ""
     resto = partes[1:] if rubro else partes
     productos, vistos = [], set()

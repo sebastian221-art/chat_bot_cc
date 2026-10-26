@@ -24,7 +24,7 @@ borrado_confirmar: >-
   Entiendo que quieres eliminar tus datos personales 🔒. Esto borra tu historial de
   conversación y lo que sé de ti; la próxima vez que escribas será como empezar de cero.
 
-  ¿Confirmas? Responde *"sí, eliminar"* para confirmar, o cualquier otra cosa para cancelar.
+  ¿Confirmas? Responde *sí* para borrarlos, o *no* para dejarlos como están.
 
 borrado_hecho: >-
   ✅ Listo. Tus datos personales fueron eliminados. Si vuelves a escribir, empezamos de cero.

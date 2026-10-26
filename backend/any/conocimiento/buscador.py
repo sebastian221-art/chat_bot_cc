@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import yaml
 from sqlalchemy.orm import Session
 
-from .catalogo import Local, locales
+from .catalogo import Local, es_categoria_compuesta, locales
 from .texto import VACIAS, contiene_frase, normalizar, palabras, raices, raiz
 
 _RUTA_SINONIMOS = os.path.join(os.path.dirname(__file__), "..", "datos", "sinonimos.yaml")
@@ -156,6 +156,8 @@ def buscar_locales(db: Session, consulta: str, incluir_torre: bool = False,
             mejor = 0
             for campo, peso in PESOS.items():
                 rs = getattr(loc, f"raices_{campo}")
+                if campo == "rubro" and es_categoria_compuesta(loc.rubro):
+                    peso = PESO_FUERTE - 1      # «Calzado, Marroquinería y Accesorios» no dice que venda zapatos
                 if c.raices & rs:
                     mejor = max(mejor, peso)
             if not mejor and c.frases:
