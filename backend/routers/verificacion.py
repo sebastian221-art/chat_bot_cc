@@ -97,6 +97,12 @@ def _sin_ig(t) -> str:
     return re.sub(r"[\s|]+", " ", t).strip()
 
 
+def _url_igual(u: str) -> str:
+    """Para comparar links: sin https://, sin www., sin parámetros ni barra final."""
+    u = (u or "").strip().lower().split("?")[0].rstrip("/")
+    return re.sub(r"^https?://(www\.)?", "", u)
+
+
 def _a_celda(v):
     if v is None:
         return ""
@@ -262,7 +268,7 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                     continue
                 if campo == "@instagram":
                     nuevo_ig = str(nuevo or "").strip()
-                    if nuevo_ig and nuevo_ig != _instagram(obj):
+                    if nuevo_ig and _url_igual(nuevo_ig) != _url_igual(_instagram(obj) or ""):
                         desc = _IG.sub("", obj.description or "").strip()
                         desc = re.sub(r"(?i)\s*\|?\s*instagram:\s*$", "", desc)
                         obj.description = (desc + f" | Instagram: {nuevo_ig}").strip(" |")

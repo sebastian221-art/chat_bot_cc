@@ -17,11 +17,12 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from .texto import link_whatsapp, normalizar, raices
+from .texto import link_whatsapp, normalizar, raices, telefono_fijo
 
 ZONAS_OFICIALES = [
     "Pasillo Barichara", "Pasillo Vélez", "Pasillo Socorro", "Pasillo Charalá", "Pasillo Páramo",
     "Pasillo Curití", "Plaza Principal", "Zona Terrazas", "Plazoleta de Comidas La Ceiba", "Paseo de la Cruz",
+    "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar",
 ]
 TAGS_GENERICOS = {"torre medica", "consultorio", "oficina", "salud", "administracion", "servicios", "mall", "cine"}
 CATEGORIAS_TORRE = {"torre medica y empresarial"}
@@ -54,6 +55,11 @@ class Local:
     raices_productos: set = field(default_factory=set)
     raices_descripcion: set = field(default_factory=set)
 
+    @property
+    def fijo(self) -> str | None:
+        """Número para llamar cuando el local solo tiene fijo (sin WhatsApp)."""
+        return None if self.whatsapp else telefono_fijo(self.telefono)
+
     def ficha(self, completa: bool = False) -> dict:
         """Lo que se le entrega al modelo. Sin IDs internos visibles."""
         d = {"nombre": self.nombre, "zona": self.zona}
@@ -64,6 +70,8 @@ class Local:
             d["telefono"] = self.telefono
         if self.whatsapp:
             d["whatsapp"] = self.whatsapp
+        elif self.fijo:
+            d["solo_telefono_fijo"] = f"{self.fijo} (no tiene WhatsApp: que llamen a ese número)"
         if completa:
             d.update({"rubro": self.rubro, "que_vende": ", ".join(self.productos[:25]),
                       "descripcion": self.descripcion, "horario": self.horario})

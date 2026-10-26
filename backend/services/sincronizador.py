@@ -52,6 +52,7 @@ URL_TARIFAS        = f"https://www.cinelandia.com.co/promos.php?ciudad={CINE_CIU
 URL_PROXIMAMENTE   = f"https://www.cinelandia.com.co/proximamente.php?ciudad={CINE_CIUDAD}"
 URL_SERVICIOS      = "https://www.elpuente.com.co/servicios"
 URL_TORRE          = "https://www.elpuente.com.co/torre-empresarial"
+MARCA_TORRE        = " | Torre Médica y Empresarial, "   # así termina la descripción que escribe la web
 URL_CAMPANAS       = "https://www.elpuente.com.co/eventos-de-temporada"
 URL_REGISTRO_FACT  = "https://www.elpuente.com.co/registro-de-facturas"
 
@@ -623,11 +624,17 @@ async def sincronizar_mall(db: Session) -> dict:
             desc = (desc + f" | Torre Médica y Empresarial, {e_['piso']}, oficina {e_['oficina']}").strip(" |")
             st = _buscar_store_parecido(db, e_["nombre"], zona="torre")
             if st:
-                st.floor = e_["piso"]
-                st.local_number = e_["oficina"][:60] or st.local_number
-                if tel_principal:
+                # Si el registro ya lo corrigió una persona (panel o planilla de verificación), la web solo
+                # llena lo que esté vacío: no le pisa el teléfono, la descripción, el piso ni el consultorio.
+                a_mano = bool((st.description or "").strip()) and MARCA_TORRE not in (st.description or "")
+                if not a_mano or not (st.floor or "").lower().startswith("piso"):
+                    st.floor = e_["piso"]
+                if not a_mano or not (st.local_number or "").strip():
+                    st.local_number = e_["oficina"][:60] or st.local_number
+                if tel_principal and (not a_mano or not (st.phone or "").strip()):
                     st.phone = re.sub(r"\D", "", tel_principal)[:60]
-                st.description = desc[:4000]
+                if not a_mano:
+                    st.description = desc[:4000]
                 st.location_hint = st.location_hint or "Torre Médica"
             else:
                 db.add(Store(

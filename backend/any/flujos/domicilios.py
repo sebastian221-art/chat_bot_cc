@@ -128,8 +128,10 @@ class Domicilios(Flujo):
             if not loc.whatsapp:
                 e.terminar_flujo()
                 return await self._redactar(ctx, {"situacion": f"{loc.nombre} no tiene WhatsApp registrado, así que "
-                                                               "no se le puede enviar el pedido; dilo con honestidad y "
-                                                               "ofrece buscar otro local parecido",
+                                                               "no se le puede enviar el pedido; dilo con honestidad. Si "
+                                                               "la ficha trae solo_telefono_fijo, dile que puede llamar "
+                                                               "a ese número para pedir; si no, ofrece buscar otro "
+                                                               "local parecido",
                                                   "local": loc.ficha()})
             d = {"paso": "datos", "local_id": loc.id, "local": loc.nombre, "campos": {}}
             d["campos"]["celular"] = self._celular_por_defecto(ctx)

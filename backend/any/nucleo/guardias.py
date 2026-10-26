@@ -237,7 +237,8 @@ def _corregir_pasillos(ctx: Contexto, t: str) -> str:
 
 
 NOMBRES_FIJOS = {"Punto de Información", "Torre Médica", "Plazoleta de Comidas La Ceiba", "Plaza Principal",
-                 "Zona Terrazas", "Paseo de la Cruz", "Cinelandia Múltiplex"}
+                 "Zona Terrazas", "Paseo de la Cruz", "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar",
+                 "Cinelandia Múltiplex"}
 CLAVES_NOMBRES = {"nombre", "lugar", "zona", "titulo", "local", "location", "donde_registrar"}
 
 

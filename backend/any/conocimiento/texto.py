@@ -80,9 +80,27 @@ def solo_digitos(texto: str) -> str:
 
 
 def link_whatsapp(telefono: str | None) -> str | None:
+    """Solo los celulares (3xx xxx xxxx) tienen WhatsApp; un fijo no da link."""
     d = solo_digitos(telefono or "")
     if len(d) == 10:
         d = "57" + d
-    if len(d) != 12 or not d.startswith("57"):
+    if len(d) != 12 or not d.startswith("573"):
         return None
     return f"https://wa.me/{d}"
+
+
+def telefono_fijo(telefono: str | None) -> str | None:
+    """El número escrito bonito cuando NO es un celular (fijo, línea 01 8000…). None si es celular o no hay."""
+    t = (telefono or "").strip()
+    d = solo_digitos(t)
+    if not d or link_whatsapp(t):
+        return None
+    if d.startswith("3"):
+        return None       # celular mal escrito (le sobra o le falta un dígito): mejor no darlo
+    if len(d) == 7:
+        return f"(607) {d[:3]} {d[3:]}"
+    if len(d) == 10 and d.startswith("60"):
+        return f"({d[:3]}) {d[3:6]} {d[6:]}"
+    if d.startswith("018000"):
+        return f"01 8000 {d[6:9]} {d[9:]}".strip()
+    return t

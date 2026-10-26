@@ -20,7 +20,9 @@ MARCA = "{LISTA}"
 def linea_consultorio(l: Local) -> str:
     lugar = ", ".join(x for x in [l.piso, f"consultorio {l.numero}" if l.numero and l.numero.upper() != "S/N" else ""] if x)
     s = f"• *{l.nombre}*" + (f" — {lugar}" if lugar else "")
-    return s + (f" · 👉 {l.whatsapp}" if l.whatsapp else "")
+    if l.whatsapp:
+        return s + f" · 👉 {l.whatsapp}"
+    return s + (f" · ☎️ solo fijo: {l.fijo}" if l.fijo else "")
 
 
 _SALUD = re.compile(r"medic|odont|ortodon|dermat|salud|clinic|cirug|cirujan|renal|nefro|dialisis|respirat|nutric|"

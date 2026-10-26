@@ -33,6 +33,16 @@ def _correr(coro):
 
 # ── Texto ─────────────────────────────────────────────────────────
 
+def test_fijo_no_tiene_whatsapp():
+    from any.conocimiento.texto import link_whatsapp, telefono_fijo
+    assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"
+    assert link_whatsapp("7244097") is None and telefono_fijo("7244097") == "(607) 724 4097"
+    assert link_whatsapp("6077245818") is None and telefono_fijo("6077245818") == "(607) 724 5818"
+    assert telefono_fijo("018000971903") == "01 8000 971 903"
+    assert link_whatsapp("31051117207") is None and telefono_fijo("31051117207") is None   # celular mal escrito
+    assert telefono_fijo("3156945386") is None
+
+
 def test_texto_palabra_completa():
     from any.conocimiento.texto import contiene_frase, raiz
     assert not contiene_frase("comer", "centro comercial")          # grieta del sistema viejo

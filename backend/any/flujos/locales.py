@@ -107,6 +107,8 @@ def linea_lista(loc: Local) -> str:
     contactos = []
     if loc.whatsapp:
         contactos.append(f"👉 {loc.whatsapp}")
+    elif loc.fijo:
+        contactos.append(f"☎️ solo fijo: {loc.fijo}")
     ig = instagram_de(loc)
     if ig:
         contactos.append(f"📸 {ig}")
@@ -304,5 +306,7 @@ class Locales(Flujo):
             partes = [f"*{l['nombre']}*" + (f" queda en {l['zona']}" if l.get("zona") else "")]
             if l.get("whatsapp"):
                 partes.append(f"👉 {l['whatsapp']}")
+            elif l.get("solo_telefono_fijo"):
+                partes.append(f"☎️ Solo tiene número fijo: {l['solo_telefono_fijo'].split(' (')[0]}, puedes llamar ahí.")
             return "\n".join(partes)
         return None

@@ -42,7 +42,8 @@ MAX_FILAS = 1_000_000      # límite de Excel por hoja: 1.048.576 filas
 
 ZONAS_OFICIALES = ["Pasillo Barichara", "Pasillo Vélez", "Pasillo Socorro", "Pasillo Charalá", "Pasillo Páramo",
                    "Pasillo Curití", "Plaza Principal", "Zona Terrazas", "Plazoleta de Comidas La Ceiba",
-                   "Paseo de la Cruz", "Torre Médica", "Oficinas Administrativas"]
+                   "Paseo de la Cruz", "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar", "Torre Médica",
+                   "Oficinas Administrativas"]
 
 
 # ── utilidades ────────────────────────────────────────────────────
