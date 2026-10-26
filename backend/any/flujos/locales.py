@@ -103,6 +103,16 @@ def _es_imagen(url: str | None) -> bool:
     return bool(url) and not url.lower().split("?")[0].endswith(".pdf")
 
 
+# Lo que se pregunta DE un local (no otro producto): con estas palabras se sigue hablando del mismo local
+_ATRIBUTOS = set("""
+domicilio domicilios envio envios precio precios vale valen cuesta cuestan costo costos pago pagos pagar tarjeta
+tarjetas nequi daviplata efectivo transferencia parqueadero abierto abierta cerrado hoy manana lunes martes
+miercoles jueves viernes sabado sabados domingo domingos festivo festivos y el la los las de del en a que
+tienen tiene tienes hay dan da ofrecen ofrece hacen hace manejan maneja aceptan acepta reciben recibe venden vende
+puedo puede quiero necesito busco me te se lo le por favor si no tambien ustedes alli ahi
+""".split())
+
+
 def linea_lista(loc: Local) -> str:
     """• *Nombre* — Zona
          👉 WhatsApp · 📸 Instagram   (los dos contactos, siempre que existan)"""
@@ -139,6 +149,8 @@ class Locales(Flujo):
         loc = self._local_nombrado(ctx, ent, consulta, pide)
         if loc:
             return self._ficha(loc, pide)
+        if getattr(ctx, "buscar_lo_que_escribio", False):
+            consulta, ent = ctx.mensaje, {k: v for k, v in ent.items() if k != "local"}
         return await self._lista(ctx, ent, consulta, pide)
 
     def _local_nombrado(self, ctx: Contexto, ent: dict, consulta: str, pide: str | None) -> Local | None:
@@ -153,6 +165,12 @@ class Locales(Flujo):
         if ent.get("local"):
             loc = encontrar_local(db, str(ent["local"]), incluir_torre=False) or \
                 encontrar_local(db, str(ent["local"]), incluir_torre=True)       # "Benítez abogados" es de la Torre
+            if loc and recordado and normalizar(loc.nombre) == normalizar(recordado):
+                otro = self._otro_local_por_producto(db, ctx.mensaje, loc)
+                if otro is not False:
+                    if otro is None:
+                        ctx.buscar_lo_que_escribio = True     # la lista sale de SUS palabras, no de la reescritura
+                    return otro         # "¿dan clases de zumba?" después del gimnasio → RUMBATERAPIA, no el gimnasio
             if loc:
                 return loc
         for texto in (() if ent.get("categoria") else (consulta,)):   # "unos tennis" ≠ el local Tennis
@@ -166,6 +184,24 @@ class Locales(Flujo):
                 ctx.decision and ctx.decision.es_seguimiento:
             return encontrar_local(db, recordado, incluir_torre=False)
         return None
+
+    def _otro_local_por_producto(self, db, mensaje: str, actual: Local):
+        """El modelo suele pegarle al mensaje el local del que se venía hablando. Si lo que el cliente pide
+        (zumba, yoga…) lo declara OTRO local y no este, se responde con ese otro. False = seguir con el actual;
+        un Local = ese; None = varios (va la lista)."""
+        if normalizar(actual.nombre) in normalizar(mensaje):
+            return False
+        palabras_msg = [w for w in palabras(normalizar(mensaje)) if w not in _ATRIBUTOS]
+        if not palabras_msg:
+            return False
+        res = [r for r in buscar_locales(db, " ".join(palabras_msg), incluir_servicios=False) if r.fuertes]
+        if not res:
+            return False
+        mx = max(len(r.fuertes) for r in res)
+        tops = [r.local for r in res if len(r.fuertes) == mx]
+        if any(l.id == actual.id for l in tops):
+            return False
+        return tops[0] if len(tops) == 1 else None
 
     def _ficha(self, loc: Local, pide: str | None) -> Datos:
         hechos = {"modo": "ficha", "lo_que_pide": pide or "general", "local": loc.ficha(completa=True)}
@@ -245,6 +281,11 @@ class Locales(Flujo):
             rubros = sorted({l.rubro for l in locales(db, incluir_torre=False, incluir_servicios=False) if l.rubro})
             return Datos(hechos={"modo": "sin_resultados", "busqueda": termino, "rubros_del_centro_comercial": rubros},
                          entidades={"categoria": termino})
+        if len(seleccion) == 1:
+            # Un solo local ("¿hay gimnasio?" → GIMNASIO CAJASAN): va su ficha completa, con foto de portada
+            datos = self._ficha(seleccion[0], pide)
+            datos.entidades["categoria"] = termino
+            return datos
         lineas = {l.nombre: linea_lista(l) for l in seleccion}
         hechos = {
             "modo": "lista", "busqueda": termino, "cantidad": len(seleccion),
