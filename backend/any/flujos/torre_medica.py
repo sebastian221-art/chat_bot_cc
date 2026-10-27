@@ -60,6 +60,19 @@ class TorreMedica(Flujo):
         numero = numero_en_texto(ctx.mensaje)
         if numero:
             return self._por_numero(db, numero, hechos)
+        piso = d.entidades.get("piso") if d else None
+        if piso:
+            en_piso = [l for l in torre if re.search(rf"\b{int(piso)}\b", l.piso or "")]
+            hechos["modo"] = "coinciden" if en_piso else "piso_sin_registro"
+            hechos["busqueda"] = f"piso {piso} de la Torre"
+            if not en_piso:
+                hechos["nota"] = f"No hay oficinas registradas en el piso {piso}; ofrece la línea 317 432 0138."
+                return Datos(hechos=hechos, meta={})
+            lineas = {l.nombre: linea_consultorio(l) for l in sorted(en_piso, key=lambda l: normalizar(l.nombre))}
+            hechos["como_escribir"] = f"Frase corta de entrada; luego {MARCA} en una línea sola; no escribas tú la lista."
+            return Datos(hechos=hechos, entidades={"especialidad": f"piso {piso}"},
+                         meta={"lista": "\n".join(lineas.values()), "lista_equidad": list(lineas),
+                               "lineas_equidad": lineas, "telefonos_validos": [l.telefono for l in en_piso if l.telefono]})
         if nombrado and nombrado.es_torre:
             hechos["modo"] = "ficha"
             hechos["consultorio"] = nombrado.ficha(completa=True)

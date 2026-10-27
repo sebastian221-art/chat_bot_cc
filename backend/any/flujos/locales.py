@@ -107,6 +107,7 @@ def _es_imagen(url: str | None) -> bool:
 _SOLO_OFICINAS = set("""
 oficina oficinas y que cuales cual dame listado lista de las los hay tiene tienen el la en centro comercial locales
 me puedes regalar pasame quiero ver todas todos directorio torre empresarial hola por favor
+medica conocer sobre saber pues entonces bueno ok y empresas negocios hay
 """.split())
 
 
@@ -165,7 +166,7 @@ class Locales(Flujo):
             if en_numero:
                 return self._datos_lista(en_numero, f"local {numero}", pide)
         pal = set(palabras(normalizar(ctx.mensaje)))
-        if pal & {"oficina", "oficinas"} and pal <= _SOLO_OFICINAS:
+        if pal & {"oficina", "oficinas", "torre"} and pal <= _SOLO_OFICINAS:
             # "Oficina", "¿qué oficinas tiene?": el directorio de la Torre Médica y Empresarial
             return self._datos_lista([l for l in locales(ctx.db) if l.es_torre], "oficinas de la Torre", pide)
         loc = self._local_nombrado(ctx, ent, consulta, pide)

@@ -105,6 +105,12 @@ def test_oficina_por_numero():
     assert numero_en_texto("el número es 318 522 1963") is None and numero_en_texto("cuesta $506") is None
 
 
+def test_piso_de_la_torre():
+    from any.nucleo.router import piso_en_texto
+    assert piso_en_texto("Pero cuáles hay en el quinto piso") == 5 and piso_en_texto("qué hay en el piso 2") == 2
+    assert piso_en_texto("5to piso") == 5 and piso_en_texto("piso 1") is None and piso_en_texto("hola") is None
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

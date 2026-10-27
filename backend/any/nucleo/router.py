@@ -47,6 +47,20 @@ def regla_salon_eventos(texto: str) -> bool:
     return bool(re.search(r"\bauditorio\b", n) or (_VERBO_ALQUILER.search(n) and _COSA_EVENTO.search(n)))
 
 
+_ORDINALES = {"primer": 1, "primero": 1, "segundo": 2, "tercer": 3, "tercero": 3, "cuarto": 4, "quinto": 5, "sexto": 6}
+
+
+def piso_en_texto(texto: str) -> int | None:
+    """«piso 5», «quinto piso», «5to piso» → 5. Solo pisos de la Torre (2 a 6)."""
+    n = normalizar(texto or "")
+    m = re.search(r"\bpiso\s*(\d)\b", n) or re.search(r"\b(\d)\s*(?:o|to|er|ro|do)?\s*piso\b", n)
+    num = int(m.group(1)) if m else None
+    if num is None:
+        m = re.search(r"\b(" + "|".join(_ORDINALES) + r")\s+piso\b", n)
+        num = _ORDINALES[m.group(1)] if m else None
+    return num if num and 2 <= num <= 6 else None
+
+
 def local_por_nombre_exacto(ctx: Contexto):
     n = normalizar(ctx.mensaje or "").strip(" .!¡?¿,")
     if len(n) < 3 or n in _NOMBRES_AMBIGUOS or len(n.split()) > 6:
@@ -109,8 +123,14 @@ async def decidir(ctx: Contexto) -> Decision:
     from ..flujos.locales import _SOLO_OFICINAS
     from ..conocimiento.texto import palabras
     pal = set(palabras(normalizar(ctx.mensaje or "")))
-    if not ctx.estado.flujo_activo and pal & {"oficina", "oficinas"} and pal <= _SOLO_OFICINAS:
+    if not ctx.estado.flujo_activo and pal & {"oficina", "oficinas", "torre"} and pal <= _SOLO_OFICINAS:
         return Decision("locales", {}, False, ctx.mensaje, "pide el listado de oficinas", "regla")
+
+    # 2c-3. «¿Cuáles hay en el quinto piso?»: los pisos solo existen en la Torre
+    piso = piso_en_texto(ctx.mensaje)
+    if piso and not ctx.estado.flujo_activo and \
+            re.search(r"\b(que|cuales|quienes|hay|oficinas?|consultorios?|lista|listado)\b", normalizar(ctx.mensaje)):
+        return Decision("torre_medica", {"piso": piso}, False, ctx.mensaje, f"pregunta por el piso {piso}", "regla")
 
     # 2d. El mensaje es solo el nombre de un local ("FDS", "Enjoy"): ficha de ese local, sin adivinar
     loc = None if ctx.estado.flujo_activo else local_por_nombre_exacto(ctx)   # con un pedido a medias decide la IA
