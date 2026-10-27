@@ -339,6 +339,18 @@ def _sin_entradas_colgando(t: str) -> str:
 _NOMBRES_PALABRA = {"claro", "merecido", "rich", "tru", "densa", "pintemos", "tennis", "enjoy", "popsy"}
 
 
+_LUGARES_MAL_ESCRITOS = [
+    # el afiche se lee con visión y a veces sale mal; aunque el dato guardado esté mal, al cliente le llega bien
+    (re.compile(r"(?i)\bplaz[a-z]*\s+gua(?:m|n)[a-záéíóú]*\b"), "Plazoleta Guanentá"),
+]
+
+
+def corregir_lugares(texto: str) -> str:
+    for patron, bueno in _LUGARES_MAL_ESCRITOS:
+        texto = patron.sub(bueno, texto)
+    return texto
+
+
 def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
     """Pedido del centro comercial: los nombres de los locales van siempre en MAYÚSCULA (ZIRUS PIZZA)."""
     if not texto:

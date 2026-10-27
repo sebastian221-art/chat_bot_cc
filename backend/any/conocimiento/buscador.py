@@ -130,6 +130,13 @@ empresa empresas oficina oficinas firma firmas negocio negocios asesoria asesori
 """.split())
 
 
+# Dicen la clase de sitio, no lo que se busca: solo cuentan si no hay nada más concreto en la pregunta
+PALABRAS_GENERICAS = set("""
+restaurante restaurantes comida comidas comer tienda tiendas almacen almacenes local locales sitio sitios lugar
+lugares opcion opciones recomendacion recomiendas recomienda bueno buena mejor
+""".split())
+
+
 @dataclass
 class Resultado:
     local: Local
@@ -144,6 +151,11 @@ def buscar_locales(db: Session, consulta: str, incluir_torre: bool = False,
                    incluir_servicios: bool = True) -> list[Resultado]:
     lista = locales(db, incluir_torre=incluir_torre, incluir_servicios=incluir_servicios)
     cons = [c for c in conceptos(consulta, "locales") if c.palabra not in PALABRAS_DE_PEDIDO]
+    # "restaurante de comida mexicana": si hay algo concreto (mexicana), "restaurante"/"comida" no cuentan;
+    # si no, todos los restaurantes cubrían 2 de 3 palabras y salían en la lista
+    concretos = [c for c in cons if normalizar(c.palabra) not in PALABRAS_GENERICAS]
+    if concretos:
+        cons = concretos
     for c in cons:   # palabra específica que nadie declara → se amplía a su grupo
         if c.respaldo and not any(c.raices & (l.raices_nombre | l.raices_rubro | l.raices_productos) for l in lista):
             c.raices, c.frases = c.respaldo

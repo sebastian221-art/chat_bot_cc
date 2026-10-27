@@ -26,6 +26,7 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  mexicana: [mexicana, mexicano, mexicanos, comida mexicana, tacos, taco, burrito, burritos, quesadilla, quesadillas, nachos, enchiladas]
   contador: [contador, contadores, contadora, contable, contables, contabilidad, contaduria, tributario, tributaria, tributarios, impuestos, declaracion de renta, revisor fiscal]
   abogado: [abogado, abogados, abogada, juridico, juridica, juridicos, asesoria legal, asesoria juridica, derecho, demanda]
   tenis:

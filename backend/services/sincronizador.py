@@ -1028,6 +1028,8 @@ def corregir_lugar(texto: str) -> str:
     if not texto:
         return texto
     t = _norm(texto)
+    if re.search(r"plaz\w*\s+gua(me|ne)\w*", t):     # la visión lee «Plazaleta Guamerá» en el afiche
+        return "Plazoleta Guanentá"
     for malo, bueno in CORRECCIONES_LUGAR.items():
         if malo in t:
             return bueno
@@ -1044,6 +1046,8 @@ def corregir_lugares_guardados(db: Session) -> int:
             nuevo = corregir_lugar(e.location or "")
             if nuevo != (e.location or ""):
                 e.location = nuevo; n += 1
+            if e.description and re.search(r"(?i)plaz\w*\s+gua(me|ne)\w*", e.description):
+                e.description = re.sub(r"(?i)plaz\w*\s+gua(me|ne)\w*", "Plazoleta Guanentá", e.description); n += 1
             for malo, bueno in CORRECCIONES_LUGAR.items():
                 if e.description and malo in _norm(e.description):
                     e.description = re.sub(re.escape(malo), bueno, e.description, flags=re.I); n += 1

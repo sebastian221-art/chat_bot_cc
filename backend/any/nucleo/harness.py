@@ -136,7 +136,7 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
         r.meta["promo"] = {**ctx.promo["datos"], "agregada_por_codigo": agregada}
         traza.paso("promocion_mostrada", r.meta["promo"])
     if r.texto and r.flujo != "privacidad":
-        r.texto = guardias.nombres_en_mayuscula(ctx, r.texto)
+        r.texto = guardias.corregir_lugares(guardias.nombres_en_mayuscula(ctx, r.texto))
     borrado = bool(r.meta.get("borrado"))
     if not borrado:
         guardias.aviso_privacidad(ctx, r)

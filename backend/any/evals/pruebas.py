@@ -111,6 +111,13 @@ def test_piso_de_la_torre():
     assert piso_en_texto("5to piso") == 5 and piso_en_texto("piso 1") is None and piso_en_texto("hola") is None
 
 
+def test_plazoleta_guanenta():
+    from any.nucleo.guardias import corregir_lugares
+    assert corregir_lugares("3:00 p.m. · Plazaleta Guamerá") == "3:00 p.m. · Plazoleta Guanentá"
+    assert corregir_lugares("en la Plazuela Guanenta") == "en la Plazoleta Guanentá"
+    assert corregir_lugares("Pasillo Barichara") == "Pasillo Barichara"
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"
