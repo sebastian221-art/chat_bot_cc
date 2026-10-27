@@ -54,7 +54,61 @@ class AnyAviso(BaseAny):
     mostrado = Column(DateTime(timezone=True), nullable=True)
 
 
+class AnyUsuarioMeta(BaseAny):
+    """Clientes que escriben con nombre de usuario de WhatsApp y sin número visible: Meta manda un ID propio
+    (BSUID, ej. «CO.1234567890123456789»), más largo que las columnas de teléfono (20). Se guarda una clave
+    corta y aquí queda el ID completo para poder responderle."""
+    __tablename__ = "any_usuarios_meta"
+    clave = Column(String(20), primary_key=True)
+    bsuid = Column(String(120), nullable=False)
+    creado = Column(DateTime(timezone=True), nullable=True)
+
+
 _tablas_listas: set = set()
+_bsuid_cache: dict = {}
+
+
+def es_bsuid(identificador: str) -> bool:
+    """Un BSUID trae letras o un punto («CO.1349…»); un teléfono son solo dígitos."""
+    t = (identificador or "").strip()
+    return bool(t) and not t.isdigit()
+
+
+def clave_de_bsuid(db: Session, bsuid: str) -> str:
+    """Clave de 20 caracteres para guardar al cliente en las tablas de siempre (conversaciones, trazas…)."""
+    import hashlib
+    clave = "u" + hashlib.sha1(bsuid.encode()).hexdigest()[:19]
+    if _bsuid_cache.get(clave) != bsuid:
+        asegurar_tablas(db)
+        try:
+            if not db.get(AnyUsuarioMeta, clave):
+                db.add(AnyUsuarioMeta(clave=clave, bsuid=bsuid, creado=datetime.now(timezone.utc)))
+                db.commit()
+        except Exception:
+            db.rollback()
+        _bsuid_cache[clave] = bsuid
+    return clave
+
+
+def bsuid_de_clave(clave: str) -> str | None:
+    """El ID de Meta detrás de una clave «u…» (para enviarle el mensaje). None si es un teléfono normal."""
+    if not clave or not clave.startswith("u") or len(clave) != 20:
+        return None
+    if clave in _bsuid_cache:
+        return _bsuid_cache[clave]
+    from models.database import SessionLocal
+    db = SessionLocal()
+    try:
+        asegurar_tablas(db)
+        fila = db.get(AnyUsuarioMeta, clave)
+        if fila:
+            _bsuid_cache[clave] = fila.bsuid
+            return fila.bsuid
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+    return None
 
 
 def asegurar_tablas(db: Session):

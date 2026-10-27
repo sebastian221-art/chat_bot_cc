@@ -81,6 +81,22 @@ def test_categoria_web_no_dice_que_vende():
     assert t.startswith("¡Claro!") and "*TENNIS*" in t and "wa.me/573001112233" in t
 
 
+def test_cliente_con_nombre_de_usuario_sin_numero():
+    """Meta 2026: un cliente con nombre de usuario puede escribir sin número (solo su ID de usuario)."""
+    from any.entrada import extraer_mensajes
+    from any.nucleo import estado as est
+    p = {"entry": [{"changes": [{"value": {
+        "contacts": [{"profile": {"name": "Laura"}, "user_id": "CO.13491208655302741918"}],
+        "messages": [{"from_user_id": "CO.13491208655302741918", "id": "w1", "type": "text", "text": {"body": "hola"}}]}}]}]}
+    m = extraer_mensajes(p)[0]
+    assert m["telefono"] == "CO.13491208655302741918" and m["nombre"] == "Laura"
+    db = _db()
+    clave = est.clave_de_bsuid(db, m["telefono"])
+    assert len(clave) == 20 and est.bsuid_de_clave(clave) == "CO.13491208655302741918"
+    from services.whatsapp import _destino
+    assert _destino(clave) == {"recipient": "CO.13491208655302741918"} and _destino("573001112233") == {"to": "573001112233"}
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

@@ -64,9 +64,24 @@ def extraer_mensajes(datos: dict) -> list[dict]:
     for entry in datos.get("entry") or []:
         for change in entry.get("changes") or []:
             v = change.get("value") or {}
-            nombres = {c.get("wa_id"): (c.get("profile") or {}).get("name", "") for c in v.get("contacts") or []}
+            nombres, ids_meta = {}, {}
+            for c in v.get("contacts") or []:
+                nombre = (c.get("profile") or {}).get("name", "") or (c.get("profile") or {}).get("username", "")
+                for k in (c.get("wa_id"), c.get("user_id")):
+                    if k:
+                        nombres[k] = nombre
+                if c.get("wa_id") and c.get("user_id"):
+                    ids_meta[c["user_id"]] = c["wa_id"]
             for m in v.get("messages") or []:
-                base = {"telefono": m.get("from", ""), "nombre": nombres.get(m.get("from"), ""),
+                # Desde 2026 un cliente con nombre de usuario puede escribir SIN número visible: Meta manda
+                # su ID de usuario (from_user_id / contacts.user_id) y deja «from» vacío. Antes se descartaba.
+                quien = m.get("from") or ids_meta.get(m.get("from_user_id", "")) or m.get("from_user_id") or ""
+                if not quien:
+                    sin_numero = [c.get("user_id") for c in v.get("contacts") or [] if c.get("user_id")]
+                    quien = sin_numero[0] if len(sin_numero) == 1 else ""
+                if not quien:
+                    log.warning("Mensaje de WhatsApp sin número ni ID de usuario: %s", str(m)[:300])
+                base = {"telefono": quien, "nombre": nombres.get(quien, "") or nombres.get(m.get("from_user_id"), ""),
                         "message_id": m.get("id", ""), "tipo": m.get("type")}
                 if m.get("type") == "text":
                     base["texto"] = (m.get("text") or {}).get("body", "")
@@ -102,6 +117,12 @@ async def atender_mensaje(m: dict):
     telefono = m.get("telefono") or ""
     if not telefono:
         return
+    if est.es_bsuid(telefono):     # cliente sin número visible: se guarda con una clave corta
+        db = _sesion()
+        try:
+            telefono = est.clave_de_bsuid(db, telefono)
+        finally:
+            db.close()
     candado = _candados.setdefault(telefono, asyncio.Lock())
     async with candado:
         db = _sesion()

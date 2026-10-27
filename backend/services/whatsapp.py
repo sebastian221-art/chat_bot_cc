@@ -5,7 +5,23 @@ from config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-WHATSAPP_API_URL = "https://graph.facebook.com/v19.0"
+import os
+# v19.0 ya venció (Meta la sube sola a la más vieja vigente); el envío por ID de usuario necesita una reciente.
+WHATSAPP_API_URL = f"https://graph.facebook.com/{os.getenv('WHATSAPP_API_VERSION', 'v23.0')}"
+
+
+def _destino(to: str) -> dict:
+    """{"to": teléfono} o, para clientes con nombre de usuario sin número visible, {"recipient": su ID de Meta}."""
+    try:
+        from any.nucleo.estado import bsuid_de_clave, es_bsuid
+        bsuid = bsuid_de_clave(to)
+        if bsuid:
+            return {"recipient": bsuid}
+        if es_bsuid(to) and "." in to:
+            return {"recipient": to}
+    except Exception:
+        pass
+    return {"to": to}
 
 
 # WhatsApp rechaza cualquier texto de más de 4096 caracteres (devuelve
@@ -67,7 +83,7 @@ async def send_text_message(to: str, message: str) -> bool:
             payload = {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
-                "to": to,
+                **_destino(to),
                 "type": "text",
                 "text": {"preview_url": False, "body": trozo},
             }
@@ -98,7 +114,7 @@ async def send_image_message(to: str, image_url: str, caption: str = "") -> bool
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        **_destino(to),
         "type": "image",
         "image": {"link": image_url, "caption": caption[:1024] if caption else ""},
     }
@@ -131,7 +147,7 @@ async def send_document_message(to: str, document_url: str, filename: str = "doc
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        **_destino(to),
         "type": "document",
         "document": {
             "link": document_url,
@@ -167,7 +183,7 @@ async def send_location_message(to: str, latitude: float, longitude: float, name
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        **_destino(to),
         "type": "location",
         "location": {
             "latitude": latitude,
