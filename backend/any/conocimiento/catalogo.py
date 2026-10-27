@@ -195,3 +195,32 @@ def locales(db: Session, incluir_torre: bool = True, incluir_servicios: bool = T
 
 def local_por_id(db: Session, id_: int) -> Local | None:
     return catalogo(db)["por_id"].get(id_)
+
+
+# ── Número de oficina, consultorio o local ("¿qué hay en la oficina 506?") ─────
+_NUM_EN_TEXTO = re.compile(r"\b(?:oficinas?|ofi|consultorios?|locales?|local|n[uú]mero|no\.|n[°º]|#)\s*(?:n[uú]mero|no\.?|#)?\s*(\d{3})\b(?!\s*\d)")
+
+
+def numeros_de(local_number: str) -> set[int]:
+    """«201-204» → {201, 202, 203, 204}; «503, 509 y 512» → {503, 509, 512}; «205_» → {205}."""
+    t = re.sub(r"[_]", "", local_number or "")
+    nums: set[int] = set()
+    for a, b in re.findall(r"(\d{3})\s*-\s*(\d{3})", t):
+        a, b = int(a), int(b)
+        if 0 < b - a <= 10:
+            nums.update(range(a, b + 1))
+    nums.update(int(x) for x in re.findall(r"(?<!\d)(\d{3})(?!\d)", t))
+    return nums
+
+
+def numero_en_texto(texto: str) -> int | None:
+    """El número de oficina/local que pregunta el cliente, o None. Un mensaje que es solo «506» también cuenta."""
+    n = normalizar(texto or "").strip(" ?¿.!¡")
+    if re.fullmatch(r"\d{3}", n):
+        return int(n)
+    m = _NUM_EN_TEXTO.search(n)
+    return int(m.group(1)) if m else None
+
+
+def locales_por_numero(db: Session, numero: int) -> list[Local]:
+    return sorted([l for l in catalogo(db)["locales"] if numero in numeros_de(l.numero)], key=lambda l: normalizar(l.nombre))

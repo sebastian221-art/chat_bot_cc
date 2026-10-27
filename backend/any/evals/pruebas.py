@@ -97,6 +97,14 @@ def test_cliente_con_nombre_de_usuario_sin_numero():
     assert _destino(clave) == {"recipient": "CO.13491208655302741918"} and _destino("573001112233") == {"to": "573001112233"}
 
 
+def test_oficina_por_numero():
+    from any.conocimiento.catalogo import numero_en_texto, numeros_de
+    assert numeros_de("201-204") == {201, 202, 203, 204} and numeros_de("503, 509 y 512") == {503, 509, 512}
+    assert numeros_de("208-209-210 / 301-302") == {208, 209, 210, 301, 302} and numeros_de("205_") == {205}
+    assert numero_en_texto("Y en la oficina 506 q consultorio queda?") == 506 and numero_en_texto("506") == 506
+    assert numero_en_texto("el número es 318 522 1963") is None and numero_en_texto("cuesta $506") is None
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

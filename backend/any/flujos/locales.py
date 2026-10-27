@@ -23,7 +23,7 @@ import re
 from ..config import cfg
 from ..conocimiento.buscador import (buscar_locales, conceptos, encontrar_local, seleccionar_relevantes,
                                      PALABRAS_DE_PEDIDO)
-from ..conocimiento.catalogo import Local, locales
+from ..conocimiento.catalogo import Local, locales, locales_por_numero, numero_en_texto
 from ..conocimiento.texto import normalizar, palabras
 from ..llm import completar
 from ..nucleo.tipos import Adjunto, Contexto
@@ -103,6 +103,13 @@ def _es_imagen(url: str | None) -> bool:
     return bool(url) and not url.lower().split("?")[0].endswith(".pdf")
 
 
+# "Oficina", "¿qué oficinas tiene?", "dame el listado de oficinas y locales": todo el directorio de la Torre
+_SOLO_OFICINAS = set("""
+oficina oficinas y que cuales cual dame listado lista de las los hay tiene tienen el la en centro comercial locales
+me puedes regalar pasame quiero ver todas todos directorio torre empresarial hola por favor
+""".split())
+
+
 # Lo que se pregunta DE un local (no otro producto): con estas palabras se sigue hablando del mismo local
 _ATRIBUTOS = set("""
 domicilio domicilios envio envios precio precios vale valen cuesta cuestan costo costos pago pagos pagar tarjeta
@@ -116,7 +123,11 @@ puedo puede quiero necesito busco me te se lo le por favor si no tambien ustedes
 def linea_lista(loc: Local) -> str:
     """• *Nombre* — Zona
          👉 WhatsApp · 📸 Instagram   (los dos contactos, siempre que existan)"""
-    linea = f"• *{loc.nombre}*" + (f" — {loc.zona}" if loc.zona else "")
+    if loc.es_torre:     # oficinas de la Torre: piso y oficina, que es como las encuentran
+        lugar = ", ".join(x for x in [loc.piso, f"oficina {loc.numero}" if loc.numero and loc.numero.upper() != "S/N" else ""] if x)
+        linea = f"• *{loc.nombre}* — Torre Médica" + (f", {lugar}" if lugar else "")
+    else:
+        linea = f"• *{loc.nombre}*" + (f" — {loc.zona}" if loc.zona else "")
     contactos = []
     if loc.whatsapp:
         contactos.append(f"👉 {loc.whatsapp}")
@@ -146,6 +157,17 @@ class Locales(Flujo):
         ent = d.entidades if d else {}
         consulta = (d.consulta if d and d.consulta else ctx.mensaje)
         pide = que_pide(ent.get("pide"), ctx.mensaje)
+        numero = numero_en_texto(ctx.mensaje)
+        if numero:
+            en_numero = locales_por_numero(ctx.db, numero)
+            if len(en_numero) == 1:
+                return self._ficha(en_numero[0], pide)
+            if en_numero:
+                return self._datos_lista(en_numero, f"local {numero}", pide)
+        pal = set(palabras(normalizar(ctx.mensaje)))
+        if pal & {"oficina", "oficinas"} and pal <= _SOLO_OFICINAS:
+            # "Oficina", "¿qué oficinas tiene?": el directorio de la Torre Médica y Empresarial
+            return self._datos_lista([l for l in locales(ctx.db) if l.es_torre], "oficinas de la Torre", pide)
         loc = self._local_nombrado(ctx, ent, consulta, pide)
         if loc:
             return self._ficha(loc, pide)
@@ -247,6 +269,13 @@ class Locales(Flujo):
         res = buscar_locales(db, termino)
         if not res and termino != consulta:
             termino, res = consulta, buscar_locales(db, consulta)
+        # "firma de contadores", "asesoría tributaria": no son locales comerciales sino oficinas de la Torre.
+        # Si una oficina de la Torre cubre MÁS de lo pedido que cualquier local comercial, se responde con la Torre.
+        con_torre = [r for r in buscar_locales(db, termino, incluir_torre=True) if r.fuertes]
+        mejor_torre = max((len(r.fuertes) for r in con_torre if r.local.es_torre), default=0)
+        mejor_local = max((len(r.fuertes) for r in res if r.fuertes), default=0)
+        if mejor_torre > mejor_local:
+            res = con_torre
 
         # "¿De qué locales tienes Instagram / carta?" sin decir de qué tipo
         if pide in ("carta", "instagram") and not conceptos(_quita_pedido(ctx.mensaje), "locales"):
@@ -286,6 +315,10 @@ class Locales(Flujo):
             datos = self._ficha(seleccion[0], pide)
             datos.entidades["categoria"] = termino
             return datos
+        return self._datos_lista(seleccion, termino, pide)
+
+    def _datos_lista(self, seleccion: list, termino: str, pide: str | None) -> Datos:
+        seleccion = sorted({l.id: l for l in seleccion}.values(), key=lambda l: normalizar(l.nombre))
         lineas = {l.nombre: linea_lista(l) for l in seleccion}
         hechos = {
             "modo": "lista", "busqueda": termino, "cantidad": len(seleccion),

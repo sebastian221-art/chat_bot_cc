@@ -26,6 +26,8 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  contador: [contador, contadores, contadora, contable, contables, contabilidad, contaduria, tributario, tributaria, tributarios, impuestos, declaracion de renta, revisor fiscal]
+  abogado: [abogado, abogados, abogada, juridico, juridica, juridicos, asesoria legal, asesoria juridica, derecho, demanda]
   tenis:
     generales: [tenis, tennis, sneakers, zapatilla, zapatillas, zapatillas deportivas]
     amplia_a: calzado   # el juez también revisa todo el calzado (una tienda deportiva vende tenis)

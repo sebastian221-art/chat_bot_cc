@@ -369,9 +369,16 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     if re.search(r"(?i)[\{\[][^\}\]\n]{0,60}?\blista?\b[^\}\]\n]{0,80}[\}\]]", t):   # marca de lista que quedó suelta
         ctx.traza.alerta("marca de lista suelta en el texto: se quitó")
         t = re.sub(r"(?i)[ \t]*[\{\[][^\}\]\n]{0,60}?\blista?\b[^\}\]\n]{0,80}[\}\]][ \t]*", "", t)
+    if r.flujo != "conversacion" and re.search(r"\{[^{}\n]{3,500}\}", t):
+        # el modelo a veces escribe su propia "lista" entre llaves ({DERMATO INTEGRAL – piso ? …}) además de la
+        # que pone el sistema: en WhatsApp las llaves nunca son texto válido
+        ctx.traza.alerta("texto entre llaves inventado por el modelo: se quitó")
+        t = re.sub(r"[ \t]*\{[^{}\n]{3,500}\}", "", t)
+        t = re.sub(r":\s*\.", ":", t)
     t = formato_whatsapp(t)
 
-    if r.flujo != "torre_medica" and (_PISO.search(t) or _PISO_ORDINAL.search(t)):
+    habla_de_torre = bool(re.search(r"(?i)torre\s+(m[eé]dica|empresarial)", t))
+    if r.flujo != "torre_medica" and not habla_de_torre and (_PISO.search(t) or _PISO_ORDINAL.search(t)):
         ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t) + _PISO_ORDINAL.findall(t)}")
         t = _PISO_ORDINAL.sub("", _PISO.sub("", t))
 

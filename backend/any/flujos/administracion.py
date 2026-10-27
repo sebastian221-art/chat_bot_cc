@@ -14,8 +14,9 @@ from .base import Datos, Flujo
 
 class Administracion(Flujo):
     nombre = "administracion"
-    descripcion = ("alquiler de espacios o locales, salón de eventos, pauta, empleo, proveedores, oficinas y trámites "
-                   "con la administración del centro comercial")
+    descripcion = ("SOLO trámites con la administración del centro comercial: arrendar un local, pauta, empleo en el "
+                   "mall, proveedores, contratos. NO para buscar empresas u oficinas que funcionan en el centro "
+                   "comercial (contadores, abogados, EPS…): eso es torre_medica o locales")
     temperatura = 0.4
     max_tokens = 400
 

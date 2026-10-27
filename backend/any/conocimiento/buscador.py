@@ -126,6 +126,7 @@ carta menu instagram insta foto fotos imagen horario horarios abre abren cierra 
 queda quedan ubicado ubicada direccion regalame regalas dame das pasame pasas tienes tiene hay
 porfa xfa fa q k ver info informacion mas otro otra otros otras donde zona sobre sobra saber
 servicio servicios atencion consultorio consultorios cerca cercano cercana marca marcas comprar compro algo puedo
+empresa empresas oficina oficinas firma firmas negocio negocios asesoria asesorias establecimiento establecimientos
 """.split())
 
 

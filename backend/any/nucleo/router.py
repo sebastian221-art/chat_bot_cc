@@ -93,6 +93,25 @@ async def decidir(ctx: Contexto) -> Decision:
         return Decision("servicios_mall", {"servicio": "salon_eventos"}, False, ctx.mensaje,
                         "alquiler de salón / auditorio para eventos", "regla")
 
+    # 2c'. «¿Qué hay en la oficina 506?», «local 301»: se busca por número (el modelo decía «está vacía»)
+    if not ctx.estado.flujo_activo:
+        from ..conocimiento.catalogo import locales_por_numero, numero_en_texto
+        numero = numero_en_texto(ctx.mensaje)
+        if numero:
+            en_numero = locales_por_numero(ctx.db, numero)
+            n = normalizar(ctx.mensaje)
+            if (en_numero and all(l.es_torre for l in en_numero)) or (not en_numero and re.search(r"oficina|consultorio", n)):
+                return Decision("torre_medica", {}, False, ctx.mensaje, f"pregunta por la oficina {numero}", "regla")
+            if en_numero:
+                return Decision("locales", {}, False, ctx.mensaje, f"pregunta por el local {numero}", "regla")
+
+    # 2c''. «Oficina», «¿qué oficinas tiene?»: el directorio de la Torre (el modelo lo mandaba a servicios)
+    from ..flujos.locales import _SOLO_OFICINAS
+    from ..conocimiento.texto import palabras
+    pal = set(palabras(normalizar(ctx.mensaje or "")))
+    if not ctx.estado.flujo_activo and pal & {"oficina", "oficinas"} and pal <= _SOLO_OFICINAS:
+        return Decision("locales", {}, False, ctx.mensaje, "pide el listado de oficinas", "regla")
+
     # 2d. El mensaje es solo el nombre de un local ("FDS", "Enjoy"): ficha de ese local, sin adivinar
     loc = None if ctx.estado.flujo_activo else local_por_nombre_exacto(ctx)   # con un pedido a medias decide la IA
     if loc:

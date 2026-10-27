@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from ..conocimiento.buscador import buscar_conocimiento, buscar_locales, seleccionar_relevantes, encontrar_local
-from ..conocimiento.catalogo import Local, locales
+from ..conocimiento.catalogo import Local, locales, locales_por_numero, numero_en_texto
 from ..conocimiento.texto import normalizar
 from ..nucleo.tipos import Contexto
 from .base import Datos, Flujo
@@ -43,7 +43,8 @@ def es_de_salud(l: Local) -> bool:
 
 class TorreMedica(Flujo):
     nombre = "torre_medica"
-    descripcion = "Torre Médica y Empresarial: consultorios, especialistas, laboratorios, vacunación, oficinas de la torre"
+    descripcion = ("Torre Médica y Empresarial: consultorios, especialistas, laboratorios, vacunación y empresas u "
+                   "oficinas de la torre (contadores, abogados, EPS, Fenalco, ESSA…)")
     temperatura = 0.4
     max_tokens = 500
 
@@ -56,6 +57,9 @@ class TorreMedica(Flujo):
         nombrado = encontrar_local(db, str(d.entidades.get("local")), incluir_torre=True) if d and d.entidades.get("local") else None
         info = [f.dict() for f in buscar_conocimiento(db, "torre medica empresarial horario", k=2)]
         hechos: dict = {"torre": "Torre Médica y Empresarial del Centro Comercial El Puente", "info_general": info}
+        numero = numero_en_texto(ctx.mensaje)
+        if numero:
+            return self._por_numero(db, numero, hechos)
         if nombrado and nombrado.es_torre:
             hechos["modo"] = "ficha"
             hechos["consultorio"] = nombrado.ficha(completa=True)
@@ -82,6 +86,30 @@ class TorreMedica(Flujo):
         return Datos(hechos=hechos, entidades={"especialidad": termino},
                      meta={"lista": "\n".join(lineas.values()), "lista_equidad": list(lineas),
                            "lineas_equidad": lineas, "telefonos_validos": [l.telefono for l in sel if l.telefono]})
+
+    def _por_numero(self, db, numero: int, hechos: dict) -> Datos:
+        """«¿Qué hay en la oficina 506?»: se busca por el número, no por palabras (antes decía «está vacía»)."""
+        en_numero = [l for l in locales_por_numero(db, numero) if l.es_torre] or locales_por_numero(db, numero)
+        hechos["numero_preguntado"] = numero
+        if len(en_numero) == 1:
+            hechos["modo"] = "ficha"
+            hechos["consultorio"] = en_numero[0].ficha(completa=True)
+            return Datos(hechos=hechos, entidades={"local": en_numero[0].nombre},
+                         meta={"telefonos_validos": [en_numero[0].telefono] if en_numero[0].telefono else []})
+        if not en_numero:
+            hechos["modo"] = "numero_sin_registro"
+            hechos["nota"] = (f"No hay ninguna oficina o consultorio registrado con el número {numero} en el directorio. "
+                              "NO digas que está vacía (puede que no esté registrada): di que no la tienes en el "
+                              "directorio y ofrece la línea del centro comercial 317 432 0138.")
+            return Datos(hechos=hechos, meta={})
+        hechos["modo"] = "coinciden"
+        hechos["busqueda"] = f"oficina {numero}"
+        hechos["nota"] = f"Estos comparten la oficina {numero} según el directorio."
+        lineas = {l.nombre: linea_consultorio(l) for l in en_numero}
+        hechos["como_escribir"] = (f"Frase corta de entrada; luego {MARCA} en una línea sola; no escribas tú la lista.")
+        return Datos(hechos=hechos, entidades={"especialidad": f"oficina {numero}"},
+                     meta={"lista": "\n".join(lineas.values()), "lista_equidad": list(lineas), "lineas_equidad": lineas,
+                           "telefonos_validos": [l.telefono for l in en_numero if l.telefono]})
 
     def componer(self, ctx, datos, texto):
         lista = datos.meta.get("lista")
