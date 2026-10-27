@@ -154,6 +154,21 @@ class Locales(Flujo):
     # ── Reunir datos ──────────────────────────────────────────────
 
     async def reunir(self, ctx: Contexto) -> Datos:
+        datos = await self._reunir(ctx)
+        # "¿qué restaurante está abierto a esta hora?", "horario de los almacenes de ropa": con datos reales
+        if re.search(r"horario|abiert|abren|cierran|a esta hora|ahora mismo|todavia|aun estan", normalizar(ctx.mensaje)):
+            try:
+                from ..conocimiento.servicios import info_mall
+                hg = info_mall(ctx.db).get("horario_general")
+                if hg:
+                    datos.hechos["horario_general_del_centro_comercial"] = hg
+                dia = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][ctx.ahora.weekday()]
+                datos.hechos["hora_actual"] = f"{dia} {ctx.ahora.strftime('%I:%M %p')}"
+            except Exception:
+                pass
+        return datos
+
+    async def _reunir(self, ctx: Contexto) -> Datos:
         d = ctx.decision
         ent = d.entidades if d else {}
         consulta = (d.consulta if d and d.consulta else ctx.mensaje)
@@ -323,7 +338,8 @@ class Locales(Flujo):
         lineas = {l.nombre: linea_lista(l) for l in seleccion}
         hechos = {
             "modo": "lista", "busqueda": termino, "cantidad": len(seleccion),
-            "locales_para_tu_contexto": [{"nombre": l.nombre, "rubro": l.rubro, "que_vende": ", ".join(l.productos[:8])}
+            "locales_para_tu_contexto": [{"nombre": l.nombre, "rubro": l.rubro, "que_vende": ", ".join(l.productos[:8]),
+                                          "horario": (l.horario or "")[:120]}
                                          for l in seleccion[:40]],
             "como_escribir": f"Escribe una frase corta de entrada; luego, en una línea sola, escribe exactamente "
                              f"{MARCA_LISTA} (ahí el sistema pone la lista completa con zona y WhatsApp); "

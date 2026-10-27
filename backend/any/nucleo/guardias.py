@@ -147,6 +147,7 @@ def formato_whatsapp(t: str) -> str:
     for vos, tu in _VOSEO.items():                                 # "recibís" → "recibes" (tuteo colombiano)
         t = re.sub(rf"(?i)\b{vos}\b", lambda m, tu=tu: tu.capitalize() if m.group(0)[0].isupper() else tu, t)
     t = re.sub(r"\*\*(.+?)\*\*", r"*\1*", t)                     # **x** → *x*
+    t = re.sub(r"^(\s*)(?:[•\-]\s*)?\*\s+(?=\*\S)", r"\1• ", t, flags=re.MULTILINE)   # "• * *Locales:*" → "• *Locales:*"
     t = re.sub(r"__(.+?)__", r"*\1*", t)
     t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.MULTILINE)   # títulos
     t = re.sub(r"^\s*[-*_]{3,}\s*$", "", t, flags=re.MULTILINE)   # ---
@@ -294,7 +295,7 @@ def _corregir_nombres(ctx: Contexto, t: str) -> str:
     if re.search(r"(?i)\bel puente de informaci[oó]n\b", t):     # confusión conocida del modelo
         ctx.traza.alerta("nombre mal copiado «El Puente de Información» → Punto de Información")
         t = re.sub(r"(?i)\bel puente de informaci[oó]n\b", "Punto de Información", t)
-    nombres = _nombres_de_los_datos(ctx) | NOMBRES_FIJOS
+    nombres = _nombres_de_los_datos(ctx) | NOMBRES_FIJOS | {f"Pasillo {p}" for p in PASILLOS}
     exactos = {normalizar(n) for n in nombres}
     protegidos: list[str] = []
 
@@ -314,6 +315,8 @@ def _corregir_nombres(ctx: Contexto, t: str) -> str:
             if len(trozo) < 6 or trozo == nombre or "*" in trozo or "⟦" in trozo or normalizar(trozo) in exactos:
                 continue   # otro nombre real de los datos no se toca
             a, b = normalizar(trozo), normalizar(nombre)
+            if [w.rstrip("s") for w in a.split()] == [w.rstrip("s") for w in b.split()]:
+                continue      # «tarjeta bono regalo» vs «Tarjetas bono regalo»: es lo mismo en singular
             # parecido en conjunto Y palabra por palabra ("no tengo información" no es "Punto de Información")
             if a != b and difflib.SequenceMatcher(None, a, b).ratio() >= 0.8 and all(
                     difflib.SequenceMatcher(None, x, y).ratio() >= 0.6 for x, y in zip(a.split(), b.split())):

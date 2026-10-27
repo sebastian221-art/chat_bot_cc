@@ -230,7 +230,7 @@ def encontrar_local(db: Session, nombre: str, incluir_torre: bool = True) -> Loc
     mejor, puntaje = None, 0.0
     for loc in locales(db, incluir_torre=incluir_torre):
         ln = normalizar(loc.nombre)
-        if ln == n:
+        if ln == n or (len(n) >= 6 and ln.replace(" ", "") == n.replace(" ", "")):     # "Happy landia"
             return loc
         p = 0.0
         tn = {w for w in palabras(n) if w not in VACIAS}

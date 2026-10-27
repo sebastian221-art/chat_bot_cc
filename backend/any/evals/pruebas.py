@@ -118,6 +118,17 @@ def test_plazoleta_guanenta():
     assert corregir_lugares("Pasillo Barichara") == "Pasillo Barichara"
 
 
+def test_guardia_no_cambia_zonas_reales_ni_plurales():
+    from any.nucleo.guardias import revisar_salida, formato_whatsapp
+    from any.nucleo.tipos import Respuesta
+    from any.nucleo.trazas import Traza
+    class _C:
+        db = _db(); traza = Traza("x", "x", "prueba"); historial = []
+    t = revisar_salida(_C, Respuesta("*X* está en el Pasillo Charalá. Punto de Información (Pasillo Barichara)", "locales")).texto
+    assert "Pasillo Charalá" in t and "Pasillo Barichara" in t
+    assert formato_whatsapp("• * *Locales:* 10 am").startswith("• *Locales:*")
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

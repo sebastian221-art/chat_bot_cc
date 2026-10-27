@@ -32,6 +32,9 @@ _NO_SALUD = re.compile(r"abogad|juridic|derecho|contador|contable|electrificador
 
 
 def busca_salud(texto: str) -> bool:
+    if _SALUD.search(normalizar(texto)) or re.search(r"logo\b|logia\b|ologa\b|cardio|neuro|psiqu|oftalm|otorrino|"
+                                                    r"traumat|ortoped|fisiatr|fonoaud", normalizar(texto)):
+        return True
     return bool(re.search(r"doctor|medic|salud|consulta|cita|especialista|enferm|dolor|vacun|odont|dentist|pediatr|"
                           r"ginec|laborator|examen|terapia|clinic", normalizar(texto)))
 
@@ -83,13 +86,33 @@ class TorreMedica(Flujo):
             hechos["modo"] = "coinciden"
             hechos["busqueda"] = termino
         else:
+            # "Ortopédicos", "tienda ortopédica": no es un consultorio pero SÍ hay un local que lo vende
+            comerciales = [r.local for r in seleccionar_relevantes(buscar_locales(db, termino)) if not r.local.es_torre] \
+                or [r.local for r in seleccionar_relevantes(buscar_locales(db, ctx.mensaje)) if not r.local.es_torre]
+            if comerciales:
+                from .locales import linea_lista
+                hechos["modo"] = "locales_comerciales"
+                hechos["busqueda"] = termino
+                hechos["nota"] = ("No es un consultorio de la Torre, pero estos LOCALES del centro comercial lo venden: "
+                                  "preséntalos así (sin decir que no hay).")
+                sel = sorted(comerciales, key=lambda l: normalizar(l.nombre))
+                if len(sel) == 1:
+                    hechos["modo"] = "ficha"
+                    hechos["consultorio"] = sel[0].ficha(completa=True)
+                    return Datos(hechos=hechos, entidades={"local": sel[0].nombre},
+                                 meta={"telefonos_validos": [sel[0].telefono] if sel[0].telefono else []})
+                lineas = {l.nombre: linea_lista(l) for l in sel}
+                hechos["como_escribir"] = f"Frase corta de entrada; luego {MARCA} en una línea sola; no escribas tú la lista."
+                return Datos(hechos=hechos, entidades={"categoria": termino},
+                             meta={"lista": "\n".join(lineas.values()), "lista_equidad": list(lineas),
+                                   "lineas_equidad": lineas, "telefonos_validos": [l.telefono for l in sel if l.telefono]})
             sel = torre
             if busca_salud(f"{ctx.mensaje} {termino}"):
                 sel = [l for l in torre if es_de_salud(l)] or torre   # "doctor": no se muestran abogados ni oficinas
             hechos["modo"] = "sin_coincidencia"
             hechos["busqueda"] = termino
-            hechos["nota"] = ("Ningún consultorio menciona eso; se muestra el directorio completo de la torre "
-                              "para que el cliente revise o pregunte directamente.")
+            hechos["nota"] = ("Ningún consultorio menciona eso; se muestra el directorio de la torre para que el "
+                              "cliente revise o pregunte directamente.")
         sel = sorted(sel, key=lambda l: normalizar(l.nombre))
         hechos["como_escribir"] = (f"Frase corta de entrada; luego {MARCA} en una línea sola (ahí va la lista con piso, "
                                    f"consultorio y WhatsApp); opcional una línea final. No escribas tú la lista.")

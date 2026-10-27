@@ -68,7 +68,8 @@ def local_por_nombre_exacto(ctx: Contexto):
     try:
         from ..conocimiento.catalogo import locales
         for l in locales(ctx.db):
-            if not (l.es_servicio or l.es_cine) and normalizar(l.nombre).strip(" .") == n:
+            ln = normalizar(l.nombre).strip(" .")
+            if not (l.es_servicio or l.es_cine) and (ln == n or (len(n) >= 6 and ln.replace(" ", "") == n.replace(" ", ""))):
                 return l
     except Exception:
         return None
