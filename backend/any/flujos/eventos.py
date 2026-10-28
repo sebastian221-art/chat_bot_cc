@@ -50,6 +50,11 @@ def ficha_evento(e, hoy) -> dict:
         rec = recurrencia(e.date, e.description)
         if rec and not e.date:
             d["fecha"] = rec[0][0].upper() + rec[0][1:]
+        if rec:      # el modelo calculaba mal el día ("domingo 29/10" cuando era 01/11)
+            from datetime import timedelta
+            prox = next(hoy + timedelta(days=i) for i in range(8) if (hoy + timedelta(days=i)).weekday() in rec[1])
+            dia = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][prox.weekday()]
+            d["proxima_vez"] = "hoy" if prox == hoy else f"{dia} {prox.strftime('%d/%m/%Y')}"
         f = (e.date or (rec[0] if rec else "")).lower()
         nombres = ["lunes", "martes", "miercoles", "miércoles", "jueves", "viernes", "sabado", "sábado", "domingo"]
         dia_hoy = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][hoy.weekday()]
@@ -110,7 +115,8 @@ class Eventos(Flujo):
         if not e and recordado and d and d.es_seguimiento:
             e = next((x for x in evs if x.name == recordado), None)
         hechos = {"hoy": hoy.strftime("%d/%m/%Y"),
-                  "inscripciones_si_la_descripcion_no_dice_como": "línea del centro comercial 317 432 0138 · https://wa.me/573174320138"}
+                  "inscripciones_solo_si_el_evento_requiere_inscripcion_y_la_descripcion_no_dice_como":
+                      "línea del centro comercial 317 432 0138 · https://wa.me/573174320138"}
         datos = Datos(hechos=hechos, meta={"sin_promo": True})
         if e:
             hechos["evento"] = ficha_evento(e, hoy)

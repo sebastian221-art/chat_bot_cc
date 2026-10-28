@@ -148,6 +148,18 @@ def test_directorio_de_areas_y_audio():
     assert m["tipo"] == "audio" and m["media_id"] == "MEDIA1" and "ogg" in m["mime"]
 
 
+def test_queja_a_la_gerencia_no_es_emergencia():
+    import asyncio
+    from any.flujos import FLUJOS
+    from any.nucleo.tipos import Decision
+    from any.nucleo.trazas import Traza
+    class _C:
+        db = _db(); mensaje = "quiero poner una queja a la gerencia"; telefono = "prueba-queja-g"
+        decision = Decision("emergencia_queja", {"tipo": "queja"}, False, mensaje, "x", "regla"); traza = Traza("x", "x", "prueba")
+    d = asyncio.run(FLUJOS["emergencia_queja"].reunir(_C))
+    assert d.hechos["tipo_detectado"] == "queja" and d.hechos["area_que_atiende"]["telefono"] == "3166194089"
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

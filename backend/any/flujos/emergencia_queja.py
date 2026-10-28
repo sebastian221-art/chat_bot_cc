@@ -34,8 +34,15 @@ class EmergenciaQueja(Flujo):
 
     async def reunir(self, ctx: Contexto) -> Datos:
         d = ctx.decision
-        tipo = "emergencia" if (d and (d.metodo == "regla" or d.entidades.get("tipo") == "emergencia")) else \
-            (d.entidades.get("tipo") if d and d.entidades.get("tipo") else "queja_o_emergencia")
+        # La regla del router manda emergencias (tipo "emergencia") y quejas a un área (tipo "queja"):
+        # antes TODO lo que venía por regla se trataba como emergencia y salía el bloque de seguridad
+        ent_tipo = d.entidades.get("tipo") if d else None
+        if ent_tipo in ("emergencia", "queja"):
+            tipo = ent_tipo
+        elif d and d.metodo == "regla":
+            tipo = "emergencia"
+        else:
+            tipo = ent_tipo or "queja_o_emergencia"
         avisado = marcar_para_humano(ctx.db, ctx.telefono, f"Any 2.0 · {tipo}: {ctx.mensaje[:150]}")
         hechos = {
             "tipo_detectado": tipo,
