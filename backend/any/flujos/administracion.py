@@ -14,7 +14,8 @@ from .base import Datos, Flujo
 
 class Administracion(Flujo):
     nombre = "administracion"
-    descripcion = ("SOLO trámites con la administración del centro comercial: arrendar un local, pauta, empleo en el "
+    descripcion = ("áreas y contactos del centro comercial (gerencia, secretaría, comercial, mercadeo, contabilidad, "
+                   "operaciones/mantenimiento) y trámites con la administración: arrendar un local, pauta, empleo en el "
                    "mall, proveedores, contratos. NO para buscar empresas u oficinas que funcionan en el centro "
                    "comercial (contadores, abogados, EPS…): eso es torre_medica o locales")
     temperatura = 0.4
@@ -30,6 +31,11 @@ class Administracion(Flujo):
             "informacion_relacionada": [f.dict() for f in buscar_conocimiento(db, consulta, k=3)],
             "linea_centro_comercial": "317 432 0138 · https://wa.me/573174320138",
         }
+        from ..conocimiento.areas import area_para, directorio, ficha_area
+        a = area_para(ctx.mensaje)
+        if a:
+            hechos["area_que_atiende"] = ficha_area(a)
+        hechos["directorio_de_areas"] = directorio()
         if adm and adm.zona and adm.zona.lower().startswith("oficinas"):
             hechos["nota_ubicacion"] = ("La zona exacta de las oficinas no está en el directorio: no la inventes; "
                                         "ofrece el contacto para que le indiquen.")

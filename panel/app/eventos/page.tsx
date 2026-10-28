@@ -87,7 +87,21 @@ export default function EventosPage() {
       setForm(p => ({ ...p, [key]: e.target.value })),
   })
 
-  const isUpcoming = (dateStr: string) => new Date(dateStr) >= new Date(new Date().toDateString())
+  // Acepta "2026-10-31", "31/10/2026", "07/11/2026 al 08/11/2026" y eventos que se repiten ("Todos los domingos")
+  const isUpcoming = (dateStr: string) => {
+    const t = (dateStr || '').trim()
+    if (!t) return false
+    if (!/\d/.test(t)) return true                       // se repite: siempre está vigente
+    const fechas: Date[] = []
+    const re = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(t)) !== null) fechas.push(new Date(+m[3], +m[2] - 1, +m[1]))
+    const iso = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/)
+    if (iso) fechas.push(new Date(+iso[1], +iso[2] - 1, +iso[3]))
+    if (!fechas.length) return true
+    const fin = new Date(Math.max(...fechas.map(d => d.getTime())))
+    return fin >= new Date(new Date().toDateString())
+  }
 
   return (
     <div className="p-8">
@@ -247,10 +261,11 @@ export default function EventosPage() {
             <div>
               <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Fecha *</label>
               <input
-                type="date"
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                placeholder="31/10/2026 · 07/11/2026 al 08/11/2026 · Todos los domingos"
                 {...f('date')}
               />
+              <p className="text-zinc-500 text-[11px] mt-1">Una fecha (dd/mm/aaaa), un rango, o si se repite: «Todos los domingos».</p>
             </div>
             <div>
               <label className="text-zinc-400 text-xs font-semibold block mb-1.5">Hora</label>

@@ -68,6 +68,8 @@ class Local:
         if self.es_torre:
             d["piso"] = self.piso
             d["consultorio"] = self.numero
+        elif re.search(r"\d", self.numero or ""):
+            d["numero_de_local"] = (self.numero or "").replace("_", "").strip()     # "¿en qué local está TRU?"
         if self.telefono:
             d["telefono"] = self.telefono
         if self.whatsapp:
@@ -76,7 +78,9 @@ class Local:
             d["solo_telefono_fijo"] = f"{self.fijo} (no tiene WhatsApp: que llamen a ese número)"
         if completa:
             d.update({"rubro": self.rubro, "que_vende": ", ".join(self.productos[:25]),
-                      "descripcion": self.descripcion, "horario": self.horario})
+                      "descripcion": self.descripcion,
+                      # sin horario cargado el modelo inventaba uno ("8 am – 6 pm, horario estándar de la Torre")
+                      "horario": self.horario or "NO REGISTRADO: no des ningún horario; di que lo confirmen con el local"})
             if self.carta_link and not re.search(r"instagram\.com|wa\.me/|whatsapp", self.carta_link, re.I):
                 d["carta_o_catalogo"] = self.carta_link     # un Instagram no es la carta: va como "instagram"
         return {k: v for k, v in d.items() if v}
@@ -168,7 +172,7 @@ def _construir(db: Session) -> dict:
         )
         loc.raices_nombre = set(raices(loc.nombre, quitar_vacias=False))
         loc.raices_rubro = set(raices(loc.rubro))
-        loc.raices_productos = set(r for p in productos for r in raices(p))
+        loc.raices_productos = set(r for p in productos for r in raices(re.sub(r"(?i)\bropa\s+vieja\b", "ropavieja", p)))
         loc.raices_descripcion = set(raices(loc.descripcion))
         locales.append(loc)
     return {"locales": locales, "por_id": {l.id: l for l in locales}}

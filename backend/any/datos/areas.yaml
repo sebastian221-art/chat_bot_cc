@@ -1,0 +1,47 @@
+# Directorio de áreas del Centro Comercial El Puente (lo usa Any para dirigir cada tema al área correcta).
+# Para agregar un área (ej. Mantenimiento) copia un bloque y llénalo. "temas" son las palabras con las que
+# la gente pregunta por esa área. Fuente: plantilla administrativa del centro comercial (28/10/2026).
+
+- area: Gerencia
+  responsable: Delis González (gerente)
+  telefono: "3166194089"
+  correo: gerencia@elpuente.com.co
+  temas: [gerencia, gerente, delis, quejas a la gerencia, queja formal, felicitaciones, hablar con la gerente, directivas]
+
+- area: Punto de Información (PQRS y atención al cliente)
+  telefono: "3174320138"
+  correo: puntodeinformacion@elpuente.com.co
+  ubicacion: Pasillo Barichara
+  horario: "Domingo a miércoles 10:00 am – 7:00 pm · jueves y viernes 10:00 am – 8:00 pm · sábado 10:00 am – 9:00 pm"
+  temas: [pqrs, queja, quejas, reclamo, reclamos, sugerencia, peticion, atencion al cliente, objetos perdidos, registro de facturas, bonos regalo, informacion]
+
+- area: Secretaría General
+  telefono: "3173680165"
+  correo: asistente@elpuente.com.co
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
+  temas: [secretaria, secretaria general, administracion, oficina de administracion, correspondencia]
+
+- area: Dirección Comercial
+  telefono: "3176574494"
+  correo: comercial@elpuente.com.co
+  temas: [direccion comercial, arriendo, arrendar, alquiler de locales, locales disponibles, abrir un local, contratos de arrendamiento]
+
+- area: Dirección de Mercadeo
+  telefono: "3173671005"
+  correo: mercadeo@elpuente.com.co
+  temas: [mercadeo, marketing, publicidad, pauta, alianzas, patrocinio, activaciones]
+
+- area: Contabilidad y Tesorería
+  telefono: "3236168588 · 3236144888"
+  correo: contabilidad@elpuente.com.co · tesoreria@elpuente.com.co
+  temas: [contabilidad, tesoreria, pagos al centro comercial, facturacion del centro comercial, cartera, cuentas de cobro, proveedores]
+
+- area: Dirección de Operaciones
+  telefono: "3176649826"
+  correo: operaciones@elpuente.com.co
+  temas: [operaciones, direccion de operaciones, mantenimiento]
+
+- area: Parqueadero
+  telefono: "3185221963"
+  horario: "Lunes a domingo 8:00 am – 11:00 pm"
+  temas: [parqueadero, parqueo, mensualidad, tickets de parqueadero, casilleros, carga de carros electricos, bicicletas]

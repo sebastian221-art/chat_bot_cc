@@ -88,6 +88,9 @@ def extraer_mensajes(datos: dict) -> list[dict]:
                 elif m.get("type") == "image":
                     img = m.get("image") or {}
                     base.update(media_id=img.get("id"), texto=img.get("caption", ""))
+                elif m.get("type") == "audio":          # nota de voz
+                    au = m.get("audio") or {}
+                    base.update(media_id=au.get("id"), mime=au.get("mime_type", "audio/ogg"))
                 elif m.get("type") == "interactive":
                     it = m.get("interactive") or {}
                     sel = it.get("button_reply") or it.get("list_reply") or {}
@@ -133,14 +136,30 @@ async def atender_mensaje(m: dict):
                 return
             from services import whatsapp
             imagen = None
+            es_audio = False
             if m.get("tipo") == "image" and m.get("media_id"):
                 imagen = await whatsapp.download_media(m["media_id"])
+            elif m.get("tipo") == "audio" and m.get("media_id"):
+                # Se escucha y se descarta: el audio nunca se guarda (solo queda el texto de lo que dijo)
+                from .llm.audio import AudioMuyLargo, transcribir
+                try:
+                    texto = await transcribir(await whatsapp.download_media(m["media_id"]), m.get("mime", "audio/ogg"))
+                except AudioMuyLargo:
+                    texto = None
+                    await whatsapp.send_text_message(
+                        telefono, "Tu audio es muy largo para escucharlo 🙏. ¿Me lo mandas más cortico o me lo escribes?")
+                    return
+                if not texto:
+                    await whatsapp.send_text_message(
+                        telefono, "No alcancé a entender tu audio 😅. ¿Me lo repites o me lo escribes, por favor?")
+                    return
+                m["texto"], es_audio = texto, True
             elif m.get("tipo") != "text":
                 await whatsapp.send_text_message(
-                    telefono, "Por ahora solo puedo leer mensajes de texto y fotos 🙏. ¿Me lo escribes?")
+                    telefono, "Por ahora puedo leer mensajes de texto, fotos y notas de voz 🙏. ¿Me lo escribes?")
                 return
             r = await procesar(db, telefono, m.get("nombre", ""), m.get("texto", ""), modo="produccion",
-                               imagen=imagen)
+                               imagen=imagen, es_audio=es_audio)
             procesado = True
             await enviar(telefono, r)
         except Exception:

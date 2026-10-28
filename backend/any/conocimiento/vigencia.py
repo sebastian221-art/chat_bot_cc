@@ -49,3 +49,23 @@ def vigente(texto: str | None, hoy: date) -> bool:
 def dias_para(texto: str | None, hoy: date) -> int | None:
     ini = fecha_inicio(texto)
     return (ini - hoy).days if ini else None
+
+
+_DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
+
+def recurrencia(*textos: str | None) -> tuple[str, set[int]] | None:
+    """«Todos los domingos», «cada sábado», «los domingos» (en la fecha o en la descripción) →
+    ("todos los domingos", {6}). None si no es un evento que se repite."""
+    import unicodedata
+    for texto in textos:
+        t = unicodedata.normalize("NFD", (texto or "").lower())
+        t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+        m = re.search(r"\b(todos los|todas las|cada|los)\s+((?:(?:lunes|martes|miercoles|jueves|viernes|sabados?|domingos?)"
+                      r"(?:\s*(?:,|y)\s*)?)+)", t)
+        if m:
+            dias = {i for i, d in enumerate(_DIAS) if re.search(rf"\b{d}", m.group(2))}
+            if dias:
+                nombres = [["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"][i] for i in sorted(dias)]
+                return "todos los " + (" y ".join(nombres) if len(nombres) < 3 else ", ".join(nombres)), dias
+    return None

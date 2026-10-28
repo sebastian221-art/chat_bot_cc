@@ -17,9 +17,23 @@ from .base import Datos, Flujo
 MARCA = "{LISTA}"
 
 
+_GENERICOS_ESP = {"droguerias", "salud y opticas", "servicios generales y tramites", "torre medica", "consultorio",
+                  "oficina", "salud"}
+
+
+def especialidad(l: Local) -> str:
+    """Lo que hace el consultorio en pocas palabras ("ortodoncia", "dermatología, estética")."""
+    prods = [p.strip() for p in l.productos if normalizar(p) not in _GENERICOS_ESP and normalizar(p) != normalizar(l.nombre)]
+    if prods:
+        return ", ".join(p.split(":")[0].strip() for p in prods[:2])[:60]
+    return (l.descripcion or "").split("|")[0].split(".")[0].strip()[:60]
+
+
 def linea_consultorio(l: Local) -> str:
-    lugar = ", ".join(x for x in [l.piso, f"consultorio {l.numero}" if l.numero and l.numero.upper() != "S/N" else ""] if x)
-    s = f"• *{l.nombre}*" + (f" — {lugar}" if lugar else "")
+    num = (l.numero or "").replace("_", "").strip()
+    lugar = ", ".join(x for x in [l.piso, f"consultorio {num}" if num and num.upper() != "S/N" else ""] if x)
+    esp = especialidad(l)
+    s = f"• *{l.nombre}*" + (f" ({esp})" if esp else "") + (f" — {lugar}" if lugar else "")
     if l.whatsapp:
         return s + f" · 👉 {l.whatsapp}"
     return s + (f" · ☎️ solo fijo: {l.fijo}" if l.fijo else "")
@@ -29,6 +43,10 @@ _SALUD = re.compile(r"medic|odont|ortodon|dermat|salud|clinic|cirug|cirujan|rena
                     r"ecograf|veterin|internista|ginec|obstet|urolog|oncolog|pediatr|eps\b|sura|sanitas|vacun|enfermer|"
                     r"terapi|psicolog|laborator|optometr|fisioter|maxilofacial|implante|citolog|doctor|\bdra?\b")
 _NO_SALUD = re.compile(r"abogad|juridic|derecho|contador|contable|electrificadora|\bessa\b|electricidad")
+
+
+_PIDE_DIRECTORIO_SALUD = re.compile(r"^(?!.*\b(?:de|en)\s+(?!la torre|el (?:cc|centro|mall))\w{5,}).*\b(medicos|doctores|doctoras|"
+                                    r"especialistas|consultorios|consultorios medicos)\b")
 
 
 def busca_salud(texto: str) -> bool:
@@ -63,6 +81,16 @@ class TorreMedica(Flujo):
         numero = numero_en_texto(ctx.mensaje)
         if numero:
             return self._por_numero(db, numero, hechos)
+        if _PIDE_DIRECTORIO_SALUD.search(normalizar(ctx.mensaje)):
+            # "¿Qué médicos hay?": TODOS los consultorios de salud con su especialidad (no el veterinario por "médicos")
+            sel = sorted([l for l in torre if es_de_salud(l)], key=lambda l: normalizar(l.nombre))
+            lineas = {l.nombre: linea_consultorio(l) for l in sel}
+            hechos.update(modo="directorio_salud", cantidad=len(sel),
+                          como_escribir=f"Frase corta de entrada; luego {MARCA} en una línea sola (ahí va cada consultorio "
+                                        f"con su especialidad, piso, consultorio y WhatsApp); no escribas tú la lista.")
+            return Datos(hechos=hechos, entidades={"especialidad": "médicos"},
+                         meta={"lista": "\n".join(lineas.values()), "lista_equidad": list(lineas),
+                               "lineas_equidad": lineas, "telefonos_validos": [l.telefono for l in sel if l.telefono]})
         piso = d.entidades.get("piso") if d else None
         if piso:
             en_piso = [l for l in torre if re.search(rf"\b{int(piso)}\b", l.piso or "")]

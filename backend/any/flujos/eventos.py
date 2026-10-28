@@ -44,9 +44,13 @@ def ficha_evento(e, hoy) -> dict:
     if dias is not None:
         d["es_hoy"] = hoy in dias
         d["es_este_fin_de_semana"] = bool({sab, sab + timedelta(days=1)} & dias)
-    else:   # recurrentes: "todos los domingos"
+    else:   # recurrentes: "todos los domingos" (en la fecha o, si la fecha está vacía, en la descripción)
         import re
-        f = (e.date or "").lower()
+        from ..conocimiento.vigencia import recurrencia
+        rec = recurrencia(e.date, e.description)
+        if rec and not e.date:
+            d["fecha"] = rec[0][0].upper() + rec[0][1:]
+        f = (e.date or (rec[0] if rec else "")).lower()
         nombres = ["lunes", "martes", "miercoles", "miércoles", "jueves", "viernes", "sabado", "sábado", "domingo"]
         dia_hoy = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][hoy.weekday()]
         if any(n in f for n in nombres):

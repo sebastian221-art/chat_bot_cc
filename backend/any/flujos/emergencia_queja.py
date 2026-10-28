@@ -47,6 +47,11 @@ class EmergenciaQueja(Flujo):
         }
         if d and d.entidades.get("local"):
             hechos["local_mencionado"] = d.entidades["local"]
+        if tipo != "emergencia":
+            from ..conocimiento.areas import area_para, areas, ficha_area
+            a = area_para(ctx.mensaje) or next((x for x in areas() if x.get("area", "").startswith("Punto de Información")), None)
+            if a:
+                hechos["area_que_atiende"] = ficha_area(a)     # «queja a la gerencia» → Gerencia (Delis González)
         return Datos(hechos=hechos, meta={"tipo": tipo, "sin_promo": True}, entidades={"tema": tipo})
 
     def respaldo(self, ctx, datos):

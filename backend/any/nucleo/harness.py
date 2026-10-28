@@ -63,7 +63,7 @@ def _cargar_modelos():
 
 
 async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime | None = None,
-                   modo: str = "prueba", imagen: bytes | None = None) -> Respuesta:
+                   modo: str = "prueba", imagen: bytes | None = None, es_audio: bool = False) -> Respuesta:
     ahora = (ahora or datetime.now(ZONA_HORARIA))
     if ahora.tzinfo is None:
         ahora = ahora.replace(tzinfo=ZONA_HORARIA)
@@ -144,7 +144,8 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
             estado.ultimas_entidades = {**estado.ultimas_entidades, **r.entidades}
         estado.ultimo_flujo = r.flujo
         try:
-            est.guardar_turno(db, telefono, nombre, "user", mensaje or "[imagen]", ahora)
+            est.guardar_turno(db, telefono, nombre, "user",
+                              ("🎤 " + mensaje) if es_audio else (mensaje or "[imagen]"), ahora)   # 🎤 = vino por nota de voz
             for previo in r.previos:   # el aviso legal queda en el panel, pero aparte de la respuesta
                 est.guardar_turno(db, telefono, nombre, "assistant", previo, ahora)
             if r.texto:

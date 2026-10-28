@@ -33,6 +33,13 @@ class ServiciosMall(Flujo):
         info = info_mall(ctx.db)
         grupos = {c.grupo for c in conceptos(consulta, "servicios") if c.grupo}
         hechos = {"fragmentos_relevantes": [f.dict() for f in frags]}
+        from ..conocimiento.texto import normalizar
+        if __import__("re").search(r"cuant\w* (locales|tiendas)|numero de (locales|tiendas)|(locales|tiendas) (hay|tiene)",
+                                   normalizar(ctx.mensaje)):
+            from ..conocimiento.catalogo import locales
+            todos = locales(ctx.db)
+            hechos["cantidad_de_locales"] = {"locales_comerciales": len([l for l in todos if not l.es_torre and not l.es_servicio]),
+                                             "oficinas_y_consultorios_de_la_torre": len([l for l in todos if l.es_torre])}
         datos = Datos(hechos=hechos, entidades={"servicio": sorted(grupos)} if grupos else {})
         if "horario" in grupos and info.get("horario_general"):
             hechos["horario_general"] = info["horario_general"]

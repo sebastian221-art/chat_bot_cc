@@ -89,11 +89,18 @@ def vigentes(db, hoy: date) -> list[tuple]:
         if vigente(e.date, hoy):
             ini = fecha_inicio(e.date)
             cuando = None
+            fecha_txt = e.date
+            if not ini:
+                from ..conocimiento.vigencia import recurrencia
+                rec = recurrencia(e.date, e.description)
+                if rec:      # "La Santa Misa": todos los domingos (solo es "hoy" si hoy es domingo)
+                    fecha_txt = rec[0][0].upper() + rec[0][1:]
+                    cuando = "hoy" if hoy.weekday() in rec[1] else rec[0]
             if ini:
                 dias = (ini - hoy).days
                 cuando = "hoy" if dias == 0 else ("mañana" if dias == 1 else (f"en {dias} días" if dias > 1 else "en curso"))
             out.append(("event", e.id, e.priority or 3, ini or hoy + timedelta(days=365),
-                        {"tipo": "evento", "nombre": e.name, "fecha": e.date, "hora": e.time, "lugar": e.location,
+                        {"tipo": "evento", "nombre": e.name, "fecha": fecha_txt, "hora": e.time, "lugar": e.location,
                          "cuando": cuando}))
     for r in db.query(Raffle).filter(Raffle.active.is_(True)).all():
         if vigente(r.end_date, hoy):

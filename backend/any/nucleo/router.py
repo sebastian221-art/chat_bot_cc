@@ -133,6 +133,16 @@ async def decidir(ctx: Contexto) -> Decision:
             re.search(r"\b(que|cuales|quienes|hay|oficinas?|consultorios?|lista|listado)\b", normalizar(ctx.mensaje)):
         return Decision("torre_medica", {"piso": piso}, False, ctx.mensaje, f"pregunta por el piso {piso}", "regla")
 
+    # 2c-4. Áreas del centro comercial: «quiero hablar con la gerente», «número de mercadeo», «queja a la gerencia»
+    if not ctx.estado.flujo_activo:
+        from ..conocimiento.areas import area_para
+        a = area_para(ctx.mensaje)
+        n = normalizar(ctx.mensaje)
+        if a and not a.get("area", "").startswith(("Parqueadero", "Punto de Información")):
+            if re.search(r"\b(queja|quejas|reclamo|reclamos|inconformidad|mal servicio|pesimo)\b", n):
+                return Decision("emergencia_queja", {"tipo": "queja"}, False, ctx.mensaje, f"queja para {a['area']}", "regla")
+            return Decision("administracion", {}, False, ctx.mensaje, f"pide el área {a['area']}", "regla")
+
     # 2d. El mensaje es solo el nombre de un local ("FDS", "Enjoy"): ficha de ese local, sin adivinar
     loc = None if ctx.estado.flujo_activo else local_por_nombre_exacto(ctx)   # con un pedido a medias decide la IA
     if loc:

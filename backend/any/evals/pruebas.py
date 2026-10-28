@@ -129,6 +129,25 @@ def test_guardia_no_cambia_zonas_reales_ni_plurales():
     assert formato_whatsapp("• * *Locales:* 10 am").startswith("• *Locales:*")
 
 
+def test_misa_no_es_hoy_un_martes():
+    from any.conocimiento.vigencia import recurrencia
+    assert recurrencia(None, "Todos los Domingos.") == ("todos los domingos", {6})
+    assert recurrencia("31/10/2026") is None and recurrencia(None, "Día de la carrera") is None
+
+
+def test_directorio_de_areas_y_audio():
+    from any.conocimiento.areas import area_para
+    assert area_para("Quiero poner una queja a la gerencia")["area"] == "Gerencia"
+    assert area_para("quiero arrendar un local")["area"] == "Dirección Comercial"
+    assert area_para("qué eventos hay") is None and area_para("hola") is None
+    from any.entrada import extraer_mensajes
+    p = {"entry": [{"changes": [{"value": {"contacts": [{"profile": {"name": "Ana"}, "wa_id": "573001112233"}],
+        "messages": [{"from": "573001112233", "id": "w9", "type": "audio",
+                      "audio": {"id": "MEDIA1", "mime_type": "audio/ogg; codecs=opus", "voice": True}}]}}]}]}
+    m = extraer_mensajes(p)[0]
+    assert m["tipo"] == "audio" and m["media_id"] == "MEDIA1" and "ogg" in m["mime"]
+
+
 def test_fijo_no_tiene_whatsapp():
     from any.conocimiento.texto import link_whatsapp, telefono_fijo
     assert link_whatsapp("315 694 5386") == "https://wa.me/573156945386"

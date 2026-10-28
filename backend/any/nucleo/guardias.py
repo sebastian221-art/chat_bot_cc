@@ -148,6 +148,7 @@ def formato_whatsapp(t: str) -> str:
         t = re.sub(rf"(?i)\b{vos}\b", lambda m, tu=tu: tu.capitalize() if m.group(0)[0].isupper() else tu, t)
     t = re.sub(r"\*\*(.+?)\*\*", r"*\1*", t)                     # **x** → *x*
     t = re.sub(r"^(\s*)(?:[•\-]\s*)?\*\s+(?=\*\S)", r"\1• ", t, flags=re.MULTILINE)   # "• * *Locales:*" → "• *Locales:*"
+    t = re.sub(r"^(\s*)•(?:\s*•)+", r"\1•", t, flags=re.MULTILINE)                       # "• • *Locales:*" → "• *Locales:*"
     t = re.sub(r"__(.+?)__", r"*\1*", t)
     t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.MULTILINE)   # títulos
     t = re.sub(r"^\s*[-*_]{3,}\s*$", "", t, flags=re.MULTILINE)   # ---
@@ -167,7 +168,8 @@ def formato_whatsapp(t: str) -> str:
 
 _DINERO = re.compile(r"\$\s?\d{1,3}(?:[ \u00a0\u202f.,]\d{3})+(?!\d)(?:\s?(?:millones|millón|millon|mil)\b)?|"
                      r"\$\s?\d[\d.,]*(?:\s?(?:millones|millón|millon|mil)\b)?|\b\d{1,3}(?:[.,]\d{3})+\b|"
-                     r"\b\d+(?:[.,]\d+)?\s?%")
+                     r"\b\d+(?:[.,]\d+)?\s?%|"
+                     r"\b\d{1,3}(?:[ \u00a0\u202f]\d{3})+\s?(?:[cC][oO][pP]|[pP]esos)\b")
 
 
 def _cifra(x: str) -> str:
