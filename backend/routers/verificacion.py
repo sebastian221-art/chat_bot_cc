@@ -284,6 +284,12 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                     continue
                 if campo in ("name", "title", "content", "category", "floor") and not valor:
                     continue      # un campo obligatorio no se deja vacío
+                largo = getattr(getattr(modelo.__table__.c.get(campo), "type", None), "length", None)
+                if largo and isinstance(valor, str) and len(valor) > largo:
+                    # antes un texto largo tumbaba TODA la importación ("value too long"); ahora se avisa esa celda
+                    errores.append(f"{hoja} · id {obj.id} · «{titulo}»: máximo {largo} caracteres "
+                                   f"(tiene {len(valor)}); acórtalo. Esa celda no se cambió.")
+                    continue
                 if (actual if actual is not None else "") != (valor if valor is not None else "") and \
                         str(actual or "").strip() != str(valor or "").strip():
                     setattr(obj, campo, valor)
