@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 for _lib in ["sqlalchemy", "sqlalchemy.engine", "sqlalchemy.engine.Engine",
              "sqlalchemy.pool", "sqlalchemy.dialects", "sqlalchemy.orm",
              "watchfiles", "httpcore", "httpx", "chromadb", "groq",
-             "asyncio", "uvicorn.access", "uvicorn.error", "uvicorn",
+             "asyncio", "uvicorn.access",
              "multipart", "starlette", "passlib"]:
     logging.getLogger(_lib).setLevel(logging.CRITICAL)
 logging.basicConfig(level=logging.CRITICAL)
@@ -77,8 +77,16 @@ async def lifespan(app: FastAPI):
     sep = f"{GREY}  {'─'*46}{RESET}"
     print(f"\n{BOLD}{CYAN}  🛍️  {settings.APP_NAME}{RESET}")
     print(sep)
-    create_tables()
-    print(f"{GREEN}  ✓  Base de datos lista{RESET}")
+    try:
+        create_tables()
+        print(f"{GREEN}  ✓  Base de datos lista{RESET}", flush=True)
+    except Exception:
+        # Antes este error se tragaba (uvicorn.error está en CRITICAL) y el servidor moría sin decir nada.
+        # Las tablas ya existen en Railway: se muestra el error completo y se sigue arrancando.
+        import traceback
+        print(f"{RED}  ✗  Error preparando la base de datos (se sigue arrancando):{RESET}", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
     db = SessionLocal()
     try:
         create_default_admin(db)
