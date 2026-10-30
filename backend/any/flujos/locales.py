@@ -33,6 +33,55 @@ MARCA_LISTA = "{LISTA}"
 _MARCA_VARIANTES = re.compile(r"[\{\[][^\}\]\n]{0,60}?\b(?:LISTA|LIST|lista|list|Lista|List)\b[^\}\]\n]{0,80}[\}\]]")
 
 
+def quitar_rubros_como_lugar(ctx, texto: str) -> str:
+    """«Acércate a la zona Entidades Financieras y Cajeros»: los rubros son categorías de la web, no lugares.
+    Se quita la frase que nombra un rubro (con 2+ palabras) como si fuera un sitio."""
+    if not texto:
+        return texto
+    try:
+        rubros = {normalizar(l.rubro) for l in locales(ctx.db) if l.rubro and len(l.rubro.split()) >= 3}
+    except Exception:
+        return texto
+    if not rubros:
+        return texto
+    out, quitado = [], False
+    for linea in texto.split("\n"):
+        frases = re.split(r"(?<=[.!?])\s+", linea)
+        buenas = [f for f in frases if not any(r in normalizar(f.replace("*", "")) for r in rubros)]
+        if len(buenas) < len(frases):
+            quitado = True
+            buenas = [f for f in buenas if re.search(r"[^\W_]", f)]
+            if not buenas:
+                continue
+        out.append(" ".join(buenas))
+    if quitado:
+        ctx.traza.alerta("frase que usaba un rubro de la web como lugar: se quitó")
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    return texto
+
+
+_NO_CLAVE = set("""
+local locales tienda tiendas almacen almacenes negocio negocios centro comercial mall puente donde queda quedan
+venden vende vendan venta comprar compro consigo encuentro conseguir alguna alguno algun hay tienen tiene tienes
+quiero necesito busco buscando sucursal sucursales oficina oficinas informacion sobre hablame cuentame dame
+favor gracias hola buenas buenos tardes noches dias cual cuales donde porque como cuando ustedes ellos para
+pago pagos pagar hacer hago puedo pueden podria servicio servicios cliente clientes precio precios abierto abren cierran horario
+""".split())
+
+
+def palabras_clave(texto: str) -> list[str]:
+    """Raíces de las palabras que de verdad dicen qué busca («seguros» → «segur»), sin palabras de relleno."""
+    from ..conocimiento.texto import VACIAS
+    out = []
+    for w in palabras(normalizar(texto)):
+        if len(w) < 4 or w in VACIAS or w in _NO_CLAVE:
+            continue
+        r = w[:-2] if len(w) >= 7 else (w[:-1] if len(w) >= 5 and w.endswith("s") else w)
+        if r not in out:
+            out.append(r)
+    return out[:6]
+
+
 def poner_lista(texto: str, lista: str) -> str:
     """Pone la lista donde el modelo escribió la marca ({LISTA}, {LIST}, [LISTA]…); si no la puso,
     después del primer párrafo y siempre ANTES de la línea "De paso"."""
@@ -323,6 +372,9 @@ class Locales(Flujo):
 
         seleccion = sorted({l.id: l for l in seleccion}.values(), key=lambda l: normalizar(l.nombre))
         if not seleccion:
+            red = await self._red_de_seguridad(ctx, termino, pide)
+            if red:
+                return red
             parecidos = self._consultorios_parecidos(db, f"{ctx.mensaje} {termino}")
             if parecidos:
                 # «Odonto Vital» no está, pero hay consultorios de odontología en la Torre: se ofrecen esos
@@ -335,8 +387,9 @@ class Locales(Flujo):
                 if len(termino.split()) > 4:      # no recordar la pregunta entera como «categoría»
                     datos.entidades.pop("categoria", None)
                 return datos
-            rubros = sorted({l.rubro for l in locales(db, incluir_torre=False, incluir_servicios=False) if l.rubro})
-            return Datos(hechos={"modo": "sin_resultados", "busqueda": termino, "rubros_del_centro_comercial": rubros},
+            # Ya no se le pasa la lista de rubros: el modelo la usaba como lugar («la zona Entidades Financieras»)
+            return Datos(hechos={"modo": "sin_resultados", "busqueda": termino,
+                                 "linea_centro_comercial": "317 432 0138 · https://wa.me/573174320138"},
                          entidades={"categoria": termino} if len(termino.split()) <= 4 else {})
         if len(seleccion) == 1:
             # Un solo local ("¿hay gimnasio?" → GIMNASIO CAJASAN): va su ficha completa, con foto de portada
@@ -344,6 +397,79 @@ class Locales(Flujo):
             datos.entidades["categoria"] = termino
             return datos
         return self._datos_lista(seleccion, termino, pide)
+
+    async def _red_de_seguridad(self, ctx: Contexto, termino: str, pide: str | None) -> Datos | None:
+        """Antes de decir «no hay», se busca en TODO: locales, oficinas de la Torre y la información oficial del
+        centro comercial, por raíz de palabra y en la descripción. Así no se niega algo que sí existe
+        («seguros» → Gopass vende SOAT; «sucursal de Davivienda» → el cajero Davivienda)."""
+        db = ctx.db
+        texto = f"{ctx.mensaje} {termino}"
+        claves = palabras_clave(texto)
+        for c in conceptos(texto, "locales"):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
+            if c.grupo:
+                claves += [r for r in sorted(c.raices) if len(r) >= 4 and r not in claves]
+        claves = claves[:16]
+        candidatos: dict[int, Local] = {}
+        for r in buscar_locales(db, texto, incluir_torre=True):
+            if r.fuertes or r.cercanos or r.nombre_exacto:
+                candidatos[r.local.id] = r.local
+        if claves:
+            todos = locales(db, incluir_torre=True, incluir_servicios=False)
+            campos = {l.id: normalizar(f"{l.nombre} {' '.join(l.productos)} {l.descripcion or ''}") for l in todos}
+            for c in claves:
+                hits = [l for l in todos if re.search(rf"\b{re.escape(c)}", campos[l.id])]
+                if len(hits) > 12:      # «pago» sale en casi todas las descripciones: no dice nada
+                    continue
+                for l in hits:
+                    candidatos.setdefault(l.id, l)
+        sel: list[Local] = []
+        if candidatos:
+            extra = sorted({r for c in conceptos(texto, "locales") for r in c.raices if len(r) >= 4})
+            busca = f"{termino} (también cuenta lo que ofrezca: {', '.join(extra)})" if extra else termino
+            juzgado = await self._juez(ctx, busca, [], list(candidatos.values())[:MAX_CANDIDATOS_JUEZ])
+            sel = juzgado or []
+        from .servicios_mall import _PIDE_FINANCIERO, entidades_financieras
+        from ..conocimiento.buscador import buscar_conocimiento
+        info = [f.dict() for f in buscar_conocimiento(db, texto, k=3)]
+        enteras = [w for w in palabras(normalizar(texto)) if len(w) >= 4 and w not in _NO_CLAVE]
+        if enteras:         # palabra completa en la información oficial («Davivienda» → «Cajeros automáticos»)
+            from ..conocimiento.buscador import fragmentos_del_mall
+            from ..conocimiento.texto import VACIAS
+            frags = fragmentos_del_mall(db)
+            for w in [w for w in enteras if w not in VACIAS]:
+                base = w[:-1] if w.endswith("s") else w
+                hits = [f for f in frags if re.search(rf"\b{re.escape(base)}s?\b", normalizar(f"{f.titulo} {f.contenido}"))]
+                if len(hits) <= 4:
+                    for f in hits:
+                        if f.titulo not in {i.get("titulo") for i in info}:
+                            info.append(f.dict())
+        info = info[:4]
+        fin = entidades_financieras(db) if _PIDE_FINANCIERO.search(normalizar(texto)) else []
+        if fin:
+            sel = [l for l in sel if normalizar(l.nombre) not in {normalizar(e["nombre"]) for e in fin}]
+        if not sel and not info and not fin:
+            ctx.traza.paso("red_de_seguridad", {"claves": claves, "candidatos": len(candidatos), "resultado": "nada"})
+            return None
+        ctx.traza.paso("red_de_seguridad", {"claves": claves, "locales": [l.nombre for l in sel],
+                                            "info": [i.get("titulo") for i in info], "financieras": [e["nombre"] for e in fin]})
+        if sel:
+            datos = self._datos_lista(sel, termino, pide)
+            from .torre_medica import linea_consultorio
+            lineas = {l.nombre: (linea_consultorio(l) if l.es_torre else linea_lista(l)) for l in
+                      sorted(sel, key=lambda l: normalizar(l.nombre))}
+            datos.meta.update(lista="\n".join(lineas.values()), lineas_equidad=lineas, lista_equidad=list(lineas))
+        else:
+            datos = Datos(hechos={"modo": "info_relacionada", "busqueda": termino}, entidades={})
+        if info:
+            datos.hechos["info_oficial_relacionada"] = info
+        if fin:
+            datos.hechos["entidades_financieras_del_centro_comercial"] = fin
+        datos.hechos["nota"] = ("Esto SÍ está en la información del centro comercial y responde lo que busca: preséntalo. "
+                                "PROHIBIDO decir que no hay o que no tenemos algo que aparece aquí. Si el local exacto que "
+                                "nombró no está, dilo en una frase y ofrece esto.")
+        if len(termino.split()) > 4:
+            datos.entidades.pop("categoria", None)
+        return datos
 
     @staticmethod
     def _consultorios_parecidos(db, texto: str) -> list:
@@ -422,6 +548,7 @@ class Locales(Flujo):
     # ── Componer ──────────────────────────────────────────────────
 
     def componer(self, ctx: Contexto, datos: Datos, texto: str) -> str:
+        texto = quitar_rubros_como_lugar(ctx, texto)
         lista = datos.meta.get("lista")
         if not lista:
             return texto

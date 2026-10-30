@@ -914,6 +914,41 @@ def test_ajustes_trazas_29_10():
     assert afi(en_curso, "Hay concurso el 31/10.", 1) == "Hay concurso el 31/10."
 
 
+def test_nunca_niega_lo_que_existe():
+    """30/10: «¿hay algún local que vende seguros?» → «no hay» (y Gopass vende SOAT, EPS Sura está en la Torre);
+    «¿hay sucursal de Davivienda?» → «no» sin mencionar el cajero ni Paga Fácil; «la zona Entidades Financieras»."""
+    import types
+    from any.flujos.locales import Locales, palabras_clave, quitar_rubros_como_lugar
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    nombres = {l.nombre for l in locales(db)}
+
+    class _T:
+        def paso(self, *_): pass
+        def alerta(self, *_): pass
+        def llm(self, *_): pass
+    L = Locales()
+
+    async def juez(ctx, b, seg, pos):        # sin IA: el juez deja pasar todo lo que encontró el buscador
+        return pos
+    L._juez = juez
+    ctx = lambda m: types.SimpleNamespace(db=db, mensaje=m, traza=_T())
+    d = _correr(L._red_de_seguridad(ctx("hay algun local que vende seguros?"), "seguros", None))
+    if "Gopass" in nombres:
+        assert d is not None and "Gopass" in d.meta["lista_equidad"]
+    if "EPS Sura" in nombres:
+        assert "EPS Sura" in d.meta["lista_equidad"]
+    d = _correr(L._red_de_seguridad(ctx("¿Hay sucursal de Davivienda?"), "¿Hay sucursal de Davivienda?", None))
+    if "Paga Facil" in nombres:
+        assert d is not None and "Paga Facil" in [e["nombre"] for e in d.hechos["entidades_financieras_del_centro_comercial"]]
+    assert _correr(L._red_de_seguridad(ctx("venden helicopteros?"), "helicopteros", None)) is None
+    assert "pago" not in palabras_clave("donde pago el soat") and "soat" in palabras_clave("donde pago el soat")
+    c = types.SimpleNamespace(db=db, traza=_T())
+    t = quitar_rubros_como_lugar(c, "No tenemos sucursal.\n\nSi buscas, tienes la zona *Entidades Financieras y Cajeros*, con bancos.\n\n¿Algo más?")
+    if any((l.rubro or "") == "Entidades Financieras y Cajeros" for l in locales(db)):
+        assert "Entidades Financieras" not in t and "¿Algo más?" in t
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

@@ -26,6 +26,7 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  seguros: [seguros, aseguradora, aseguradoras, poliza, polizas, soat, sura, mapfre, allianz, positiva, previsora, colpatria]
   textil_hogar: [cobija, cobijas, cobertor, cobertores, edredon, edredones, frazada, frazadas, sabana, sabanas, almohada, almohadas, toalla, toallas, ropa de cama, lenceria de hogar, juego de cama]
   mexicana: [mexicana, mexicano, mexicanos, comida mexicana, tacos, taco, burrito, burritos, quesadilla, quesadillas, nachos, enchiladas]
   contador: [contador, contadores, contadora, contable, contables, contabilidad, contaduria, tributario, tributaria, tributarios, impuestos, declaracion de renta, revisor fiscal]
