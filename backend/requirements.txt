@@ -9,6 +9,8 @@ python-multipart==0.0.9
 sqlalchemy==2.0.35
 alembic==1.13.3
 pg8000==1.31.2   # driver Postgres 100% Python, sin dependencias nativas (evita error libpq.so.5 en Railway)
+scramp==1.4.18   # FIJO: scramp 1.5 quitó make_channel_binding y pg8000 ya no conecta a Postgres (caída del 30/10)
+python-dateutil==2.9.0.post0   # FIJO: la 3.0 es nueva; pg8000 la usa para fechas
 
 # AI / LLM
 groq==0.11.0
@@ -36,5 +38,4 @@ openpyxl==3.1.5
 # Compresión de PDF (cartas grandes → livianas para WhatsApp)
 pikepdf==9.4.0
 # Lectura de páginas web (sincronizador automático: Cinelandia + El Puente)
-
 beautifulsoup4==4.12.3
