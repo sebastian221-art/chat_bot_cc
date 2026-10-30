@@ -83,6 +83,34 @@ def _dias_del_evento(fecha_texto, hoy):
 MAX_AFICHES = 4
 
 
+def _quitar_promesa_de_afiches(ctx, texto: str, imagenes: int) -> str:
+    """«Los afiches de ambos eventos van adjuntos» con un solo afiche, «¿quieres que te envíe el afiche?» cuando
+    ya se envió, o «te dejo el afiche» sin ninguno: se quita esa frase. El cliente ve las imágenes que llegan."""
+    import re
+    if not texto:
+        return texto
+    patrones = [r"\bte (?:env|mand|pas|dej|comparto)\w*[^.?!\n]*\bafiche", r"\b(?:quieres|deseas|gustaria)\b[^.?!\n]*\bafiche"]
+    if imagenes < 2:
+        patrones += [r"\bafiches\b", r"\b(?:ambos|los dos)\b[^.?!\n]*\bafiche"]
+    if imagenes == 0:
+        patrones += [r"\bafiche\b", r"\bimagen(?:es)?\b"]
+    malo = re.compile("(?i)" + "|".join(patrones))
+    if not malo.search(texto):
+        return texto
+    if hasattr(ctx, "traza"):
+        ctx.traza.alerta("frase sobre afiches que no corresponde: se quitó")
+    out = []
+    for linea in texto.split("\n"):        # se conservan los saltos de línea originales
+        frases = re.split(r"(?<=[.!?])\s+", linea)
+        buenas = [f for f in frases if not malo.search(f)]
+        if len(buenas) < len(frases):
+            buenas = [f for f in buenas if re.search(r"[^\W_]", f)]   # sin un «🎉» suelto
+        if not buenas and linea.strip():
+            continue
+        out.append(" ".join(buenas))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 class Eventos(Flujo):
     nombre = "eventos"
     descripcion = "eventos y actividades del centro comercial (concursos, carreras, ferias, misa) e inscripciones"
@@ -103,7 +131,7 @@ class Eventos(Flujo):
             for _, n in nombrados[:MAX_AFICHES]:
                 if afiches[n] not in ya:
                     datos.adjuntos.append(Adjunto(tipo="imagen", url=afiches[n], leyenda=n))
-        return texto
+        return _quitar_promesa_de_afiches(ctx, texto, sum(1 for a in datos.adjuntos if a.tipo == "imagen"))
 
     async def reunir(self, ctx: Contexto) -> Datos:
         db, hoy = ctx.db, ctx.ahora.date()
@@ -134,7 +162,11 @@ class Eventos(Flujo):
                     afiches[x.name] = f
             datos.meta["afiches"] = afiches
             if afiches:
-                hechos["afiches"] = "los afiches de los eventos que menciones se envían aparte, como imágenes"
+                # Antes decía «los afiches se envían aparte» y el modelo prometía «los afiches de ambos eventos»
+                # aunque solo uno tuviera afiche. Ahora sabe cuáles tienen, y no debe hablar de afiches.
+                hechos["eventos_con_afiche"] = sorted(afiches)
+                hechos["afiches"] = ("el sistema adjunta solo el afiche de los eventos de 'eventos_con_afiche' que "
+                                     "nombres; no escribas nada sobre afiches ni imágenes en la respuesta")
             nombre = d.entidades.get("evento") if d else None
             if nombre:
                 hechos["evento_pedido_no_encontrado"] = nombre

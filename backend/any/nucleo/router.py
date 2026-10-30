@@ -70,11 +70,11 @@ _PIDE_LOCAL = re.compile(r"^(?:hola\s+(?:any|ani)\s*,?\s*)?(?:any\s*,?\s*)?"
 
 
 def local_por_nombre_exacto(ctx: Contexto):
-    n = normalizar(ctx.mensaje or "").strip(" .!¡?¿,")
+    n = normalizar(ctx.mensaje or "").strip(" .!¡?¿,\"'“”‘’«»")     # «“Háblame de claro» copiado con comillas
     m = _PIDE_LOCAL.match(n)
     con_pedido = bool(m and len(n) > m.end())
     if con_pedido:
-        n = n[m.end():].strip(" .!¡?¿,")
+        n = n[m.end():].strip(" .!¡?¿,\"'“”‘’«»")
     if len(n) < 3 or (n in _NOMBRES_AMBIGUOS and not con_pedido) or len(n.split()) > 6:
         return None
     try:

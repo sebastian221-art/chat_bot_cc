@@ -332,6 +332,8 @@ class Locales(Flujo):
                 datos.meta.update(lista="\n".join(lineas.values()), lineas_equidad=lineas, lista_equidad=list(lineas))
                 datos.hechos["nota"] = (f"No hay un local o consultorio llamado así registrado. Dilo en una frase y "
                                         f"ofrece estos consultorios de la Torre Médica que hacen algo parecido.")
+                if len(termino.split()) > 4:      # no recordar la pregunta entera como «categoría»
+                    datos.entidades.pop("categoria", None)
                 return datos
             rubros = sorted({l.rubro for l in locales(db, incluir_torre=False, incluir_servicios=False) if l.rubro})
             return Datos(hechos={"modo": "sin_resultados", "busqueda": termino, "rubros_del_centro_comercial": rubros},

@@ -888,8 +888,10 @@ def test_ajustes_trazas_29_10():
     if "CLARO" in nombres:
         assert local_por_nombre_exacto(c("Háblame de claro")).nombre == "CLARO"
         assert local_por_nombre_exacto(c("info de la tienda claro")).nombre == "CLARO"
+        assert local_por_nombre_exacto(c("“Háblame de claro")).nombre == "CLARO"       # copiado con comillas
     assert local_por_nombre_exacto(c("claro")) is None and local_por_nombre_exacto(c("claro que sí")) is None
     assert _PIDE_FINANCIERO.search("que bancos hay") and _PIDE_FINANCIERO.search("hay alguna sucursal bancaria")
+    assert _PIDE_FINANCIERO.search("hay alguna sucursal de davivienda")
     if "Paga Facil" in nombres:
         assert "Paga Facil" in [e["nombre"] for e in entidades_financieras(db)]
     assert "Jottatravel" not in [e["nombre"] for e in entidades_financieras(db)]
@@ -905,6 +907,11 @@ def test_ajustes_trazas_29_10():
         "En el centro comercial hay tres cajeros."
     assert quitar_saludo_repetido(nueva, "¡Hola, Edgar! En el centro comercial hay tres cajeros.").startswith("¡Hola")
     assert quitar_saludo_repetido(en_curso, "¡Claro, Edgar! Hay tres cajeros en el centro.").startswith("¡Claro")
+    from any.flujos.eventos import _quitar_promesa_de_afiches as afi
+    t = afi(en_curso, "• *Concurso*\n• *Misa*\n\nLos afiches de ambos eventos van adjuntos.\n\n¿Algo más?", 1)
+    assert "afiche" not in t and "*Misa*" in t and "¿Algo más?" in t
+    assert "afiche" not in afi(en_curso, "Es el 31/10.\n\n¿Quieres que te envíe el afiche? 🎉", 1)
+    assert afi(en_curso, "Hay concurso el 31/10.", 1) == "Hay concurso el 31/10."
 
 
 # ── Mini corredor ─────────────────────────────────────────────────
