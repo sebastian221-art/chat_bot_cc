@@ -874,6 +874,39 @@ def test_imagen_usa_la_busqueda_de_locales():
     borrar_datos(db, "prueba-foto")
 
 
+def test_ajustes_trazas_29_10():
+    """Trazas del 29/10: «Háblame de claro», bancos, «Odonto Vital», saludo repetido."""
+    import types
+    from any.nucleo.router import local_por_nombre_exacto
+    from any.nucleo.guardias import quitar_saludo_repetido
+    from any.flujos.servicios_mall import entidades_financieras, _PIDE_FINANCIERO
+    from any.flujos.locales import Locales
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    nombres = {l.nombre for l in locales(db)}
+    c = lambda m: types.SimpleNamespace(mensaje=m, db=db)
+    if "CLARO" in nombres:
+        assert local_por_nombre_exacto(c("Háblame de claro")).nombre == "CLARO"
+        assert local_por_nombre_exacto(c("info de la tienda claro")).nombre == "CLARO"
+    assert local_por_nombre_exacto(c("claro")) is None and local_por_nombre_exacto(c("claro que sí")) is None
+    assert _PIDE_FINANCIERO.search("que bancos hay") and _PIDE_FINANCIERO.search("hay alguna sucursal bancaria")
+    if "Paga Facil" in nombres:
+        assert "Paga Facil" in [e["nombre"] for e in entidades_financieras(db)]
+    assert "Jottatravel" not in [e["nombre"] for e in entidades_financieras(db)]
+    if "Orthonext" in nombres:
+        assert "Orthonext" in [l.nombre for l in Locales._consultorios_parecidos(db, "Odonto vital")]
+    assert Locales._consultorios_parecidos(db, "seguros") == []
+
+    class _T:
+        def alerta(self, *_): pass
+    en_curso = types.SimpleNamespace(sesion_nueva=False, historial=[1], traza=_T())
+    nueva = types.SimpleNamespace(sesion_nueva=True, historial=[], traza=_T())
+    assert quitar_saludo_repetido(en_curso, "¡Hola, Edgar! En el centro comercial hay tres cajeros.") == \
+        "En el centro comercial hay tres cajeros."
+    assert quitar_saludo_repetido(nueva, "¡Hola, Edgar! En el centro comercial hay tres cajeros.").startswith("¡Hola")
+    assert quitar_saludo_repetido(en_curso, "¡Claro, Edgar! Hay tres cajeros en el centro.").startswith("¡Claro")
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

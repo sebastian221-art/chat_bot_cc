@@ -380,6 +380,23 @@ def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
     return re.sub(r"⟦U(\d+)⟧", lambda m: links[int(m.group(1))], t)
 
 
+_SALUDO_INICIAL = re.compile(r"^\s*¡?\s*(?:[Hh]ola|[Bb]uenas(?: tardes| noches)?|[Bb]uenos d[ií]as)\b\s*,?\s*"
+                             r"(?:[A-ZÁÉÍÓÚÑ][\wáéíóúñ]*)?\s*[!¡.,]*\s*(?:[😊👋🙌]\s*)?")
+
+
+def quitar_saludo_repetido(ctx: Contexto, t: str) -> str:
+    """Con la conversación en curso no se vuelve a saludar («¡Hola, Edgar!» en el décimo mensaje)."""
+    if getattr(ctx, "sesion_nueva", True) or not getattr(ctx, "historial", None):
+        return t
+    m = _SALUDO_INICIAL.match(t)
+    resto = t[m.end():] if m and m.end() > 0 else ""
+    if not m or m.end() == 0 or len(resto.strip()) < 20:
+        return t
+    ctx.traza.alerta("saludo repetido con la conversación en curso: se quitó")
+    resto = resto.lstrip()
+    return resto[:1].upper() + resto[1:]
+
+
 def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = r.texto or ""
     t = _ID_INTERNO.sub("", t)
@@ -393,6 +410,7 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
         t = re.sub(r"[ \t]*\{[^{}\n]{3,500}\}", "", t)
         t = re.sub(r":\s*\.", ":", t)
     t = formato_whatsapp(t)
+    t = quitar_saludo_repetido(ctx, t)
 
     habla_de_torre = bool(re.search(r"(?i)torre\s+(m[eé]dica|empresarial)", t))
     if r.flujo != "torre_medica" and not habla_de_torre and (_PISO.search(t) or _PISO_ORDINAL.search(t)):

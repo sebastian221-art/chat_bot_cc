@@ -323,15 +323,39 @@ class Locales(Flujo):
 
         seleccion = sorted({l.id: l for l in seleccion}.values(), key=lambda l: normalizar(l.nombre))
         if not seleccion:
+            parecidos = self._consultorios_parecidos(db, f"{ctx.mensaje} {termino}")
+            if parecidos:
+                # «Odonto Vital» no está, pero hay consultorios de odontología en la Torre: se ofrecen esos
+                from .torre_medica import linea_consultorio
+                datos = self._datos_lista(parecidos, termino, pide)
+                lineas = {l.nombre: linea_consultorio(l) for l in parecidos}
+                datos.meta.update(lista="\n".join(lineas.values()), lineas_equidad=lineas, lista_equidad=list(lineas))
+                datos.hechos["nota"] = (f"No hay un local o consultorio llamado así registrado. Dilo en una frase y "
+                                        f"ofrece estos consultorios de la Torre Médica que hacen algo parecido.")
+                return datos
             rubros = sorted({l.rubro for l in locales(db, incluir_torre=False, incluir_servicios=False) if l.rubro})
             return Datos(hechos={"modo": "sin_resultados", "busqueda": termino, "rubros_del_centro_comercial": rubros},
-                         entidades={"categoria": termino})
+                         entidades={"categoria": termino} if len(termino.split()) <= 4 else {})
         if len(seleccion) == 1:
             # Un solo local ("¿hay gimnasio?" → GIMNASIO CAJASAN): va su ficha completa, con foto de portada
             datos = self._ficha(seleccion[0], pide)
             datos.entidades["categoria"] = termino
             return datos
         return self._datos_lista(seleccion, termino, pide)
+
+    @staticmethod
+    def _consultorios_parecidos(db, texto: str) -> list:
+        """Consultorios de salud de la Torre que comparten la raíz de una palabra de salud del mensaje
+        («odonto» → odontología, «dermato» → dermatología)."""
+        from .torre_medica import busca_salud, es_de_salud
+        if not busca_salud(texto):
+            return []
+        raices = {w[:5] for w in palabras(normalizar(texto)) if len(w) >= 5 and busca_salud(w)}
+        if not raices:
+            return []
+        torre = [l for l in locales(db) if l.es_torre and es_de_salud(l)]
+        sel = [l for l in torre if any(r in normalizar(f"{l.nombre} {' '.join(l.productos)}") for r in raices)]
+        return sorted(sel, key=lambda l: normalizar(l.nombre))[:10]
 
     def _datos_lista(self, seleccion: list, termino: str, pide: str | None) -> Datos:
         seleccion = sorted({l.id: l for l in seleccion}.values(), key=lambda l: normalizar(l.nombre))

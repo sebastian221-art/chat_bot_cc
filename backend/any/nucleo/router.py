@@ -61,9 +61,21 @@ def piso_en_texto(texto: str) -> int | None:
     return num if num and 2 <= num <= 6 else None
 
 
+# «Háblame de Claro», «info de la tienda Enjoy», «¿dónde queda Rich?»: lo que sigue es el nombre del local.
+# Con ese inicio también valen los nombres que son palabras comunes («claro», «tennis»).
+_PIDE_LOCAL = re.compile(r"^(?:hola\s+(?:any|ani)\s*,?\s*)?(?:any\s*,?\s*)?"
+                         r"(?:hablame|cuentame|dime|dame info(?:rmacion)?|info(?:rmacion)?|que (?:es|venden en|hay en)|"
+                         r"donde (?:queda|esta|encuentro)|ubicacion|telefono|whatsapp|numero)"
+                         r"(?:\s+(?:de|del|sobre|acerca de))?(?:\s+(?:la|el))?(?:\s+(?:tienda|local|almacen|negocio))?\s+")
+
+
 def local_por_nombre_exacto(ctx: Contexto):
     n = normalizar(ctx.mensaje or "").strip(" .!¡?¿,")
-    if len(n) < 3 or n in _NOMBRES_AMBIGUOS or len(n.split()) > 6:
+    m = _PIDE_LOCAL.match(n)
+    con_pedido = bool(m and len(n) > m.end())
+    if con_pedido:
+        n = n[m.end():].strip(" .!¡?¿,")
+    if len(n) < 3 or (n in _NOMBRES_AMBIGUOS and not con_pedido) or len(n.split()) > 6:
         return None
     try:
         from ..conocimiento.catalogo import locales

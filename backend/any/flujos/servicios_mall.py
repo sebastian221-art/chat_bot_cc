@@ -4,12 +4,34 @@ baños, cajeros, mascotas, punto de información y demás info general.
 Los datos salen de mall_info, info_points y la base de conocimiento (panel).
 """
 from __future__ import annotations
+import re
 
 from ..conocimiento.buscador import buscar_conocimiento, conceptos
 from ..conocimiento.servicios import info_mall
+from ..conocimiento.texto import normalizar
 from ..llm import Herramienta
 from ..nucleo.tipos import Adjunto, Contexto
 from .base import Datos, Flujo
+
+
+_PIDE_FINANCIERO = re.compile(r"\bbanc|\bcajer|financ|cooperativ|corresponsal|credito|prestamo|consignar|consignacion|"
+                              r"retirar plata|retiro de dinero|giros?\b|envio de dinero|pagar (?:recibos|facturas)")
+_ES_FINANCIERO = re.compile(r"entidades financieras|cooperativa|corresponsal|bancari|\bbanco\b|ahorro y credito")
+
+
+def entidades_financieras(db) -> list[dict]:
+    from ..conocimiento.catalogo import locales
+    out = []
+    for l in locales(db, incluir_torre=True, incluir_servicios=False):
+        t = normalizar(f"{l.rubro or ''} {' '.join(l.productos)} {(l.descripcion or '')[:200]}")
+        if _ES_FINANCIERO.search(t):
+            d = {"nombre": l.nombre, "zona": l.zona, "que_hace": ", ".join(l.productos[:8])[:200]}
+            if l.piso:
+                d["piso"] = l.piso
+            if l.whatsapp:
+                d["whatsapp"] = l.whatsapp
+            out.append(d)
+    return sorted(out, key=lambda d: normalizar(d["nombre"]))[:12]
 
 
 class ServiciosMall(Flujo):
@@ -41,6 +63,16 @@ class ServiciosMall(Flujo):
             hechos["cantidad_de_locales"] = {"locales_comerciales": len([l for l in todos if not l.es_torre and not l.es_servicio]),
                                              "oficinas_y_consultorios_de_la_torre": len([l for l in todos if l.es_torre])}
         datos = Datos(hechos=hechos, entidades={"servicio": sorted(grupos)} if grupos else {})
+        if _PIDE_FINANCIERO.search(normalizar(f"{ctx.mensaje} {consulta}")):
+            # «¿Qué bancos hay?»: además de los cajeros, los locales financieros (corresponsal, cooperativa…).
+            # Antes solo salía el dato de los cajeros y Any decía «no hay sucursales» sin saberlo.
+            fin = entidades_financieras(ctx.db)
+            if fin:
+                hechos["entidades_financieras_del_centro_comercial"] = fin
+                hechos["como_responder_bancos"] = (
+                    "Da los cajeros Y estas entidades financieras (nombre, zona, qué hacen y WhatsApp si viene). "
+                    "Si preguntan por la sucursal u oficina de un banco que no aparece aquí, di que no tienes "
+                    "registrada una sucursal de ese banco (no afirmes que no existe) y ofrece lo que sí hay.")
         if "horario" in grupos and info.get("horario_general"):
             hechos["horario_general"] = info["horario_general"]
         if "parqueadero" in grupos and info.get("parqueadero"):
