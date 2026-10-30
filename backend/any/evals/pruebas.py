@@ -942,6 +942,18 @@ def test_nunca_niega_lo_que_existe():
     if "Paga Facil" in nombres:
         assert d is not None and "Paga Facil" in [e["nombre"] for e in d.hechos["entidades_financieras_del_centro_comercial"]]
     assert _correr(L._red_de_seguridad(ctx("venden helicopteros?"), "helicopteros", None)) is None
+    # seguros / SOAT van siempre a locales (el modelo mandaba «pagar el SOAT» a la Torre Médica)
+    from any.nucleo.router import decidir
+    from any.nucleo.estado import EstadoSesion as Estado
+    for m in ("¿dónde puedo pagar el SOAT?", "hay algun local que vende seguros?"):
+        cx = types.SimpleNamespace(db=db, mensaje=m, imagen=None, estado=Estado("prueba-seguros"), traza=_T(), historial=[])
+        assert _correr(decidir(cx)).flujo == "locales", m
+    # si el juez falla, una mención de pasada («sucursal física» en People Plays) no se toma como respuesta
+    async def juez_falla(ctx, b, seg, pos):
+        return None
+    L._juez = juez_falla
+    d = _correr(L._lista(ctx("¿hay sucursal de Davivienda?"), {"categoria": "banco"}, "¿hay sucursal de Davivienda?", None))
+    assert d.hechos.get("modo") != "ficha"
     assert "pago" not in palabras_clave("donde pago el soat") and "soat" in palabras_clave("donde pago el soat")
     c = types.SimpleNamespace(db=db, traza=_T())
     t = quitar_rubros_como_lugar(c, "No tenemos sucursal.\n\nSi buscas, tienes la zona *Entidades Financieras y Cajeros*, con bancos.\n\n¿Algo más?")

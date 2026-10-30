@@ -411,6 +411,11 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
         t = re.sub(r":\s*\.", ":", t)
     t = formato_whatsapp(t)
     t = quitar_saludo_repetido(ctx, t)
+    try:
+        from ..flujos.locales import quitar_rubros_como_lugar
+        t = quitar_rubros_como_lugar(ctx, t)       # «la zona de Entidades Financieras» (lo decía también servicios)
+    except Exception:
+        pass
 
     habla_de_torre = bool(re.search(r"(?i)torre\s+(m[eé]dica|empresarial)", t))
     if r.flujo != "torre_medica" and not habla_de_torre and (_PISO.search(t) or _PISO_ORDINAL.search(t)):

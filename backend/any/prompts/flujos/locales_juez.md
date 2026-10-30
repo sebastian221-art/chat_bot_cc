@@ -9,6 +9,7 @@ Reglas que siempre aplican:
 - Si se busca algo "para adultos" (bares, rumba, vida nocturna), excluye lo infantil (juegos para niños, jugueterías, parques infantiles).
 - Si se busca un servicio que el local no presta como negocio (un "gimnasio" que en realidad es un parque infantil), no lo agregues.
 - Cuenta también lo que el local ofrece como servicio o trámite, aunque no sea su negocio principal: "seguros" → quien vende SOAT, pólizas o es aseguradora/EPS; "pagar recibos" o "giros" → corresponsal bancario o cooperativa. Si alguno lo ofrece, AGRÉGALO: decir que no hay algo que sí existe es el peor error.
+- Un nombre parecido no cuenta: "Fenalco Sur de Santander" no es "Sura" (Sur ≠ Sura). Si un SEGURO entró solo por un parecido así, va en "excluir".
 - Una palabra usada en otro sentido no cuenta ("servicio seguro", "espacio seguro" no es vender seguros).
 - Si SEGUROS dice (ninguno), solo pon en "agregar" los que de verdad ofrecen lo buscado; si ninguno lo ofrece, "agregar" va vacío.
 

@@ -161,6 +161,12 @@ async def decidir(ctx: Contexto) -> Decision:
         return Decision("torre_medica" if loc.es_torre else "locales", {"local": loc.nombre}, False, ctx.mensaje,
                         f"el mensaje es el nombre del local «{loc.nombre}»", "regla")
 
+    # 2e. Seguros, SOAT, pólizas: se buscan en todo el directorio (el modelo lo mandaba a la Torre Médica,
+    #     que solo mira consultorios y no vio a Gopass, que hace el trámite del SOAT)
+    if not ctx.estado.flujo_activo and re.search(r"\b(seguros|soat|polizas?|aseguradoras?)\b|\b(vend|compr|sac|pag)\w* (un |el )?seguro\b",
+                                              normalizar(ctx.mensaje)):
+        return Decision("locales", {"categoria": "seguros"}, False, ctx.mensaje, "busca seguros / SOAT", "regla")
+
     # 3. Router IA
     try:
         return await _router_ia(ctx)

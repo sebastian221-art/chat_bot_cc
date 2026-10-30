@@ -70,9 +70,10 @@ class ServiciosMall(Flujo):
             if fin:
                 hechos["entidades_financieras_del_centro_comercial"] = fin
                 hechos["como_responder_bancos"] = (
-                    "Da los cajeros Y estas entidades financieras (nombre, zona, qué hacen y WhatsApp si viene). "
-                    "Si preguntan por la sucursal u oficina de un banco que no aparece aquí, di que no tienes "
-                    "registrada una sucursal de ese banco (no afirmes que no existe) y ofrece lo que sí hay.")
+                    "EMPIEZA por lo que SÍ hay: los cajeros y estas entidades financieras (nombre, zona si viene, qué "
+                    "hacen y WhatsApp si viene). Si preguntan por la sucursal de un banco o un servicio que no aparece "
+                    "aquí, dilo en media frase DESPUÉS («sucursal como tal no tengo registrada»), nunca como primera "
+                    "frase ni como «no hay». Si una entidad no trae zona, no inventes dónde queda.")
         if "horario" in grupos and info.get("horario_general"):
             hechos["horario_general"] = info["horario_general"]
         if "parqueadero" in grupos and info.get("parqueadero"):

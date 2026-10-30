@@ -355,12 +355,16 @@ class Locales(Flujo):
             extra = []   # "ropa para niños": ya cumplen las dos cosas; no se abre a toda la ropa
         else:
             extra = [r.local for r in res if r.local.id not in ids and (r.cercanos or r.fuertes)]
+        if 2 <= len(seleccion) < 4 and mx > 0:
+            ids = {l.id for l in seleccion} | {l.id for l in extra}
+            extra += [l for l in self._candidatos_amplios(ctx, termino)[0] if l.id not in ids]
         if seleccion and mx == 0:
             # Nadie declara venderlo: solo lo menciona su descripción ("gimnasio" en un parque infantil).
             # No es seguro: el juez decide si de verdad lo ofrecen; si dice que ninguno, no hay.
             juzgado = await self._juez(ctx, termino, [], (seleccion + extra)[:MAX_CANDIDATOS_JUEZ])
-            if juzgado is not None:
-                seleccion = juzgado
+            # Si el juez falló, una mención de pasada en la descripción no basta («sucursal de Davivienda» →
+            # People Plays porque su descripción dice «sucursal física»): sigue la red de seguridad.
+            seleccion = juzgado if juzgado is not None else []
         elif len(seleccion) + len(extra) >= 4:
             juzgado = await self._juez(ctx, termino, seleccion, extra[:MAX_CANDIDATOS_JUEZ])
             if juzgado:
@@ -404,24 +408,8 @@ class Locales(Flujo):
         («seguros» → Gopass vende SOAT; «sucursal de Davivienda» → el cajero Davivienda)."""
         db = ctx.db
         texto = f"{ctx.mensaje} {termino}"
-        claves = palabras_clave(texto)
-        for c in conceptos(texto, "locales"):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
-            if c.grupo:
-                claves += [r for r in sorted(c.raices) if len(r) >= 4 and r not in claves]
-        claves = claves[:16]
-        candidatos: dict[int, Local] = {}
-        for r in buscar_locales(db, texto, incluir_torre=True):
-            if r.fuertes or r.cercanos or r.nombre_exacto:
-                candidatos[r.local.id] = r.local
-        if claves:
-            todos = locales(db, incluir_torre=True, incluir_servicios=False)
-            campos = {l.id: normalizar(f"{l.nombre} {' '.join(l.productos)} {l.descripcion or ''}") for l in todos}
-            for c in claves:
-                hits = [l for l in todos if re.search(rf"\b{re.escape(c)}", campos[l.id])]
-                if len(hits) > 12:      # «pago» sale en casi todas las descripciones: no dice nada
-                    continue
-                for l in hits:
-                    candidatos.setdefault(l.id, l)
+        lista_amplia, claves = self._candidatos_amplios(ctx, termino)
+        candidatos: dict[int, Local] = {l.id: l for l in lista_amplia}
         sel: list[Local] = []
         if candidatos:
             extra = sorted({r for c in conceptos(texto, "locales") for r in c.raices if len(r) >= 4})
@@ -470,6 +458,31 @@ class Locales(Flujo):
         if len(termino.split()) > 4:
             datos.entidades.pop("categoria", None)
         return datos
+
+    @staticmethod
+    def _candidatos_amplios(ctx: Contexto, termino: str) -> tuple[list, list]:
+        """Todo local u oficina que mencione lo buscado (o un sinónimo) en su nombre, productos o descripción."""
+        db = ctx.db
+        texto = f"{ctx.mensaje} {termino}"
+        claves = palabras_clave(texto)
+        for c in conceptos(texto, "locales"):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
+            if c.grupo:
+                claves += [r for r in sorted(c.raices) if len(r) >= 4 and r not in claves]
+        claves = claves[:16]
+        candidatos: dict[int, Local] = {}
+        for r in buscar_locales(db, texto, incluir_torre=True):
+            if r.fuertes or r.cercanos or r.nombre_exacto:
+                candidatos[r.local.id] = r.local
+        if claves:
+            todos = locales(db, incluir_torre=True, incluir_servicios=False)
+            campos = {l.id: normalizar(f"{l.nombre} {' '.join(l.productos)} {l.descripcion or ''}") for l in todos}
+            for c in claves:
+                hits = [l for l in todos if re.search(rf"\b{re.escape(c)}", campos[l.id])]
+                if len(hits) > 12:      # «pago» sale en casi todas las descripciones: no dice nada
+                    continue
+                for l in hits:
+                    candidatos.setdefault(l.id, l)
+        return list(candidatos.values())[:MAX_CANDIDATOS_JUEZ], claves
 
     @staticmethod
     def _consultorios_parecidos(db, texto: str) -> list:
@@ -525,10 +538,12 @@ class Locales(Flujo):
         texto = (f"BUSCA: {busqueda}\n\nSEGUROS (se quedan salvo error claro):\n" + ("\n".join(map(fila, seguros)) or "(ninguno)")
                  + "\n\nPOSIBLES (entran solo si de verdad lo venden):\n" + ("\n".join(map(fila, posibles)) or "(ninguno)"))
         try:
-            r = await completar(cfg().modelo_de_flujo("locales"),
-                                [{"role": "system", "content": leer_prompt("flujos/locales_juez.md")},
-                                 {"role": "user", "content": texto}],
-                                json_salida=True, temperatura=0, max_tokens=900, razonamiento="low")
+            import asyncio
+            r = await asyncio.wait_for(          # el juez es una mejora: si el proveedor se cuelga, no esperamos 20 s
+                completar(cfg().modelo_de_flujo("locales"),
+                          [{"role": "system", "content": leer_prompt("flujos/locales_juez.md")},
+                           {"role": "user", "content": texto}],
+                          json_salida=True, temperatura=0, max_tokens=900, razonamiento="low"), timeout=8)
             ctx.traza.llm("juez_locales", r)
             j = r.json()
         except Exception as e:   # el juez es una mejora: si falla por lo que sea, manda la selección por palabras
