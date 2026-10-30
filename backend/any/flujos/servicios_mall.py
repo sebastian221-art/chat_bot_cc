@@ -73,7 +73,8 @@ class ServiciosMall(Flujo):
                     "EMPIEZA por lo que SÍ hay: los cajeros y estas entidades financieras (nombre, zona si viene, qué "
                     "hacen y WhatsApp si viene). Si preguntan por la sucursal de un banco o un servicio que no aparece "
                     "aquí, dilo en media frase DESPUÉS («sucursal como tal no tengo registrada»), nunca como primera "
-                    "frase ni como «no hay». Si una entidad no trae zona, no inventes dónde queda.")
+                    "frase ni como «no hay». Si una entidad no trae zona, no inventes dónde queda. Los cajeros solo sirven "
+                    "para retirar y consultar: nunca digas que en un cajero se hacen giros, pagos o envíos.")
         if "horario" in grupos and info.get("horario_general"):
             hechos["horario_general"] = info["horario_general"]
         if "parqueadero" in grupos and info.get("parqueadero"):

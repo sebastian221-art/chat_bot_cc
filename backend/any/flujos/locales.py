@@ -42,12 +42,17 @@ def quitar_rubros_como_lugar(ctx, texto: str) -> str:
         rubros = {normalizar(l.rubro) for l in locales(ctx.db) if l.rubro and len(l.rubro.split()) >= 3}
     except Exception:
         return texto
-    if not rubros:
-        return texto
+    # también el comienzo del rubro («zona de Entidades Financieras») y «área de servicios financieros»
+    rubros |= {" ".join(r.split()[:2]) for r in rubros if len(r.split()[0]) >= 5}
+    lugar = re.compile(r"\b(zona|area|seccion|sector|pasillo)\b")
+    inventado = re.compile(r"\b(zona|area|seccion|sector) (de |del )?(los )?(servicios? )?(financier|bancari|entidades)")
     out, quitado = [], False
     for linea in texto.split("\n"):
         frases = re.split(r"(?<=[.!?])\s+", linea)
-        buenas = [f for f in frases if not any(r in normalizar(f.replace("*", "")) for r in rubros)]
+        def mala(f: str) -> bool:
+            n = normalizar(f.replace("*", ""))
+            return bool(inventado.search(n)) or any(r in n and (len(r.split()) >= 3 or lugar.search(n)) for r in rubros)
+        buenas = [f for f in frases if not mala(f)]
         if len(buenas) < len(frases):
             quitado = True
             buenas = [f for f in buenas if re.search(r"[^\W_]", f)]
@@ -59,6 +64,8 @@ def quitar_rubros_como_lugar(ctx, texto: str) -> str:
         return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
     return texto
 
+
+_AMBIGUAS = {"segur", "segura", "seguro"}
 
 _NO_CLAVE = set("""
 local locales tienda tiendas almacen almacenes negocio negocios centro comercial mall puente donde queda quedan
@@ -355,9 +362,12 @@ class Locales(Flujo):
             extra = []   # "ropa para niños": ya cumplen las dos cosas; no se abre a toda la ropa
         else:
             extra = [r.local for r in res if r.local.id not in ids and (r.cercanos or r.fuertes)]
-        if 2 <= len(seleccion) < 4 and mx > 0:
+        if 1 <= len(seleccion) < 4 and mx > 0:
             ids = {l.id for l in seleccion} | {l.id for l in extra}
-            extra += [l for l in self._candidatos_amplios(ctx, termino)[0] if l.id not in ids]
+            amplios = [l for l in self._candidatos_amplios(ctx, termino)[0] if l.id not in ids]
+            fuertes = getattr(ctx, "_fuertes_amplios", set())
+            seleccion += [l for l in amplios if l.id in fuertes]       # Gopass dice «SOAT»: va seguro
+            extra += [l for l in amplios if l.id not in fuertes]
         if seleccion and mx == 0:
             # Nadie declara venderlo: solo lo menciona su descripción ("gimnasio" en un parque infantil).
             # No es seguro: el juez decide si de verdad lo ofrecen; si dice que ninguno, no hay.
@@ -414,8 +424,11 @@ class Locales(Flujo):
         if candidatos:
             extra = sorted({r for c in conceptos(texto, "locales") for r in c.raices if len(r) >= 4})
             busca = f"{termino} (también cuenta lo que ofrezca: {', '.join(extra)})" if extra else termino
-            juzgado = await self._juez(ctx, busca, [], list(candidatos.values())[:MAX_CANDIDATOS_JUEZ])
-            sel = juzgado or []
+            fuertes = getattr(ctx, "_fuertes_amplios", set())
+            seguros_ = [l for l in candidatos.values() if l.id in fuertes]
+            posibles_ = [l for l in candidatos.values() if l.id not in fuertes]
+            juzgado = await self._juez(ctx, busca, seguros_, posibles_[:MAX_CANDIDATOS_JUEZ])
+            sel = juzgado if juzgado is not None else seguros_
         from .servicios_mall import _PIDE_FINANCIERO, entidades_financieras
         from ..conocimiento.buscador import buscar_conocimiento
         info = [f.dict() for f in buscar_conocimiento(db, texto, k=3)]
@@ -465,11 +478,17 @@ class Locales(Flujo):
         db = ctx.db
         texto = f"{ctx.mensaje} {termino}"
         claves = palabras_clave(texto)
+        especificas = []
         for c in conceptos(texto, "locales"):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
             if c.grupo:
-                claves += [r for r in sorted(c.raices) if len(r) >= 4 and r not in claves]
+                raices = [r for r in sorted(c.raices) if len(r) >= 4]
+                claves += [r for r in raices if r not in claves]
+                # una palabra del grupo escrita en la descripción («SOAT») cuenta como que lo ofrece,
+                # salvo las que tienen otro sentido común («seguro» = sin peligro)
+                especificas += [r for r in raices if r not in _AMBIGUAS]
         claves = claves[:16]
         candidatos: dict[int, Local] = {}
+        fuertes: set[int] = set()
         for r in buscar_locales(db, texto, incluir_torre=True):
             if r.fuertes or r.cercanos or r.nombre_exacto:
                 candidatos[r.local.id] = r.local
@@ -482,6 +501,10 @@ class Locales(Flujo):
                     continue
                 for l in hits:
                     candidatos.setdefault(l.id, l)
+                    if c in especificas and len(c) >= 4:
+                        fuertes.add(l.id)     # dice «SOAT» o «póliza» con todas las letras: sí es de seguros
+        ctx._fuertes_amplios = fuertes
+        ctx._claves_amplias = claves
         return list(candidatos.values())[:MAX_CANDIDATOS_JUEZ], claves
 
     @staticmethod
@@ -533,8 +556,14 @@ class Locales(Flujo):
           - de los POSIBLES (del grupo mayor) solo entran los que de verdad venden lo buscado.
         Solo puede elegir entre esos nombres: no puede agregar locales.
         """
+        claves = getattr(ctx, "_claves_amplias", None) or palabras_clave(busqueda)
+
         def fila(l: Local) -> str:
-            return f"- {l.nombre} | {l.rubro} | {', '.join(l.productos[:12])} | {l.descripcion[:140]}"
+            desc = l.descripcion or ""
+            d = normalizar(desc)
+            m = next((m for c in claves for m in [re.search(rf"\b{re.escape(c)}", d)] if m), None)
+            trozo = desc[max(0, m.start() - 70): m.start() + 90] if m and m.start() > 120 else desc[:160]
+            return f"- {l.nombre} | {l.rubro} | {', '.join(l.productos[:12])} | {trozo}"
         texto = (f"BUSCA: {busqueda}\n\nSEGUROS (se quedan salvo error claro):\n" + ("\n".join(map(fila, seguros)) or "(ninguno)")
                  + "\n\nPOSIBLES (entran solo si de verdad lo venden):\n" + ("\n".join(map(fila, posibles)) or "(ninguno)"))
         try:

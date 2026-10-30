@@ -930,7 +930,7 @@ def test_nunca_niega_lo_que_existe():
     L = Locales()
 
     async def juez(ctx, b, seg, pos):        # sin IA: el juez deja pasar todo lo que encontró el buscador
-        return pos
+        return seg + pos
     L._juez = juez
     ctx = lambda m: types.SimpleNamespace(db=db, mensaje=m, traza=_T())
     d = _correr(L._red_de_seguridad(ctx("hay algun local que vende seguros?"), "seguros", None))
@@ -954,6 +954,17 @@ def test_nunca_niega_lo_que_existe():
     L._juez = juez_falla
     d = _correr(L._lista(ctx("¿hay sucursal de Davivienda?"), {"categoria": "banco"}, "¿hay sucursal de Davivienda?", None))
     assert d.hechos.get("modo") != "ficha"
+    # «¿dónde pago el SOAT?»: Gopass dice «SOAT» en su descripción → entra seguro aunque el juez no lo agregue
+    async def juez_tacanio(ctx, b, seg, pos):
+        return seg
+    L._juez = juez_tacanio
+    if "Gopass" in nombres:
+        d = _correr(L._lista(ctx("¿dónde puedo pagar el SOAT?"), {"categoria": "seguros"}, "¿dónde puedo pagar el SOAT?", None))
+        assert "Gopass" in (d.meta.get("lista_equidad") or [d.hechos.get("local", {}).get("nombre")])
+    c2 = types.SimpleNamespace(db=db, traza=_T())
+    assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros.\n\nVe a la zona de *Entidades Financieras* y pregunta.").lower()
+    assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros. Está dentro del área de servicios financieros del mall.").lower()
+    assert quitar_rubros_como_lugar(c2, "Está en la Plazoleta de Comidas La Ceiba.") == "Está en la Plazoleta de Comidas La Ceiba."
     assert "pago" not in palabras_clave("donde pago el soat") and "soat" in palabras_clave("donde pago el soat")
     c = types.SimpleNamespace(db=db, traza=_T())
     t = quitar_rubros_como_lugar(c, "No tenemos sucursal.\n\nSi buscas, tienes la zona *Entidades Financieras y Cajeros*, con bancos.\n\n¿Algo más?")
