@@ -380,6 +380,36 @@ def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
     return re.sub(r"⟦U(\d+)⟧", lambda m: links[int(m.group(1))], t)
 
 
+_CAJERO_FALSO = re.compile(r"(?i)\bcajer\w*\b[^.!?\n]*\b(giro|giros|pagar|pago|pagos|soat|envi\w*|transfer\w*|recarg\w*|consign\w*)\b|"
+                           r"\b(giro|giros|pagar|pago|soat|envi\w*|transfer\w*|recarg\w*)\b[^.!?\n]*\bcajer\w*")
+_SIN_DATO = re.compile(r"(?i),?\s*(?:aunque|pero|y)?\s*(?:no tiene|no trae|sin)\s+(?:una\s+)?(?:zona|ubicaci[oó]n)\s+"
+                       r"(?:espec[ií]fica(?:da)?|indicada|registrada|definida)(?:\s+indicada)?")
+
+
+def quitar_afirmaciones_falsas(ctx: Contexto, t: str) -> str:
+    """Los cajeros solo sirven para retirar y consultar: «haz el giro / paga el SOAT en el cajero» es inventado.
+    Y «aunque no tiene zona especificada» habla de los datos, no del centro comercial."""
+    if _SIN_DATO.search(t):
+        ctx.traza.alerta("frase sobre un dato que falta («sin zona especificada»): se quitó")
+        t = _SIN_DATO.sub("", t)
+    if not _CAJERO_FALSO.search(t):
+        return t
+    ctx.traza.alerta("se le atribuía a los cajeros algo que no hacen (giros/pagos): se quitó la frase")
+    out = []
+    for linea in t.split("\n"):
+        frases = re.split(r"(?<=[.!?])\s+", linea)
+        buenas = [f for f in frases if not _CAJERO_FALSO.search(f)]
+        if len(buenas) < len(frases):
+            buenas = [f for f in buenas if re.search(r"[^\W_]", f)]
+            if not buenas:
+                continue
+        out.append(" ".join(buenas))
+    t = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    # «También el punto Paga Fácil…» quedó de primera frase tras quitar la anterior
+    t = re.sub(r"(^|\n\n|[!?.]\s+)(Tambi[eé]n|Adem[aá]s),?\s+(\w)", lambda m: m.group(1) + m.group(3).upper(), t, count=1)
+    return t
+
+
 _SALUDO_INICIAL = re.compile(r"^\s*¡?\s*(?:[Hh]ola|[Bb]uenas(?: tardes| noches)?|[Bb]uenos d[ií]as)\b\s*,?\s*"
                              r"(?:[A-ZÁÉÍÓÚÑ][\wáéíóúñ]*)?\s*[!¡.,]*\s*(?:[😊👋🙌]\s*)?")
 
@@ -411,6 +441,7 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
         t = re.sub(r":\s*\.", ":", t)
     t = formato_whatsapp(t)
     t = quitar_saludo_repetido(ctx, t)
+    t = quitar_afirmaciones_falsas(ctx, t)
     try:
         from ..flujos.locales import quitar_rubros_como_lugar
         t = quitar_rubros_como_lugar(ctx, t)       # «la zona de Entidades Financieras» (lo decía también servicios)

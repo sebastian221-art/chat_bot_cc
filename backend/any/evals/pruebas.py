@@ -965,6 +965,16 @@ def test_nunca_niega_lo_que_existe():
     assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros.\n\nVe a la zona de *Entidades Financieras* y pregunta.").lower()
     assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros. Está dentro del área de servicios financieros del mall.").lower()
     assert quitar_rubros_como_lugar(c2, "Está en la Plazoleta de Comidas La Ceiba.") == "Está en la Plazoleta de Comidas La Ceiba."
+    # trazas 30/10 1:30 am: «haz el giro en los cajeros», «paga el SOAT en el cajero», «sin zona especificada»,
+    # y una lista que abría con «No hay un punto para pagar el SOAT»
+    from any.nucleo.guardias import quitar_afirmaciones_falsas
+    from any.flujos.locales import no_negar_lo_que_hay
+    t = quitar_afirmaciones_falsas(c2, "¡Mira! Para hacer un giro puedes usar los cajeros del Paseo de la Cruz.\n\n"
+                                       "También el punto *Paga Fácil* hace envíos de dinero aunque no tiene zona especificada.")
+    assert "cajero" not in t and "zona especificada" not in t and t.split("\n\n")[-1].startswith("El punto *Paga Fácil*")
+    assert "cajeros" in quitar_afirmaciones_falsas(c2, "Hay 3 cajeros: Davivienda, Banco de Bogotá y Bancolombia.")
+    t = no_negar_lo_que_hay(c2, "¡Mira! No hay un punto para el SOAT, pero ve a la Torre.\n\n• *GOPASS* — Zona Terrazas")
+    assert "No hay" not in t and "*GOPASS*" in t
     assert "pago" not in palabras_clave("donde pago el soat") and "soat" in palabras_clave("donde pago el soat")
     c = types.SimpleNamespace(db=db, traza=_T())
     t = quitar_rubros_como_lugar(c, "No tenemos sucursal.\n\nSi buscas, tienes la zona *Entidades Financieras y Cajeros*, con bancos.\n\n¿Algo más?")

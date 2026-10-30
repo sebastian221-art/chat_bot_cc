@@ -65,6 +65,24 @@ def quitar_rubros_como_lugar(ctx, texto: str) -> str:
     return texto
 
 
+_NEGACION = re.compile(r"(?i)\b(no hay|no tenemos|no contamos|no tengo registrad\w*|no existe|no encontr\w*)\b")
+
+
+def no_negar_lo_que_hay(ctx, texto: str) -> str:
+    """Si hay lista, la respuesta no puede abrir con «No hay un punto para el SOAT, pero…»: se cambia esa
+    frase por una entrada positiva."""
+    lineas = texto.split("\n")
+    for i, linea in enumerate(lineas[:3]):
+        frases = re.split(r"(?<=[.!?])\s+", linea)
+        for j, f in enumerate(frases):
+            if _NEGACION.search(f) and "{" not in f:
+                frases[j] = "Te cuento dónde te pueden ayudar con eso:"
+                lineas[i] = " ".join(frases)
+                ctx.traza.alerta("la respuesta abría negando algo que sí está en la lista: se cambió la frase")
+                return "\n".join(lineas)
+    return texto
+
+
 _AMBIGUAS = {"segur", "segura", "seguro"}
 
 _NO_CLAVE = set("""
@@ -593,6 +611,8 @@ class Locales(Flujo):
 
     def componer(self, ctx: Contexto, datos: Datos, texto: str) -> str:
         texto = quitar_rubros_como_lugar(ctx, texto)
+        if datos.hechos.get("modo") in ("lista", "info_relacionada"):
+            texto = no_negar_lo_que_hay(ctx, texto)
         lista = datos.meta.get("lista")
         if not lista:
             return texto
