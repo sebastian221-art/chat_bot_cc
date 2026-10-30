@@ -1,5 +1,5 @@
 # 📄 ARCHIVO: backend/requirements.txt  ← REEMPLAZA EL TUYO
-# CAMBIOS: fuera langchain y alembic (nadie los usa); PyYAML ahora explícito
+# CAMBIOS: añadidos PyJWT y bcrypt para el sistema de auth
 
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
@@ -7,10 +7,14 @@ python-multipart==0.0.9
 
 # Base de datos
 sqlalchemy==2.0.35
+alembic==1.13.3
 pg8000==1.31.2   # driver Postgres 100% Python, sin dependencias nativas (evita error libpq.so.5 en Railway)
 
 # AI / LLM
 groq==0.11.0
+langchain==0.3.3
+langchain-community==0.3.2
+langchain-groq==0.2.1
 chromadb==0.5.15
 
 # WhatsApp
@@ -18,7 +22,6 @@ httpx==0.27.2
 
 # Config
 python-dotenv==1.0.1
-PyYAML>=6.0.2    # lo usa Any 2.0 (datos/*.yaml); antes llegaba escondido dentro de langchain
 pydantic-settings==2.5.2
 
 # Auth  ← NUEVOS
