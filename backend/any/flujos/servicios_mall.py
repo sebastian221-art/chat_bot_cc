@@ -16,7 +16,7 @@ from .base import Datos, Flujo
 
 _PIDE_FINANCIERO = re.compile(r"\bbanc|\bcajer|financ|sucursal|davivienda|bancolombia|banco de bogota|nequi|daviplata|efecty|cooperativ|corresponsal|credito|prestamo|consignar|consignacion|"
                               r"retirar plata|retiro de dinero|giros?\b|envio de dinero|pagar (?:recibos|facturas)")
-_ES_FINANCIERO = re.compile(r"entidades financieras|cooperativa|corresponsal|bancari|\bbanco\b|ahorro y credito")
+_ES_FINANCIERO = re.compile(r"entidades financieras|servicios financieros|cooperativa|corresponsal|bancari|\bbanco\b|ahorro y credito")
 
 
 def entidades_financieras(db) -> list[dict]:

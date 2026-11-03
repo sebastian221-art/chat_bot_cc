@@ -14,7 +14,7 @@ Cómo se usa:
      En "revisado" escribir "sí" cuando el registro quedó confirmado.
      Para apagar un registro, poner "no" en "activo".
   3. Subir el archivo. Solo se cambian las celdas distintas a lo que hay en la base.
-     No se crean ni se borran registros: los nuevos se crean en el panel.
+     No se borran registros. Para CREAR uno nuevo, escribe «nuevo» en la columna id y llena la fila.
 
 El Instagram de un local no tiene campo propio en la base: Any lo lee del link de la carta o de
 la descripción. Si se cambia en la planilla, se escribe en la descripción ("Instagram: …").
@@ -136,6 +136,48 @@ def _a_valor(campo: str, v, actual):
     return str(v).strip()
 
 
+# Lo mínimo que pide la base para crear un registro nuevo desde la planilla (fila con id «nuevo»)
+_OBLIGATORIOS = {
+    "Locales": {"name": "nombre", "category": None, "floor": None},
+    "Eventos": {"name": "nombre", "date": "fecha (dd/mm/aaaa)", "location": "lugar"},
+    "Sorteos": {"name": "nombre"},
+    "Promociones": {"title": "título"},
+    "Conocimiento": {"title": "título", "content": "contenido"},
+}
+_POR_DEFECTO = {"category": "Local Comercial", "floor": "", "priority": 3, "active": True}
+
+
+def _crear(db: Session, hoja: str, modelo, cols, pos, fila, errores: list, n: int):
+    """Fila con id «nuevo»: se crea el registro con lo obligatorio; el resto de columnas se aplica después
+    como cualquier otra fila. Si ya existe uno con el mismo nombre/título, no se duplica."""
+    if hoja not in _OBLIGATORIOS:
+        errores.append(f"{hoja} fila {n}: en esta hoja no se pueden crear registros")
+        return None
+    datos = {}
+    for campo, titulo in _OBLIGATORIOS[hoja].items():
+        v = fila[pos[titulo]] if titulo and titulo in pos and pos[titulo] < len(fila) else None
+        v = _a_valor(campo, v, None) if v not in (None, "") else None
+        if v in (None, ""):
+            if titulo:
+                errores.append(f"{hoja} fila {n}: para crear el registro falta «{titulo}»")
+                return None
+            v = _POR_DEFECTO.get(campo, "")
+        datos[campo] = v
+    clave = "name" if "name" in datos else "title"
+    from sqlalchemy import func
+    ya = db.query(modelo).filter(func.lower(getattr(modelo, clave)) == str(datos[clave]).lower()).first()
+    if ya:
+        errores.append(f"{hoja} fila {n}: ya existe «{datos[clave]}» (id {ya.id}); no se creó otro")
+        return None
+    for campo, v in _POR_DEFECTO.items():
+        if hasattr(modelo, campo) and campo not in datos:
+            datos[campo] = v
+    obj = modelo(**{k: v for k, v in datos.items() if hasattr(modelo, k)})
+    db.add(obj)
+    db.flush()          # ya tiene id para el resto de la fila
+    return obj
+
+
 def construir(db: Session) -> bytes:
     from openpyxl import Workbook
     from openpyxl.comments import Comment
@@ -168,10 +210,11 @@ def construir(db: Session) -> bytes:
         ["3. Cuando un registro quede confirmado, escribe «sí» en la columna «revisado»."],
         ["4. Para apagar un registro (duplicado, cerrado, mal importado) pon «no» en «activo»."],
         ["5. Sube el archivo en el panel con «Importar verificación». Solo se aplica lo que cambió."],
-        [], ["No borres filas ni cambies los id. Los registros nuevos se crean desde el panel."],
+        [], ["No borres filas ni cambies los id. Para crear un registro nuevo escribe «nuevo» en la columna id."],
         ["Zonas válidas: Pasillo Barichara, Pasillo Vélez, Pasillo Socorro, Pasillo Charalá, Pasillo Páramo, "
-         "Pasillo Curití, Plaza Principal, Zona Terrazas, Plazoleta de Comidas La Ceiba, Paseo de la Cruz, "
-         "Torre Médica, Oficinas Administrativas."],
+         "Pasillo Curití, Pasillo Pinchote, Plaza Principal, Zona Terrazas, Plazoleta de Comidas La Ceiba, "
+         "Plazoleta Guanentá, Paseo de la Cruz, Paseo San Gil, Paseo Chicamocha, Dunas Club Bar, "
+         "Lobby Torre Empresarial, Zona de Parqueaderos, Torre Médica, Oficinas Administrativas."],
         ["Fechas siempre en número: 31/10/2026. Teléfonos: el celular de 10 dígitos (para el link de WhatsApp)."],
     ]:
         ws.append(fila)
@@ -253,10 +296,20 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
             id_ = fila[pos["id"]] if pos["id"] < len(fila) else None
             if id_ in (None, ""):
                 continue
-            obj = db.get(modelo, int(id_))
-            if not obj:
-                errores.append(f"{hoja} fila {n}: no existe el id {id_}")
-                continue
+            if str(id_).strip().lower() == "nuevo":
+                obj = _crear(db, hoja, modelo, cols, pos, fila, errores, n)
+                if not obj:
+                    continue
+                cambios.append(f"{hoja} · nuevo · «{getattr(obj, 'name', None) or getattr(obj, 'title', '')}»")
+            else:
+                try:
+                    obj = db.get(modelo, int(float(id_)))
+                except (TypeError, ValueError):
+                    errores.append(f"{hoja} fila {n}: el id «{id_}» no es un número ni «nuevo»")
+                    continue
+                if not obj:
+                    errores.append(f"{hoja} fila {n}: no existe el id {id_}")
+                    continue
             for titulo, campo, editable, _ in cols:
                 if not editable or titulo not in pos or pos[titulo] >= len(fila):
                     continue
@@ -272,6 +325,8 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                         desc = _IG.sub("", obj.description or "").strip()
                         desc = re.sub(r"(?i)\s*\|?\s*instagram:\s*$", "", desc)
                         obj.description = (desc + f" | Instagram: {nuevo_ig}").strip(" |")
+                        if _IG.search(obj.catalogo_link or ""):
+                            obj.catalogo_link = None    # un Instagram viejo ahí tapaba el nuevo (y no es una carta)
                         cambios.append(f"{hoja} · {obj.id} · instagram → {nuevo_ig}")
                     continue
                 actual = getattr(obj, campo, None)

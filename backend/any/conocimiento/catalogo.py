@@ -24,7 +24,8 @@ from .texto import link_whatsapp, normalizar, raices, telefono_fijo
 ZONAS_OFICIALES = [
     "Pasillo Barichara", "Pasillo Vélez", "Pasillo Socorro", "Pasillo Charalá", "Pasillo Páramo",
     "Pasillo Curití", "Plaza Principal", "Zona Terrazas", "Plazoleta de Comidas La Ceiba", "Paseo de la Cruz",
-    "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar",
+    "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar", "Pasillo Pinchote", "Plazoleta Guanentá",
+    "Lobby Torre Empresarial", "Zona de Parqueaderos",
 ]
 TAGS_GENERICOS = {"torre medica", "consultorio", "oficina", "salud", "administracion", "servicios", "mall", "cine"}
 CATEGORIAS_TORRE = {"torre medica y empresarial"}
@@ -93,6 +94,10 @@ CATEGORIAS_COMPUESTAS = {normalizar(c) for c in [
     "Calzado, Marroquinería y Accesorios", "Cafés, Repostería y Heladerías", "Vehículos, Concesionarios y Accesorios",
     "Hogar, Decoración y Colchones", "Droguerías, Salud y Ópticas", "Entretenimiento, Cines y Juegos",
     "Belleza, Cosméticos y Peluquerías", "Tecnología, Audio y Telecomunicaciones",
+    # categorías nuevas de la base del centro comercial (nov. 2026)
+    "Cafetería, heladería y postres", "Droguería, óptica y ortopedia", "Hogar, colchones y decoración",
+    "Regalos, juguetes y artesanías", "Vehículos, motos y servicios automotrices", "Calzado y marroquinería",
+    "Calzado y ropa deportiva", "Servicios financieros y trámites",
 ]}
 
 
