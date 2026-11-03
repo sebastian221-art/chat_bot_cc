@@ -71,6 +71,18 @@ class Cine(Flujo):
             hechos["nota_tarifas"] = "precios de compra en la web; en taquilla pueden variar"
         if "confiteria" in temas:
             hechos["confiteria"] = cd.confiteria(db) or "no tengo la confitería cargada"
+        # Promociones del cine cargadas en el panel (2x1…): antes decía «no hay promociones» y el «De paso» sí la traía
+        try:
+            from .sorteos_promos import ficha_promo, promos_vigentes
+            from ..conocimiento.texto import normalizar as _n
+            cine = hechos.get("cine", {}).get("nombre", "")
+            promos = [ficha_promo(db, m) for m in promos_vigentes(db, ctx.ahora.date())
+                      if re.search(r"\bcine|cinelandia|pelicula", _n(f"{m.title} {m.description or ''}"))
+                      or (cine and ficha_promo(db, m).get("local") == cine)]
+            if promos:
+                hechos["promociones_del_cine"] = promos
+        except Exception:
+            pass
         return datos
 
     def respaldo(self, ctx, datos):

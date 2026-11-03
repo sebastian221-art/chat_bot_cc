@@ -115,10 +115,14 @@ def _rubro_y_productos(tags: str, nombre: str) -> tuple[str, list[str]]:
     rubro = partes[0] if normalizar(partes[0]) not in TAGS_GENERICOS else ""
     resto = partes[1:] if rubro else partes
     productos, vistos = [], set()
+    pal_nom = set(re.findall(r"[a-z0-9ñ]+", nom))
     for p in resto:
         n = normalizar(p)
         if n == nom or n in TAGS_GENERICOS or n in vistos:
             continue
+        pal_p = set(re.findall(r"[a-z0-9ñ]+", n))
+        if pal_p and pal_p <= pal_nom:
+            continue          # «Eden Vivero», «Vivero Eden» solo repiten el nombre: no es lo que vende
         vistos.add(n)
         productos.append(p)
     return rubro, productos

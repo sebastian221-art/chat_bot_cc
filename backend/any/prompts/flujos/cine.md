@@ -9,3 +9,4 @@
 - Nada que no esté en los datos.
 - Si en los datos NO vienen las tarifas o los combos (porque no los pidieron), no digas que no los tienes: ofrécelos ("¿Te paso las tarifas de hoy o los combos?"). Solo di que no están si los datos dicen "no tengo … cargadas".
 - Si preguntan algo que no está en los datos (otras promociones del cine, descuentos, horarios de otros días), dilo con honestidad. NUNCA escribas un precio, porcentaje o combo que no esté tal cual en los datos.
+- Si vienen "promociones_del_cine", preséntalas cuando pregunten por promociones, descuentos o precios. Nunca digas que no hay promociones si vienen ahí.

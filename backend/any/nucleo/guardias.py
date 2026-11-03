@@ -244,7 +244,7 @@ def _telefonos_validos(respuesta: Respuesta, ctx: Contexto) -> set[str]:
     return validos
 
 
-PASILLOS = ["Barichara", "Vélez", "Socorro", "Charalá", "Páramo", "Curití"]
+PASILLOS = ["Barichara", "Vélez", "Socorro", "Charalá", "Páramo", "Curití", "Pinchote"]
 
 
 def _corregir_pasillos(ctx: Contexto, t: str) -> str:
@@ -268,7 +268,8 @@ def _corregir_pasillos(ctx: Contexto, t: str) -> str:
 
 NOMBRES_FIJOS = {"Punto de Información", "Torre Médica", "Plazoleta de Comidas La Ceiba", "Plaza Principal",
                  "Zona Terrazas", "Paseo de la Cruz", "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar",
-                 "Cinelandia Múltiplex"}
+                 "Cinelandia Múltiplex", "Pasillo Pinchote", "Plazoleta Guanentá", "Lobby Torre Empresarial",
+                 "Zona de Parqueaderos"}
 CLAVES_NOMBRES = {"nombre", "lugar", "zona", "titulo", "local", "location", "donde_registrar"}
 
 
