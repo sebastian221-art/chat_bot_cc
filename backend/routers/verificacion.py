@@ -280,6 +280,9 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(400, f"No se pudo leer el Excel: {str(e)[:200]}")
     cambios, revisados, errores = [], 0, []
+    # Planilla en «modo solo cambios» (la arma el soporte con lo que llega del centro comercial): una celda
+    # vacía no borra nada, solo se aplica lo escrito. Así no se pisan cambios hechos en el panel entre tanto.
+    solo_cambios = "Cómo usar" in wb.sheetnames and "SOLO CAMBIOS" in str(wb["Cómo usar"]["A1"].value or "").upper()
     for hoja, (modelo, cols) in _modelos().items():
         if hoja not in wb.sheetnames:
             continue
@@ -314,6 +317,8 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                 if not editable or titulo not in pos or pos[titulo] >= len(fila):
                     continue
                 nuevo = fila[pos[titulo]]
+                if solo_cambios and (nuevo is None or str(nuevo).strip() == ""):
+                    continue
                 if campo == "@revisado":
                     revisados += str(nuevo or "").strip().lower() in ("sí", "si", "x", "ok")
                     continue
