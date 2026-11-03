@@ -982,6 +982,26 @@ def test_nunca_niega_lo_que_existe():
         assert "Entidades Financieras" not in t and "¿Algo más?" in t
 
 
+
+def test_servicio_que_en_realidad_es_un_local():
+    """03/11: «¿Hay discoteca?» → el modelo lo mandó a servicios del mall y Any dijo que no había (y está IBIZA)."""
+    import types
+    from any.nucleo.router import _corregir_servicio_que_es_local
+    from any.nucleo.tipos import Decision
+    from any.conocimiento.catalogo import locales
+    db = _db()
+
+    class _T:
+        def alerta(self, *_): pass
+    ir = lambda m: _corregir_servicio_que_es_local(types.SimpleNamespace(db=db, mensaje=m, traza=_T()),
+                                                   Decision("servicios_mall", {}, False, m, "x", "ia")).flujo
+    if any(l.nombre == "Ibiza Social Club" for l in locales(db)):
+        assert ir("¿Hay discoteca?") == "locales"
+    for m in ("¿hay wifi?", "¿hay cajeros?", "¿hay baños?", "¿dónde queda el parqueadero?", "¿hay enfermería?",
+              "¿dónde puedo dejar mi bicicleta?", "¿se puede entrar con mascota?"):
+        assert ir(m) == "servicios_mall", m
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

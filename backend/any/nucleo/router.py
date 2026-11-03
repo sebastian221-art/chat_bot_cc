@@ -169,10 +169,37 @@ async def decidir(ctx: Contexto) -> Decision:
 
     # 3. Router IA
     try:
-        return await _router_ia(ctx)
+        d = await _router_ia(ctx)
+        return _corregir_servicio_que_es_local(ctx, d)
     except ErrorLLM as e:
         ctx.traza.alerta(f"router IA falló: {e}")
         return Decision(RESPALDO, {}, False, ctx.mensaje, "respaldo: el router IA falló", "respaldo")
+
+
+def _corregir_servicio_que_es_local(ctx: Contexto, d: Decision) -> Decision:
+    """«¿Hay discoteca?» → el modelo lo mandó a servicios del centro comercial («instalación del mall») y Any dijo
+    que no había, cuando IBIZA SOCIAL CLUB sí está. Si lo pedido no es un servicio del mall (baños, wifi,
+    parqueadero…) pero sí lo ofrece un local, va a locales."""
+    if d.flujo != "servicios_mall":
+        return d
+    try:
+        from ..conocimiento.buscador import buscar_locales, conceptos
+        texto = f"{ctx.mensaje} {d.consulta or ''}"
+        if any(c.grupo for c in conceptos(ctx.mensaje, "servicios")) or regla_salon_eventos(ctx.mensaje):
+            return d
+        if re.search(r"banc|cajer|financ|giro|corresponsal|sucursal|davivienda|bancolombia|horario|hora|abren|"
+                     r"cierran|direccion|ubicad|como llego|parque|wifi|bano|mascota|bono|auditorio|salon|biciclet|ascensor|"
+                     r"escalera|casillero|enfermer|primeros auxilios|silla de ruedas|lactancia|sanitario|dejar mi",
+                     normalizar(texto)):
+            return d
+        fuertes = [r for r in buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True) if r.fuertes]
+        if fuertes:
+            ctx.traza.alerta(f"el modelo lo mandó a servicios, pero lo ofrece un local ({fuertes[0].local.nombre}): va a locales")
+            ent = {k: v for k, v in d.entidades.items() if k != "servicio"}
+            return Decision("locales", ent, d.es_seguimiento, d.consulta, d.razon + " → locales (lo ofrece un local)", d.metodo)
+    except Exception:
+        return d
+    return d
 
 
 def _historial_corto(ctx: Contexto, n: int = 6) -> str:
