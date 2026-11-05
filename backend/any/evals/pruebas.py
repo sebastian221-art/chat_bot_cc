@@ -157,7 +157,8 @@ def test_queja_a_la_gerencia_no_es_emergencia():
         db = _db(); mensaje = "quiero poner una queja a la gerencia"; telefono = "prueba-queja-g"
         decision = Decision("emergencia_queja", {"tipo": "queja"}, False, mensaje, "x", "regla"); traza = Traza("x", "x", "prueba")
     d = asyncio.run(FLUJOS["emergencia_queja"].reunir(_C))
-    assert d.hechos["tipo_detectado"] == "queja" and d.hechos["area_que_atiende"]["telefono"] == "3166194089"
+    assert d.hechos["tipo_detectado"] == "queja" and "telefono" not in d.hechos["area_que_atiende"] \
+        and d.hechos["area_que_atiende"]["correo"] == "gerencia@elpuente.com.co"   # sin número (05/11)
 
 
 def test_fijo_no_tiene_whatsapp():
@@ -1000,6 +1001,29 @@ def test_servicio_que_en_realidad_es_un_local():
     for m in ("¿hay wifi?", "¿hay cajeros?", "¿hay baños?", "¿dónde queda el parqueadero?", "¿hay enfermería?",
               "¿dónde puedo dejar mi bicicleta?", "¿se puede entrar con mascota?"):
         assert ir(m) == "servicios_mall", m
+
+
+
+def test_ajustes_05_11():
+    """05/11: la gerente no da su número; correos solo @elpuente.com.co; Instagram solo perfiles;
+    «años en el mercado» no hace supermercado a un colchón."""
+    import types
+    from any.conocimiento.areas import areas, ficha_area, area_para
+    from any.nucleo.guardias import quitar_numeros_privados
+    from any.flujos.locales import instagram_de
+    g = ficha_area(area_para("quiero hablar con la gerente"))
+    assert "telefono" not in g and "whatsapp" not in g and "como_contactar" in g
+    assert all("ccelpuente" not in str(a) for a in areas())
+
+    class _T:
+        def alerta(self, *_): pass
+    t = quitar_numeros_privados(types.SimpleNamespace(traza=_T()), "La gerente es Delis.\nTeléfono: 316 619 4089\nCorreo: gerencia@elpuente.com.co")
+    assert "4089" not in t and "gerencia@" in t
+    loc = lambda link, desc="": types.SimpleNamespace(carta_link=link, descripcion=desc)
+    assert instagram_de(loc("https://www.instagram.com/reels/DJ-bjyXsJlF/")) is None
+    assert instagram_de(loc("", "x | Instagram: https://www.instagram.com/popular/tienda-jumbo-san-gil/")) is None
+    assert instagram_de(loc("https://www.instagram.com/reel/abc/", "Instagram: https://www.instagram.com/oxfordjeans/")) == \
+        "https://www.instagram.com/oxfordjeans/"
 
 
 # ── Mini corredor ─────────────────────────────────────────────────

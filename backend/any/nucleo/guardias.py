@@ -387,6 +387,17 @@ _SIN_DATO = re.compile(r"(?i),?\s*(?:aunque|pero|y)?\s*(?:no tiene|no trae|sin)\
                        r"(?:espec[ií]fica(?:da)?|indicada|registrada|definida)(?:\s+indicada)?")
 
 
+NUMEROS_PRIVADOS = {"3166194089"}      # la gerente pidió que no se dé su número (05/11/2026)
+
+
+def quitar_numeros_privados(ctx: Contexto, t: str) -> str:
+    if not any(n in re.sub(r"\D", "", t) for n in NUMEROS_PRIVADOS):
+        return t
+    ctx.traza.alerta("número privado (gerencia) en la respuesta: se quitó")
+    lineas = [l for l in t.split("\n") if not any(n in re.sub(r"\D", "", l) for n in NUMEROS_PRIVADOS)]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()
+
+
 def quitar_afirmaciones_falsas(ctx: Contexto, t: str) -> str:
     """Los cajeros solo sirven para retirar y consultar: «haz el giro / paga el SOAT en el cajero» es inventado.
     Y «aunque no tiene zona especificada» habla de los datos, no del centro comercial."""
@@ -443,6 +454,7 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = formato_whatsapp(t)
     t = quitar_saludo_repetido(ctx, t)
     t = quitar_afirmaciones_falsas(ctx, t)
+    t = quitar_numeros_privados(ctx, t)
     try:
         from ..flujos.locales import quitar_rubros_como_lugar
         t = quitar_rubros_como_lugar(ctx, t)       # «la zona de Entidades Financieras» (lo decía también servicios)

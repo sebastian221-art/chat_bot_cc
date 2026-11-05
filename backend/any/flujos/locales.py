@@ -23,6 +23,7 @@ import re
 from ..config import cfg
 from ..conocimiento.buscador import (buscar_locales, conceptos, encontrar_local, seleccionar_relevantes,
                                      PALABRAS_DE_PEDIDO)
+from .torre_medica import busca_salud
 from ..conocimiento.catalogo import Local, locales, locales_por_numero, numero_en_texto
 from ..conocimiento.texto import normalizar, palabras
 from ..llm import completar
@@ -83,7 +84,7 @@ def no_negar_lo_que_hay(ctx, texto: str) -> str:
     return texto
 
 
-_AMBIGUAS = {"segur", "segura", "seguro"}
+_AMBIGUAS = {"segur", "segura", "seguro", "mercad", "mercado", "merc", "viver", "comid", "ropa", "tienda"}
 
 _NO_CLAVE = set("""
 local locales tienda tiendas almacen almacenes negocio negocios centro comercial mall puente donde queda quedan
@@ -156,10 +157,13 @@ def que_pide(entidad: str | None, mensaje: str) -> str | None:
 
 
 def instagram_de(loc: Local) -> str | None:
+    """El perfil de Instagram del local. Un link a un reel, una publicación o una página «popular» no es el
+    perfil (Colchones Spring, Jumbo): no se manda."""
     for texto in (loc.carta_link or "", loc.descripcion or ""):
-        m = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/[A-Za-z0-9_.\-/?=&]+", texto)
-        if m:
+        for m in re.finditer(r"(?:https?://)?(?:www\.)?instagram\.com/[A-Za-z0-9_.\-/?=&%]+", texto):
             url = m.group(0).rstrip(".,)").split("?")[0]          # sin ?hl=es ni rastreadores
+            if re.search(r"instagram\.com/(p|reel|reels|stories|popular|explore|tv)/", url):
+                continue
             return url if url.startswith("http") else "https://" + url
     return None
 
@@ -366,6 +370,10 @@ class Locales(Flujo):
         mejor_local = max((len(r.fuertes) for r in res if r.fuertes), default=0)
         if mejor_torre > mejor_local:
             res = con_torre
+        elif mejor_torre and mejor_torre == mejor_local and not busca_salud(f"{ctx.mensaje} {termino}"):
+            # empate: un local y una oficina de la Torre ofrecen lo mismo («seguros» → Gopass y EPS Sura): van los dos
+            ids = {r.local.id for r in res}
+            res = res + [r for r in con_torre if r.local.es_torre and len(r.fuertes) == mejor_torre and r.local.id not in ids]
 
         # "¿De qué locales tienes Instagram / carta?" sin decir de qué tipo
         if pide in ("carta", "instagram") and not conceptos(_quita_pedido(ctx.mensaje), "locales"):
