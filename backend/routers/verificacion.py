@@ -14,7 +14,8 @@ Cómo se usa:
      En "revisado" escribir "sí" cuando el registro quedó confirmado.
      Para apagar un registro, poner "no" en "activo".
   3. Subir el archivo. Solo se cambian las celdas distintas a lo que hay en la base.
-     No se borran registros. Para CREAR uno nuevo, escribe «nuevo» en la columna id y llena la fila.
+     Para CREAR uno nuevo, escribe «nuevo» en la columna id y llena la fila. Para BORRAR un evento, sorteo,
+     promoción o dato de conocimiento, agrega una columna «borrar» y escribe «sí» en esa fila.
 
 El Instagram de un local no tiene campo propio en la base: Any lo lee del link de la carta o de
 la descripción. Si se cambia en la planilla, se escribe en la descripción ("Instagram: …").
@@ -292,6 +293,8 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
             continue
         cab = [str(c or "").strip() for c in filas[0]]
         pos = {titulo: cab.index(titulo) for titulo, *_ in cols if titulo in cab}
+        if "borrar" in cab:
+            pos["borrar"] = cab.index("borrar")
         if "id" not in pos:
             errores.append(f"{hoja}: falta la columna id")
             continue
@@ -312,6 +315,18 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                     continue
                 if not obj:
                     errores.append(f"{hoja} fila {n}: no existe el id {id_}")
+                    continue
+                # Columna «borrar» (sí): elimina el registro. Solo eventos, sorteos, promociones y conocimiento;
+                # los locales se apagan con «activo = no» (tienen fotos, conversaciones y pedidos asociados).
+                if "borrar" in pos and pos["borrar"] < len(fila) and \
+                        str(fila[pos["borrar"]] or "").strip().lower() in ("sí", "si", "x"):
+                    if hoja == "Locales":
+                        errores.append(f"{hoja} fila {n}: los locales no se borran; usa «activo = no»")
+                        continue
+                    nombre_ = getattr(obj, "name", None) or getattr(obj, "title", "")
+                    db.delete(obj)
+                    db.flush()      # así un «nuevo» con el mismo nombre (Cheers Runners de noviembre) sí se crea
+                    cambios.append(f"{hoja} · {id_} · BORRADO «{nombre_}»")
                     continue
             for titulo, campo, editable, _ in cols:
                 if not editable or titulo not in pos or pos[titulo] >= len(fila):
