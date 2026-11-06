@@ -91,7 +91,8 @@ local locales tienda tiendas almacen almacenes negocio negocios centro comercial
 venden vende vendan venta comprar compro consigo encuentro conseguir alguna alguno algun hay tienen tiene tienes
 quiero necesito busco buscando sucursal sucursales oficina oficinas informacion sobre hablame cuentame dame
 favor gracias hola buenas buenos tardes noches dias cual cuales donde porque como cuando ustedes ellos para
-pago pagos pagar hacer hago puedo pueden podria servicio servicios cliente clientes precio precios abierto abren cierran horario
+pago pagos pagar hacer hago puedo pueden podria servicio servicios ubicado ubicada ubicados encuentra
+encuentran queda quedan pasillo cliente clientes precio precios abierto abren cierran horario
 """.split())
 
 
@@ -265,9 +266,50 @@ class Locales(Flujo):
         loc = self._local_nombrado(ctx, ent, consulta, pide)
         if loc:
             return self._ficha(loc, pide)
+        nombrado = ent.get("local")
+        if isinstance(nombrado, list):
+            nombrado = nombrado[0] if len(nombrado) == 1 else None
+        if nombrado and not ent.get("categoria") and not conceptos(str(nombrado), "locales") or \
+                (nombrado and pide in ("ubicacion", "telefono", "horario", "instagram")):
+            # Nombró un local que no existe tal cual («Polito»): antes se buscaba la pregunta entera y salían
+            # 33 locales. Si hay un nombre parecido («Pololos») se da esa ficha preguntando si es ese.
+            parecido = self._nombre_parecido(ctx.db, str(nombrado))
+            if parecido:
+                datos = self._ficha(parecido, pide)
+                datos.hechos["nota"] = (f"El cliente escribió «{nombrado}», que no está tal cual. Lo más parecido es "
+                                        f"{parecido.nombre}: dilo así («¿Te refieres a {parecido.nombre}?») y da sus datos.")
+                ctx.traza.paso("nombre_parecido", {"escribio": nombrado, "es": parecido.nombre})
+                return datos
+            if not any(r.fuertes or r.nombre_exacto for r in buscar_locales(ctx.db, str(nombrado), incluir_torre=True)):
+                consulta = str(nombrado)       # se busca SOLO el nombre, no «en qué pasillo está ubicado…»
         if getattr(ctx, "buscar_lo_que_escribio", False):
             consulta, ent = ctx.mensaje, {k: v for k, v in ent.items() if k != "local"}
         return await self._lista(ctx, ent, consulta, pide)
+
+    @staticmethod
+    def _nombre_parecido(db, nombre: str):
+        """«Polito» → POLOLOS, «Zirus» ya lo encuentra el buscador. Solo nombres muy parecidos."""
+        import difflib
+        n = re.sub(r"[^a-z0-9ñ ]", "", normalizar(nombre)).strip()
+        if len(n) < 4:
+            return None
+        todos = locales(db, incluir_torre=True)
+        nombres = {re.sub(r"[^a-z0-9ñ ]", "", normalizar(l.nombre)).strip(): l for l in todos}
+        cerca = difflib.get_close_matches(n, list(nombres), n=2, cutoff=0.72)
+        if not cerca:   # «Polito» → «pololos»: un poco menos parecido, pero empieza igual
+            cerca = [c for c in difflib.get_close_matches(n, list(nombres), n=2, cutoff=0.6) if c[:3] == n[:3]][:1]
+        if not cerca:
+            # contra la primera palabra del nombre («Pololos Kids» → «pololos»)
+            primeras = {}
+            for k, l in nombres.items():
+                if k.split():
+                    primeras.setdefault(k.split()[0], l)
+            cerca2 = difflib.get_close_matches(n.split()[0], [p for p in primeras if len(p) >= 4], n=1, cutoff=0.75)
+            return primeras[cerca2[0]] if cerca2 else None
+        if len(cerca) == 2 and difflib.SequenceMatcher(None, n, cerca[0]).ratio() - \
+                difflib.SequenceMatcher(None, n, cerca[1]).ratio() < 0.05:
+            return None                       # dos igual de parecidos: no adivinar
+        return nombres[cerca[0]]
 
     def _local_nombrado(self, ctx: Contexto, ent: dict, consulta: str, pide: str | None) -> Local | None:
         db = ctx.db

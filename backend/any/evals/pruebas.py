@@ -1026,6 +1026,19 @@ def test_ajustes_05_11():
         "https://www.instagram.com/oxfordjeans/"
 
 
+
+def test_nombre_parecido():
+    """05/11: «¿en qué pasillo está Polito?» listaba 33 locales; es POLOLOS."""
+    from any.flujos.locales import Locales
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    nombres = {l.nombre for l in locales(db)}
+    if "Pololos" in nombres:
+        assert Locales._nombre_parecido(db, "Polito").nombre == "Pololos"
+    for n in ("Odonto Vital", "Davivienda", "Helicopteros", "Pizza"):
+        assert Locales._nombre_parecido(db, n) is None, n
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():
