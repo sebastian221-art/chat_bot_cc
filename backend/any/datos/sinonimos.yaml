@@ -26,7 +26,9 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
-  lavadero: [lavadero, lavaderos, lavar, lavo, lavan, lavado, lavada, lavautos, autolavado, car wash, carwash, lavar el carro, lavar la moto, lavar mi carro, lavar mi moto, limpieza de carro, limpieza de carros, limpieza de vehiculos, limpieza de vehículos]
+  # Solo lo que es lavar CARROS/MOTOS. «lavar», «lavado» o «autolavado» solos no: King Helmets lava cascos y Gopass
+  # dice «autolavados» (pago por la app), y salían como lavaderos.
+  lavadero: [lavadero, lavaderos, lavautos, car wash, carwash, lavadero de carros, lavadero de motos, lavadero de carro, lavo el carro, lavo mi carro, lavo la moto, lavo mi moto, lavan carros, lavar el carro, lavar mi carro, lavar carro, lavar carros, lavar la moto, lavar mi moto, lavar moto, lavado de carros, lavado de carro, lavado de motos, lavado de moto, lavado de vehiculos, lavada del carro, limpieza de carros, limpieza de vehiculos]
   seguros: [seguros, aseguradora, aseguradoras, poliza, polizas, soat, sura, mapfre, allianz, positiva, previsora, colpatria]
   textil_hogar: [cobija, cobijas, cobertor, cobertores, edredon, edredones, frazada, frazadas, sabana, sabanas, almohada, almohadas, toalla, toallas, ropa de cama, lenceria de hogar, juego de cama]
   mexicana: [mexicana, mexicano, mexicanos, comida mexicana, tacos, taco, burrito, burritos, quesadilla, quesadillas, nachos, enchiladas]

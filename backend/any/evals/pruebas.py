@@ -1020,6 +1020,27 @@ def test_servicio_que_en_realidad_es_un_local():
 
 
 
+def test_lavadero_solo_speed_clean_car():
+    """08/11: «¿Cuál es el horario del lavadero?» listó Gopass (su app paga «autolavados») y King Helmets (lava
+    cascos). Lavadero = lavar carros/motos: solo Speed Clean Car."""
+    import types
+    from any.flujos.locales import Locales
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    if not any(l.nombre == "Speed Clean Car" for l in locales(db)):
+        return
+
+    class _T:
+        def alerta(self, *_): pass
+        def paso(self, *_): pass
+        def llm(self, *_): pass
+    for m in ("Cuál es el horario del lavadero?", "En el centro comercial puedo lavar mi carro",
+              "Hasta que horas hay lavadero de carros", "hay car wash"):
+        d = asyncio.run(Locales()._lista(types.SimpleNamespace(db=db, mensaje=m, traza=_T()), {}, m, None))
+        nombres = [x["nombre"] for x in d.hechos.get("locales_para_tu_contexto", [])] or [(d.hechos.get("local") or {}).get("nombre")]
+        assert nombres == ["Speed Clean Car"], (m, nombres)
+
+
 def test_ajustes_05_11():
     """05/11: la gerente no da su número; correos solo @elpuente.com.co; Instagram solo perfiles;
     «años en el mercado» no hace supermercado a un colchón."""
