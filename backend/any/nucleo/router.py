@@ -63,8 +63,10 @@ def piso_en_texto(texto: str) -> int | None:
 
 # «Háblame de Claro», «info de la tienda Enjoy», «¿dónde queda Rich?»: lo que sigue es el nombre del local.
 # Con ese inicio también valen los nombres que son palabras comunes («claro», «tennis»).
-_PIDE_LOCAL = re.compile(r"^(?:hola\s+(?:any|ani)\s*,?\s*)?(?:any\s*,?\s*)?"
-                         r"(?:hablame|cuentame|dime|dame info(?:rmacion)?|info(?:rmacion)?|que (?:es|venden en|hay en)|"
+_PIDE_LOCAL = re.compile(r"^(?:hola\s+(?:any|ani)\s*,?\s*)?(?:any\s*,?\s*)?(?:y\s+)?"
+                         r"(?:(?:que|q)\s+(?:info(?:rmacion)?|sabes|me (?:cuentas|dices|puedes decir))"
+                         r"(?:\s+(?:tienes|tiene|tienen|hay|me das))?|"
+                         r"hablame|cuentame|dime|dame info(?:rmacion)?|info(?:rmacion)?|que (?:es|venden en|hay en)|"
                          r"donde (?:queda|esta|encuentro)|ubicacion|telefono|whatsapp|numero)"
                          r"(?:\s+(?:de|del|sobre|acerca de))?(?:\s+(?:la|el))?(?:\s+(?:tienda|local|almacen|negocio))?\s+")
 
@@ -185,14 +187,24 @@ def _corregir_servicio_que_es_local(ctx: Contexto, d: Decision) -> Decision:
     try:
         from ..conocimiento.buscador import buscar_locales, conceptos
         texto = f"{ctx.mensaje} {d.consulta or ''}"
-        if any(c.grupo for c in conceptos(ctx.mensaje, "servicios")) or regla_salon_eventos(ctx.mensaje):
+        if regla_salon_eventos(ctx.mensaje):
             return d
-        if re.search(r"banc|cajer|financ|giro|corresponsal|sucursal|davivienda|bancolombia|horario|hora|abren|"
-                     r"cierran|direccion|ubicad|como llego|parque|wifi|bano|mascota|bono|auditorio|salon|biciclet|ascensor|"
+        if re.search(r"banc|cajer|financ|giro|corresponsal|sucursal|davivienda|bancolombia|"
+                     r"direccion|ubicad|como llego|parqueadero|parqueo|wifi|bano|mascota|bono|auditorio|salon|biciclet|ascensor|"
                      r"escalera|casillero|enfermer|primeros auxilios|silla de ruedas|lactancia|sanitario|dejar mi",
                      normalizar(texto)):
             return d
-        fuertes = [r for r in buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True) if r.fuertes]
+        # Palabras de servicios del mall que solo acompañan ("horario", "hora", "carro", "moto"): no cuentan.
+        # «¿Cuál es el horario del lavadero?» → lo que pide es el LAVADERO (Speed Clean Car), no un servicio del mall.
+        from ..conocimiento.texto import raiz
+        serv = conceptos(ctx.mensaje, "servicios")
+        de_servicio = {raiz(c.palabra) for c in serv if c.grupo} | {raiz(x) for x in (
+            "atencion", "cliente", "plazoleta", "comida", "comidas", "centro", "comercial", "informacion", "punto",
+            "local", "locales", "tienda", "tiendas", "servicio", "servicios", "domingo", "sabado", "festivo", "hoy")}
+        if any(c.grupo and c.grupo not in ("horario", "parqueadero") for c in serv):
+            return d
+        fuertes = [r for r in buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True)
+                   if any(raiz(normalizar(f)) not in de_servicio for f in r.fuertes)]
         if fuertes:
             ctx.traza.alerta(f"el modelo lo mandó a servicios, pero lo ofrece un local ({fuertes[0].local.nombre}): va a locales")
             ent = {k: v for k, v in d.entidades.items() if k != "servicio"}

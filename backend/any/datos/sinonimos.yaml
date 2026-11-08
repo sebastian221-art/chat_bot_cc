@@ -26,6 +26,7 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  lavadero: [lavadero, lavaderos, lavar, lavo, lavan, lavado, lavada, lavautos, autolavado, car wash, carwash, lavar el carro, lavar la moto, lavar mi carro, lavar mi moto, limpieza de carro, limpieza de carros, limpieza de vehiculos, limpieza de vehículos]
   seguros: [seguros, aseguradora, aseguradoras, poliza, polizas, soat, sura, mapfre, allianz, positiva, previsora, colpatria]
   textil_hogar: [cobija, cobijas, cobertor, cobertores, edredon, edredones, frazada, frazadas, sabana, sabanas, almohada, almohadas, toalla, toallas, ropa de cama, lenceria de hogar, juego de cama]
   mexicana: [mexicana, mexicano, mexicanos, comida mexicana, tacos, taco, burrito, burritos, quesadilla, quesadillas, nachos, enchiladas]

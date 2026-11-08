@@ -879,6 +879,7 @@ def test_ajustes_trazas_29_10():
     """Trazas del 29/10: «Háblame de claro», bancos, «Odonto Vital», saludo repetido."""
     import types
     from any.nucleo.router import local_por_nombre_exacto
+    from any.conocimiento.texto import normalizar
     from any.nucleo.guardias import quitar_saludo_repetido
     from any.flujos.servicios_mall import entidades_financieras, _PIDE_FINANCIERO
     from any.flujos.locales import Locales
@@ -1000,6 +1001,21 @@ def test_servicio_que_en_realidad_es_un_local():
         assert ir("¿Hay discoteca?") == "locales"
     for m in ("¿hay wifi?", "¿hay cajeros?", "¿hay baños?", "¿dónde queda el parqueadero?", "¿hay enfermería?",
               "¿dónde puedo dejar mi bicicleta?", "¿se puede entrar con mascota?"):
+        assert ir(m) == "servicios_mall", m
+    # 08/11: «¿Cuál es el horario del lavadero?» → dijo que no tenía el dato (está SPEED CLEAN CAR).
+    # «horario» y «carro» solo acompañan: lo pedido es el lavadero.
+    if any(l.nombre == "Speed Clean Car" for l in locales(db)):
+        for m in ("Cuál es el horario del lavadero", "En el centro comercial puedo lavar mi carro",
+                  "Hasta que horas hay lavadero de carros"):
+            assert ir(m) == "locales", m
+    # 06/11: «Y q información tienes de la casa del libro» fue a eventos y Any dijo que no existía.
+    from any.nucleo.router import local_por_nombre_exacto
+    from any.conocimiento.texto import normalizar
+    if any(normalizar(l.nombre) == "casa del libro" for l in locales(db)):
+        assert local_por_nombre_exacto(types.SimpleNamespace(db=db, mensaje="Y q información tienes de la casa del libro"))
+    assert not local_por_nombre_exacto(types.SimpleNamespace(db=db, mensaje="que informacion tienes del parqueadero"))
+    for m in ("¿a qué hora cierran?", "horario de atención al cliente", "horario del parqueadero",
+              "horario de la plazoleta de comidas", "¿a qué hora abren los locales el domingo?"):
         assert ir(m) == "servicios_mall", m
 
 
