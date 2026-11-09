@@ -252,6 +252,11 @@ class Locales(Flujo):
         ent = d.entidades if d else {}
         consulta = (d.consulta if d and d.consulta else ctx.mensaje)
         pide = que_pide(ent.get("pide"), ctx.mensaje)
+        # «¿la de la barra?» tras pedir una carta: el modelo deja {"categoria": "carta"} en vez de {"pide": "carta"}.
+        # «carta» no es un tipo de local: es lo que pide (si no, se buscaba «carta» y no se mandaba la de La Barra).
+        if re.fullmatch(r"(?:la |el |las |los )?(?:carta|menu|catalogo)s?", normalizar(str(ent.get("categoria") or ""))):
+            ent = {k: v for k, v in ent.items() if k != "categoria"}
+            pide = pide or "carta"
         numero = numero_en_texto(ctx.mensaje)
         if numero:
             en_numero = locales_por_numero(ctx.db, numero)

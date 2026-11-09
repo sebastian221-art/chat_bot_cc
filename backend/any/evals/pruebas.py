@@ -1020,6 +1020,29 @@ def test_servicio_que_en_realidad_es_un_local():
 
 
 
+def test_carta_de_seguimiento_la_de_la_barra():
+    """09/11: «¿la de la barra?» después de pedir cartas: el modelo puso {"categoria": "carta"} y Any dijo que
+    La Barra 1516 no tenía carta (sí la tiene)."""
+    import types
+    from any.flujos.locales import Locales, carta_de
+    from any.conocimiento.catalogo import locales
+    from any.nucleo.tipos import Decision
+    db = _db()
+    barra = next((l for l in locales(db) if l.nombre == "La Barra 1516"), None)
+    if not barra or not any(carta_de(barra)):
+        return
+
+    class _T:
+        def alerta(self, *_): pass
+        def paso(self, *_): pass
+        def llm(self, *_): pass
+    ctx = types.SimpleNamespace(db=db, mensaje="la de la barra?", traza=_T(),
+                                decision=Decision("locales", {"categoria": "carta"}, True, "¿Me puedes enviar la carta de la barra?", "x", "ia"),
+                                estado=types.SimpleNamespace(ultimas_entidades={"local": "Mercagan"}))
+    d = asyncio.run(Locales()._reunir(ctx))
+    assert d.hechos.get("lo_que_pide") == "carta" and d.hechos["local"]["nombre"] == "La Barra 1516", d.hechos
+
+
 def test_lavadero_solo_speed_clean_car():
     """08/11: «¿Cuál es el horario del lavadero?» listó Gopass (su app paga «autolavados») y King Helmets (lava
     cascos). Lavadero = lavar carros/motos: solo Speed Clean Car."""
