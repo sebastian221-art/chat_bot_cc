@@ -31,6 +31,7 @@ from .nucleo import estado as est
 from .nucleo.harness import procesar
 
 log = logging.getLogger("any.entrada")
+trafico = logging.getLogger("any.trafico")      # una línea por mensaje en los logs de Railway: 📩 llegó, ✅ listo
 router = APIRouter(prefix="/any", tags=["any2"])
 _candados: dict[str, asyncio.Lock] = {}
 
@@ -119,29 +120,41 @@ async def recibir(request: Request, tareas: BackgroundTasks, x_hub_signature_256
         if estado == "repetido":
             continue            # Meta reenvió uno que ya teníamos: no se responde dos veces
         if mid:
-            tareas.add_task(bandeja.procesar, mid, m, atender_recuperable)
+            tareas.add_task(bandeja.procesar, mid, m, atender_de_bandeja)
         else:
             tareas.add_task(atender_mensaje, m)
     return {"status": "ok"}
 
 
+async def atender_de_bandeja(m: dict):
+    """Mensaje recién llegado y guardado en la bandeja: la bandeja ya garantiza que se responde una sola vez."""
+    await atender_mensaje(m, saltar_visto=True)
+
+
 async def atender_recuperable(m: dict):
-    """Lo que usa la bandeja: la bandeja ya garantiza que cada mensaje se responde una sola vez, así que no se
-    mira «ya visto» (si el servidor se cayó a mitad, el mensaje quedó «visto» pero sin respuesta)."""
-    await atender_mensaje(m, recuperado=True)
+    """Mensaje que quedó sin responder (reinicio/caída). No se mira «ya visto»: si el servidor se cayó a mitad,
+    el mensaje quedó «visto» pero nunca se respondió."""
+    await atender_mensaje(m, recuperado=True, saltar_visto=True)
 
 
 MAX_SEGUNDOS_POR_MENSAJE = float(os.environ.get("ANY_MAX_SEGUNDOS_MENSAJE", "120"))
 
 
-async def atender_mensaje(m: dict, recuperado: bool = False):
+async def atender_mensaje(m: dict, recuperado: bool = False, saltar_visto: bool = False):
     """Ningún mensaje puede quedarse «pegado»: si algo se cuelga (base de datos, Meta, la IA), a los
     MAX_SEGUNDOS_POR_MENSAJE se corta, se le pide disculpas al cliente y se sigue con los demás. Antes un mensaje
     colgado dejaba trancado el candado de ese teléfono y Any no le volvía a responder a esa persona."""
+    import time
+    t0 = time.monotonic()
+    cola = str(m.get("telefono") or "")[-4:]
+    que = (m.get("texto") or f"[{m.get('tipo')}]").replace("\n", " ")[:70]
+    trafico.info(f"  📩  …{cola}  «{que}»{'  (recuperado tras reinicio)' if recuperado else ''}")
     try:
-        await asyncio.wait_for(_atender_mensaje(m, recuperado), timeout=MAX_SEGUNDOS_POR_MENSAJE)
+        await asyncio.wait_for(_atender_mensaje(m, saltar_visto), timeout=MAX_SEGUNDOS_POR_MENSAJE)
+        trafico.info(f"  ✅  …{cola}  listo en {time.monotonic() - t0:.1f} s")
     except asyncio.TimeoutError:
-        log.error("Any 2.0: un mensaje tardó más de %ss y se cortó (%s)", MAX_SEGUNDOS_POR_MENSAJE, m.get("telefono"))
+        from services.bandeja import registrar_problema
+        registrar_problema(f"Se demoró más de {MAX_SEGUNDOS_POR_MENSAJE:.0f} s y se cortó", m.get("telefono"), que)
         try:
             from services import whatsapp
             await whatsapp.send_text_message(
@@ -150,7 +163,7 @@ async def atender_mensaje(m: dict, recuperado: bool = False):
             log.exception("Tampoco se pudo enviar el mensaje de disculpa")
 
 
-async def _atender_mensaje(m: dict, recuperado: bool = False):
+async def _atender_mensaje(m: dict, saltar_visto: bool = False):
     telefono = m.get("telefono") or ""
     if not telefono:
         return
@@ -166,7 +179,7 @@ async def _atender_mensaje(m: dict, recuperado: bool = False):
         procesado = False
         try:
             est.asegurar_tablas(db)
-            if est.ya_visto(db, m.get("message_id", ""), telefono) and not recuperado:
+            if est.ya_visto(db, m.get("message_id", ""), telefono) and not saltar_visto:
                 return
             from services import whatsapp
             imagen = None
@@ -196,8 +209,10 @@ async def _atender_mensaje(m: dict, recuperado: bool = False):
                                imagen=imagen, es_audio=es_audio)
             procesado = True
             await enviar(telefono, r)
-        except Exception:
+        except Exception as e:
             log.exception("Error atendiendo mensaje en Any 2.0")
+            from services.bandeja import registrar_problema
+            registrar_problema("Error de Any al responder", telefono, repr(e))
             if not procesado:      # el cliente nunca se queda sin respuesta
                 try:
                     from services import whatsapp

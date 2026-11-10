@@ -26,6 +26,8 @@ locales:
   calzado:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
+  # 10/11: «Quiero naranja» no encontraba nada: pedir una fruta de jugo es pedir jugo.
+  jugos: [jugo, jugos, jugo natural, jugos naturales, zumo, jugo de naranja, naranja, naranjada, limonada, limonadas, jugo de fruta, jugos de fruta]
   # Solo lo que es lavar CARROS/MOTOS. «lavar», «lavado» o «autolavado» solos no: King Helmets lava cascos y Gopass
   # dice «autolavados» (pago por la app), y salían como lavaderos.
   lavadero: [lavadero, lavaderos, lavautos, car wash, carwash, lavadero de carros, lavadero de motos, lavadero de carro, lavo el carro, lavo mi carro, lavo la moto, lavo mi moto, lavan carros, lavar el carro, lavar mi carro, lavar carro, lavar carros, lavar la moto, lavar mi moto, lavar moto, lavado de carros, lavado de carro, lavado de motos, lavado de moto, lavado de vehiculos, lavada del carro, limpieza de carros, limpieza de vehiculos]

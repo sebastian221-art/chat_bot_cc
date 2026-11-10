@@ -93,11 +93,22 @@ async def send_text_message(to: str, message: str) -> bool:
                 logger.info(f"Mensaje enviado a {to}")
             except httpx.HTTPStatusError as e:
                 logger.error(f"Error HTTP enviando a {to}: {e.response.text}")
+                _avisar("WhatsApp (Meta) rechazó la respuesta", to, f"{e.response.status_code} {e.response.text}")
                 todo_ok = False
             except Exception as e:
                 logger.error(f"Error inesperado enviando a {to}: {str(e)}")
+                _avisar("No se pudo conectar con WhatsApp (Meta)", to, repr(e))
                 todo_ok = False
     return todo_ok
+
+
+def _avisar(que: str, to: str, detalle: str) -> None:
+    """Queda en /any/estado → «ultimos_problemas» (token vencido, número bloqueado, ventana de 24 h, etc.)."""
+    try:
+        from services.bandeja import registrar_problema
+        registrar_problema(que, to, detalle)
+    except Exception:
+        pass
 
 
 async def send_image_message(to: str, image_url: str, caption: str = "") -> bool:

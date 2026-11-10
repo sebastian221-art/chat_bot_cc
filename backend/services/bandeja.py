@@ -26,6 +26,18 @@ MAX_INTENTOS = 3
 ARRANQUE = datetime.now(timezone.utc)
 EN_CURSO: set[int] = set()        # ids que ESTE proceso está respondiendo ahora mismo
 
+# Últimos problemas (se ven en /any/estado): así se sabe QUÉ pasó cuando «Any no responde».
+from collections import deque
+PROBLEMAS: deque = deque(maxlen=25)
+_COL = timezone(timedelta(hours=-5))
+
+
+def registrar_problema(que: str, telefono: str = "", detalle: str = "") -> None:
+    cola = str(telefono or "")[-4:]
+    PROBLEMAS.appendleft({"hora": datetime.now(_COL).strftime("%d/%m %I:%M:%S %p"), "que": que,
+                          "cliente": f"…{cola}" if cola else "", "detalle": str(detalle or "")[:300]})
+    logger.error(f"❌ {que} (…{cola}): {str(detalle or '')[:300]}")
+
 
 def _utc(d: datetime | None) -> datetime | None:
     if d is None:
@@ -89,6 +101,7 @@ async def procesar(mid: int, msg: dict, procesar_mensaje) -> None:
             _marcar(mid, "hecho")
         except Exception as e:
             logger.error(f"Bandeja: error respondiendo el mensaje {mid}: {e}", exc_info=True)
+            registrar_problema("Error respondiendo", msg.get("telefono") or msg.get("phone_number"), repr(e))
             _marcar(mid, "error")
     finally:
         EN_CURSO.discard(mid)
@@ -148,8 +161,14 @@ def resumen() -> dict:
         def _col(d):
             d = _utc(d[0]) if d and d[0] else None
             return d.astimezone(timezone(timedelta(hours=-5))).strftime("%d/%m/%Y %I:%M:%S %p") if d else None
+        hace1h = datetime.now(timezone.utc) - timedelta(hours=1)
+        ultimos = db.query(MensajeEntrante.estado, MensajeEntrante.recibido).order_by(MensajeEntrante.id.desc()).limit(500).all()
+        hora = [e for e, r in ultimos if _utc(r) and _utc(r) >= hace1h]
         return {"ultimo_mensaje_recibido_de_whatsapp": _col(ult), "ultimo_respondido": _col(ult_hecho),
-                "sin_responder_ahora": abiertos, "respondiendo_en_este_momento": len(EN_CURSO)}
+                "ultima_hora": {"recibidos": len(hora), "respondidos": hora.count("hecho"),
+                                "con_error": sum(1 for e in hora if e in ("error", "vencido"))},
+                "sin_responder_ahora": abiertos, "respondiendo_en_este_momento": len(EN_CURSO),
+                "ultimos_problemas": list(PROBLEMAS) or "ninguno desde el último arranque"}
     except Exception as e:
         return {"error": str(e)[:200]}
     finally:

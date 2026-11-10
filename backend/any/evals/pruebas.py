@@ -1020,6 +1020,41 @@ def test_servicio_que_en_realidad_es_un_local():
 
 
 
+def test_todos_los_locales_por_nombre_en_todas_las_formas():
+    """10/11: «que no vuelva a fallar»: cada local se encuentra por su nombre escrito de muchas formas
+    (con o sin tildes, en minúscula, solo o dentro de una pregunta)."""
+    import unicodedata
+    from any.flujos.locales import buscar_locales
+    from any.conocimiento.catalogo import locales
+    db = _db()
+    sin_tilde = lambda t: "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn")
+    formas = ("{n}", "háblame de {n}", "horario de {n}", "teléfono de {n}", "dónde queda {n}", "{n} a qué hora abre",
+              "info de {n}", "{n} tiene domicilio?")
+    malas = []
+    for l in locales(db):
+        for n in {l.nombre, l.nombre.lower(), sin_tilde(l.nombre.lower())}:
+            for f in formas:
+                r = buscar_locales(db, f.format(n=n), incluir_torre=True)
+                if not (r and r[0].local.nombre == l.nombre or any(x.local.nombre == l.nombre and x.nombre_exacto for x in r[:3])):
+                    malas.append((l.nombre, f.format(n=n)))
+    assert not malas, malas[:10]
+
+
+def test_fruta_de_jugo_es_jugo():
+    """10/11: «Quiero naranja» no encontraba nada."""
+    import types
+    from any.flujos.locales import Locales
+
+    class _T:
+        def alerta(self, *_): pass
+        def paso(self, *_): pass
+        def llm(self, *_): pass
+    db = _db()
+    for m in ("Quiero naranja", "una limonada", "jugo de naranja"):
+        h = asyncio.run(Locales()._lista(types.SimpleNamespace(db=db, mensaje=m, traza=_T()), {}, m, None)).hechos
+        assert h.get("modo") != "sin_resultados", m
+
+
 def test_bandeja_no_pierde_mensajes():
     """10/11: Any «dejó de responder»: los mensajes que llegaron mientras el servidor se reiniciaba se perdían.
     Ahora quedan guardados y se responden al volver; si Meta reenvía uno, no se responde dos veces."""

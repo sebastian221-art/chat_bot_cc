@@ -31,6 +31,14 @@ _h = logging.StreamHandler(sys.stdout)
 _h.setFormatter(_Fmt())
 log = logging.getLogger("mall_bot")
 log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
+# Los avisos y ERRORES de Any 2.0 y del envío por WhatsApp SÍ deben verse en Railway. Antes el registro general
+# estaba en CRITICAL y se tragaba todo: si Meta rechazaba una respuesta o Any fallaba, no quedaba rastro (10/11/2026).
+for _nombre, _nivel in (("any", logging.WARNING), ("services", logging.WARNING), ("routers", logging.WARNING),
+                        ("any.trafico", logging.INFO)):
+    _lg = logging.getLogger(_nombre)
+    _lg.setLevel(_nivel)
+    if _nombre != "any.trafico":
+        _lg.addHandler(_h); _lg.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
