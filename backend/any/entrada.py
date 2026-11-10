@@ -111,12 +111,46 @@ async def recibir(request: Request, tareas: BackgroundTasks, x_hub_signature_256
         datos = await request.json()
     except Exception:
         return {"status": "ignorado"}
+    from services import bandeja
     for m in extraer_mensajes(datos):
-        tareas.add_task(atender_mensaje, m)
+        # Se guarda ANTES de decirle «OK» a Meta: si el servidor se reinicia mientras se responde, el vigilante
+        # (services/bandeja.py) lo responde al volver. Antes se perdía y Any «no respondía» (10/11/2026).
+        estado, mid = bandeja.guardar(m)
+        if estado == "repetido":
+            continue            # Meta reenvió uno que ya teníamos: no se responde dos veces
+        if mid:
+            tareas.add_task(bandeja.procesar, mid, m, atender_recuperable)
+        else:
+            tareas.add_task(atender_mensaje, m)
     return {"status": "ok"}
 
 
-async def atender_mensaje(m: dict):
+async def atender_recuperable(m: dict):
+    """Lo que usa la bandeja: la bandeja ya garantiza que cada mensaje se responde una sola vez, así que no se
+    mira «ya visto» (si el servidor se cayó a mitad, el mensaje quedó «visto» pero sin respuesta)."""
+    await atender_mensaje(m, recuperado=True)
+
+
+MAX_SEGUNDOS_POR_MENSAJE = float(os.environ.get("ANY_MAX_SEGUNDOS_MENSAJE", "120"))
+
+
+async def atender_mensaje(m: dict, recuperado: bool = False):
+    """Ningún mensaje puede quedarse «pegado»: si algo se cuelga (base de datos, Meta, la IA), a los
+    MAX_SEGUNDOS_POR_MENSAJE se corta, se le pide disculpas al cliente y se sigue con los demás. Antes un mensaje
+    colgado dejaba trancado el candado de ese teléfono y Any no le volvía a responder a esa persona."""
+    try:
+        await asyncio.wait_for(_atender_mensaje(m, recuperado), timeout=MAX_SEGUNDOS_POR_MENSAJE)
+    except asyncio.TimeoutError:
+        log.error("Any 2.0: un mensaje tardó más de %ss y se cortó (%s)", MAX_SEGUNDOS_POR_MENSAJE, m.get("telefono"))
+        try:
+            from services import whatsapp
+            await whatsapp.send_text_message(
+                m.get("telefono") or "", "Uy, me demoré más de la cuenta 😅 ¿Me lo escribes de nuevo, por favor?")
+        except Exception:
+            log.exception("Tampoco se pudo enviar el mensaje de disculpa")
+
+
+async def _atender_mensaje(m: dict, recuperado: bool = False):
     telefono = m.get("telefono") or ""
     if not telefono:
         return
@@ -132,7 +166,7 @@ async def atender_mensaje(m: dict):
         procesado = False
         try:
             est.asegurar_tablas(db)
-            if est.ya_visto(db, m.get("message_id", ""), telefono):
+            if est.ya_visto(db, m.get("message_id", ""), telefono) and not recuperado:
                 return
             from services import whatsapp
             imagen = None
@@ -286,7 +320,16 @@ async def estado_del_cambio():
         "modelo": cfg().llm_flujos,
         "respaldo": cfg().llm_respaldo or "ninguno",
         "groq_configurado": bool(os.environ.get("GROQ_API_KEY", "").strip() not in ("", "PENDIENTE")),
+        "mensajes": _resumen_bandeja(),
     }
+
+
+def _resumen_bandeja() -> dict:
+    try:
+        from services.bandeja import resumen
+        return resumen()
+    except Exception as e:
+        return {"error": str(e)[:200]}
 
 
 def _numero(n: str) -> str:

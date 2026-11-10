@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -17,7 +18,9 @@ elif db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
 
 connect_args = {}
-engine_kwargs = {"echo": settings.DEBUG}
+# El SQL de cada consulta en el log solo si se pide con SQL_ECHO=1. Con DEBUG=true en Railway se imprimían cientos
+# de líneas por segundo: Railway descartaba logs («rate limit of 500 logs/sec») y el servidor gastaba CPU en eso.
+engine_kwargs = {"echo": os.environ.get("SQL_ECHO", "").strip() in ("1", "true")}
 
 if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
@@ -25,6 +28,10 @@ else:
     # Buena práctica para Postgres en la nube: evita errores por
     # conexiones que el proveedor cierra en silencio por inactividad.
     engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 1800      # renueva conexiones cada 30 min (el proveedor corta las viejas)
+    # Una consulta o conexión colgada ya no puede trancar a Any para siempre: a los 30 s da error y se sigue.
+    if "pg8000" in db_url:
+        connect_args = {"timeout": int(os.environ.get("DB_TIMEOUT_S", "30"))}
 
 engine = create_engine(db_url, connect_args=connect_args, **engine_kwargs)
 

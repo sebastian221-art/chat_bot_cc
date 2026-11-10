@@ -141,7 +141,12 @@ async def lifespan(app: FastAPI):
     try:
         from services.bandeja import vigilante
         from routers.webhook import process_message
-        tarea_bandeja = asyncio.create_task(vigilante(process_message))
+        from any.entrada import atender_recuperable
+
+        async def _responder_guardado(msg: dict):
+            # Los de Any 2.0 traen "telefono"; los del bot viejo, "phone_number".
+            await (atender_recuperable(msg) if "telefono" in msg else process_message(msg))
+        tarea_bandeja = asyncio.create_task(vigilante(_responder_guardado))
         print(f"{GREEN}  ✓  Bandeja de mensajes vigilada (nada se queda sin respuesta){RESET}")
     except Exception as e:
         print(f"{YELLOW}  ⚠  Bandeja no arrancó: {e}{RESET}")

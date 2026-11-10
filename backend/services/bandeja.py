@@ -42,7 +42,7 @@ def guardar(msg: dict) -> tuple[str, int | None]:
     try:
         if db.query(MensajeEntrante.id).filter(MensajeEntrante.wamid == wamid).first():
             return "repetido", None
-        fila = MensajeEntrante(wamid=wamid, telefono=msg.get("phone_number", ""),
+        fila = MensajeEntrante(wamid=wamid, telefono=str(msg.get("phone_number") or msg.get("telefono") or "")[:40],
                                datos=json.dumps(msg, ensure_ascii=False), estado="pendiente", intentos=0)
         db.add(fila)
         db.commit()
@@ -85,7 +85,7 @@ async def procesar(mid: int, msg: dict, procesar_mensaje) -> None:
     try:
         _marcar(mid, "procesando", sumar_intento=True)
         try:
-            await procesar_mensaje(msg=msg)
+            await procesar_mensaje(msg)
             _marcar(mid, "hecho")
         except Exception as e:
             logger.error(f"Bandeja: error respondiendo el mensaje {mid}: {e}", exc_info=True)
@@ -137,6 +137,25 @@ def _sin_responder() -> list[tuple[int, dict]]:
     return salida
 
 
+def resumen() -> dict:
+    """Para /any/estado: ¿están llegando mensajes de WhatsApp? ¿quedó alguno sin responder?"""
+    db = SessionLocal()
+    try:
+        ult = db.query(MensajeEntrante.recibido).order_by(MensajeEntrante.id.desc()).first()
+        ult_hecho = (db.query(MensajeEntrante.actualizado).filter(MensajeEntrante.estado == "hecho")
+                     .order_by(MensajeEntrante.id.desc()).first())
+        abiertos = db.query(MensajeEntrante.id).filter(MensajeEntrante.estado.in_(("pendiente", "procesando"))).count()
+        def _col(d):
+            d = _utc(d[0]) if d and d[0] else None
+            return d.astimezone(timezone(timedelta(hours=-5))).strftime("%d/%m/%Y %I:%M:%S %p") if d else None
+        return {"ultimo_mensaje_recibido_de_whatsapp": _col(ult), "ultimo_respondido": _col(ult_hecho),
+                "sin_responder_ahora": abiertos, "respondiendo_en_este_momento": len(EN_CURSO)}
+    except Exception as e:
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
 def _limpiar_viejos() -> None:
     db = SessionLocal()
     try:
@@ -156,8 +175,9 @@ def _limpiar_viejos() -> None:
 async def revisar_una_vez(procesar_mensaje) -> int:
     pendientes = await asyncio.to_thread(_sin_responder)
     for mid, msg in pendientes:
-        print(f"  ♻️   Bandeja: respondiendo mensaje que había quedado sin respuesta ({msg.get('phone_number')}: "
-              f"{str(msg.get('message_text') or msg.get('message_type'))[:60]})", flush=True)
+        quien = msg.get("phone_number") or msg.get("telefono")
+        que = msg.get("message_text") or msg.get("texto") or msg.get("message_type") or msg.get("tipo")
+        print(f"  ♻️   Bandeja: respondiendo mensaje que había quedado sin respuesta ({quien}: {str(que)[:60]})", flush=True)
         await procesar(mid, msg, procesar_mensaje)
     return len(pendientes)
 
