@@ -1184,7 +1184,7 @@ async def ejecutar_sincronizacion(db: Session, forzar_afiche: bool = False) -> d
     # Reindexar el RAG para que Any vea lo nuevo de inmediato
     try:
         from services.rag import load_stores_to_rag
-        load_stores_to_rag(db)
+        await asyncio.to_thread(load_stores_to_rag, db)     # en otro hilo: no frena las respuestas de Any
         resumen["rag"] = "reindexado"
     except Exception as e:
         resumen["rag"] = f"error: {str(e)[:120]}"

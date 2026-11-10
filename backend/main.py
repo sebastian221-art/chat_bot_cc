@@ -34,7 +34,7 @@ log.setLevel(logging.INFO); log.addHandler(_h); log.propagate = False
 
 from config import get_settings
 from models.database import create_tables, get_db, SessionLocal
-from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle, delivery_management, store_photo, entity_photo, promotion_shown, marketing, cine_funcion, orchestrator_trace, sync_estado
+from models import conversation, store, event, user_profile, order, user, conversation_flag, knowledge, zone, zone_scan, mall_info, info_point, delivery_transfer, raffle, delivery_management, store_photo, entity_photo, promotion_shown, marketing, cine_funcion, orchestrator_trace, sync_estado, mensaje_entrante
 from services import orchestrator_switch  # registra la tabla orchestrator_config
 from services import proteccion_datos  # registra la tabla aviso_privacidad_mostrado
 from routers import webhook
@@ -103,8 +103,8 @@ async def lifespan(app: FastAPI):
     print(f"{sep}\n")
 
     # ── SINCRONIZADOR AUTOMÁTICO (web del mall + Cinelandia) ───────
-    # Corre en segundo plano: la primera vez poco después de arrancar y
-    # luego cada SYNC_INTERVALO_HORAS (por defecto 24 h). Si algo falla,
+    # Corre en segundo plano todos los días de madrugada (SYNC_HORA, por
+    # defecto 3:00 am hora Colombia). Si algo falla,
     # solo lo registra — nunca tumba el servidor. Se puede apagar con
     # SYNC_AUTOMATICO=0 y lanzar a mano desde el panel (/sync/ahora).
     import asyncio, os
@@ -112,9 +112,17 @@ async def lifespan(app: FastAPI):
     if os.environ.get("SYNC_AUTOMATICO", "1") != "0":
         async def _loop_sync():
             from services.sincronizador import ejecutar_sincronizacion
-            horas = float(os.environ.get("SYNC_INTERVALO_HORAS", "24"))
-            await asyncio.sleep(90)  # dejar que el servidor termine de arrancar
+            from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+            # Antes corría 90 s después de cada arranque y cada 24 h desde ahí: caía en horas de atención
+            # y, mientras reindexaba, Any respondía lento. Ahora corre de madrugada (SYNC_HORA, hora Colombia).
+            hora = int(os.environ.get("SYNC_HORA", "3"))
+            col = _tz(_td(hours=-5))
             while True:
+                ahora = _dt.now(col)
+                prox = ahora.replace(hour=hora, minute=0, second=0, microsecond=0)
+                if prox <= ahora:
+                    prox += _td(days=1)
+                await asyncio.sleep((prox - ahora).total_seconds())
                 dbs = SessionLocal()
                 try:
                     await ejecutar_sincronizacion(dbs)
@@ -122,11 +130,25 @@ async def lifespan(app: FastAPI):
                     print(f"{YELLOW}  ⚠  Sincronización web falló: {e}{RESET}")
                 finally:
                     dbs.close()
-                await asyncio.sleep(max(1.0, horas) * 3600)
+                await asyncio.sleep(60)
         tarea_sync = asyncio.create_task(_loop_sync())
-        print(f"{GREEN}  ✓  Sincronizador web programado (cada {os.environ.get('SYNC_INTERVALO_HORAS', '24')} h){RESET}")
+        print(f"{GREEN}  ✓  Sincronizador web programado (todos los días a las {os.environ.get('SYNC_HORA', '3')}:00, hora Colombia){RESET}")
+
+    # ── BANDEJA A PRUEBA DE REINICIOS ──────────────────────────────
+    # Al arrancar y cada minuto responde los mensajes que quedaron sin respuesta por un reinicio o una
+    # caída (10/11/2026: Any «dejó de responder» unos minutos y esos mensajes se perdieron).
+    tarea_bandeja = None
+    try:
+        from services.bandeja import vigilante
+        from routers.webhook import process_message
+        tarea_bandeja = asyncio.create_task(vigilante(process_message))
+        print(f"{GREEN}  ✓  Bandeja de mensajes vigilada (nada se queda sin respuesta){RESET}")
+    except Exception as e:
+        print(f"{YELLOW}  ⚠  Bandeja no arrancó: {e}{RESET}")
 
     yield
+    if tarea_bandeja:
+        tarea_bandeja.cancel()
     if tarea_sync:
         tarea_sync.cancel()
     print(f"\n{GREY}  ─  Servidor detenido{RESET}\n")

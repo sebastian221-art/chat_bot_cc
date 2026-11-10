@@ -101,7 +101,17 @@ async def receive_message(
     # pausa del bot no se respetaba). process_message crea su propia
     # sesión nueva, fresca, independiente del ciclo de vida de esta
     # petición HTTP.
-    background_tasks.add_task(process_message, msg=msg)
+    # El mensaje se guarda ANTES de decirle «OK» a Meta: si el servidor se reinicia mientras se responde,
+    # el vigilante de services/bandeja.py lo responde al volver (antes se perdía y Any «no respondía»).
+    from services import bandeja
+    estado, mid = bandeja.guardar(msg)
+    if estado == "repetido":
+        print(f"  ↩️   [{msg.get('phone_number')}] Meta reenvió un mensaje que ya teníamos: no se responde dos veces")
+        return {"status": "ok"}
+    if mid:
+        background_tasks.add_task(bandeja.procesar, mid, msg, process_message)
+    else:
+        background_tasks.add_task(process_message, msg=msg)
     return {"status": "ok"}
 
 

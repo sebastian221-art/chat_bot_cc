@@ -1020,6 +1020,37 @@ def test_servicio_que_en_realidad_es_un_local():
 
 
 
+def test_bandeja_no_pierde_mensajes():
+    """10/11: Any «dejó de responder»: los mensajes que llegaron mientras el servidor se reiniciaba se perdían.
+    Ahora quedan guardados y se responden al volver; si Meta reenvía uno, no se responde dos veces."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+    from models.database import create_tables, SessionLocal
+    from models.mensaje_entrante import MensajeEntrante
+    from services import bandeja
+    create_tables()
+    vistos = []
+
+    async def _fake(msg):
+        vistos.append(msg["message_text"])
+    wamid = f"wamid.prueba.{datetime.now().timestamp()}"
+    m = {"phone_number": "570000000099", "name": "Prueba", "message_id": wamid, "message_type": "text",
+         "message_text": "Quiero naranja"}
+    estado, mid = bandeja.guardar(m)
+    assert estado == "nuevo" and mid
+    assert bandeja.guardar(m)[0] == "repetido"
+    db = SessionLocal()
+    f = db.query(MensajeEntrante).filter_by(id=mid).first()
+    f.estado, f.recibido = "procesando", datetime.now(timezone.utc) - timedelta(minutes=2)   # «se cayó a medias»
+    db.commit(); db.close()
+    bandeja.ARRANQUE = datetime.now(timezone.utc)
+    asyncio.run(bandeja.revisar_una_vez(_fake))
+    assert vistos == ["Quiero naranja"], vistos
+    asyncio.run(bandeja.revisar_una_vez(_fake))
+    assert vistos == ["Quiero naranja"], vistos          # no se repite
+    db = SessionLocal(); db.query(MensajeEntrante).filter_by(id=mid).delete(); db.commit(); db.close()
+
+
 def test_carta_de_seguimiento_la_de_la_barra():
     """09/11: «¿la de la barra?» después de pedir cartas: el modelo puso {"categoria": "carta"} y Any dijo que
     La Barra 1516 no tenía carta (sí la tiene)."""
