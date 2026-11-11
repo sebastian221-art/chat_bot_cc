@@ -108,7 +108,7 @@ $("b-examen").onclick = async () => {
   _panel("Examen", "<p>" + _esc(j.estado) + "</p><p>Corre las mismas preguntas con cada motor y guarda la respuesta COMPLETA de cada una. Tarda unos minutos: toca «Ver examen» para ver el avance.</p>");
 };
 let _datos = null, _filtro = "todas";
-function _celda(f) { return !f ? "—" : (f.ok ? "✅" : "❌"); }
+function _celda(f) { return !f ? "—" : (f.ok === null || f.ok === undefined ? "⚪" : (f.ok ? "✅" : "❌")); }
 function _detalle(nombre, f) {
   if (!f) return "<p><b>" + nombre + ":</b> sin correr</p>";
   return "<p><b>" + nombre + " " + _celda(f) + "</b> · " + _esc(f.tema || "") + (nombre === "Any 3.0" && f.respondio === "any2" ? " · (lo pasó a Any 2.0)" : "") + " · " + _esc(f.segundos) + " s" +
@@ -120,10 +120,10 @@ function _detalle(nombre, f) {
 function _pintar() {
   const a3 = (_datos.any3 || {}), a2 = (_datos.any2 || {});
   const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b><br>" + _esc(e.estado) + (e.estado === "corriendo" ? " · " + _esc(e.progreso) + " de " + _esc(e.total_casos) : "") +
-     (e.total ? "<br><span style='font-size:20px'><b>" + e.bien + " / " + e.total + "</b></span> (" + e.porcentaje + " %)<br>" + _esc(JSON.stringify(e.por_tipo || {})) + "<br>" + e.segundos_promedio + " s por pregunta" : "") +
+     (e.total ? "<br><span style='font-size:20px'><b>" + e.bien + " / " + e.total + "</b></span> (" + e.porcentaje + " %)" + (e.sin_calificar ? "<br>+ " + e.sin_calificar + " nuevas para comparar a ojo" : "") + "<br>" + _esc(JSON.stringify(e.por_tipo || {})) + "<br>" + e.segundos_promedio + " s por pregunta" : "") +
      (e.error ? "<br><span class='error'>" + _esc(e.error) + "</span>" : "") + "<br><small>" + _esc(e.modelo || "") + "</small></div>";
   let h = "<div class='resumen'>" + res("Any 3.0", a3) + res("Any 2.0", a2) + "</div>";
-  h += "<div class='filtros'>" + ["todas", "fallas any3", "fallas any2", "diferencias"].map(x => "<button data-f='" + x + "'" + (x === _filtro ? " style='background:#eee'" : "") + ">" + x + "</button>").join("") + "</div>";
+  h += "<div class='filtros'>" + ["todas", "fallas any3", "fallas any2", "diferencias", "nuevas (a ojo)"].map(x => "<button data-f='" + x + "'" + (x === _filtro ? " style='background:#eee'" : "") + ">" + x + "</button>").join("") + "</div>";
   const f3 = {}, f2 = {}; (a3.todas || []).forEach(f => f3[f.n] = f); (a2.todas || []).forEach(f => f2[f.n] = f);
   const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
   h += "<table><tr><th>#</th><th>Pregunta</th><th>3.0</th><th>2.0</th></tr>";
@@ -132,6 +132,7 @@ function _pintar() {
     if (_filtro === "fallas any3" && !(x && !x.ok)) continue;
     if (_filtro === "fallas any2" && !(y && !y.ok)) continue;
     if (_filtro === "diferencias" && !(x && y && x.ok !== y.ok)) continue;
+    if (_filtro === "nuevas (a ojo)" && (x || y).tipo !== "nueva") continue;
     const p = (x || y).pregunta;
     h += "<tr class='fila' data-n='" + n + "'><td>" + n + "</td><td>" + _esc(p) + "</td><td>" + _celda(x) + "</td><td>" + _celda(y) + "</td></tr>" +
          "<tr class='det' id='det-" + n + "' hidden><td colspan='4'>" + _detalle("Any 3.0", x) + _detalle("Any 2.0", y) + "</td></tr>";
@@ -146,7 +147,7 @@ $("b-exportar").onclick = async () => {
   const d = await _json("/any3/examen?todas=true");
   const f3 = {}, f2 = {}; ((d.any3 || {}).todas || []).forEach(f => f3[f.n] = f); ((d.any2 || {}).todas || []).forEach(f => f2[f.n] = f);
   const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
-  const col = (f, k) => f ? (Array.isArray(f[k]) ? f[k].join(", ") : (k === "ok" ? (f.ok ? "BIEN" : "MAL") : (f[k] ?? ""))) : "";
+  const col = (f, k) => f ? (Array.isArray(f[k]) ? f[k].join(", ") : (k === "ok" ? (f.ok === null || f.ok === undefined ? "A OJO" : (f.ok ? "BIEN" : "MAL")) : (f[k] ?? ""))) : "";
   const cab = ["#", "tipo", "pregunta", "any3_resultado", "any3_locales", "any3_faltaron", "any3_sobraron", "any3_problema", "any3_respuesta",
                "any2_resultado", "any2_locales", "any2_faltaron", "any2_sobraron", "any2_problema", "any2_respuesta"];
   const filas = [cab].concat(ns.map(n => { const x = f3[n], y = f2[n], b = x || y;

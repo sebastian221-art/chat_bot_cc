@@ -9,7 +9,8 @@ Qué se califica:
   - productos: que salgan los locales que DEBEN y ninguno de los que NO pueden salir;
   - nombres: que salga exactamente ese local;
   - información: que lo atienda el tema correcto y que la respuesta traiga el dato clave (precio, correo…);
-  - seguimientos: conversaciones de 2 mensajes («háblame de X» → «¿y el teléfono?»).
+  - seguimientos: conversaciones de 2 mensajes («háblame de X» → «¿y el teléfono?»);
+  - nuevas: preguntas reales que no se usaron para afinar a ninguno, sin nota: se comparan a ojo.
 Cada pregunta usa un teléfono de prueba nuevo y al final se borra todo lo que dejó (conversación y trazas).
 """
 from __future__ import annotations
@@ -47,6 +48,34 @@ SEGUIMIENTOS: list[tuple[list[str], str]] = [
     (["¿Dónde queda Juan Valdez?", "¿y a qué hora abren?"], "Juan Valdez"),
     (["Quiero comida mexicana", "¿tienen carta?"], "Mero Merito"),
     (["Hola", "busco cascos para moto"], "King Helmets"),
+]
+
+# Preguntas reales de las trazas de noviembre que NO se usaron para afinar a ninguno de los dos: no tienen
+# calificación automática; están para comparar a ojo cómo responde cada motor (lo justo: Any 2.0 se afinó con
+# las preguntas del banco de arriba, así que ahí juega de local).
+NUEVAS: list[str] = [
+    "En cuál almacén del centro comercial el puente puedo conseguir calzado de la mejor calidad",
+    "Quiero dar un regalo para mujer", "Ropa casual para hombre por favor", "Ropa para jóvenes",
+    "Chaquetas de jeans dama", "Quiero comer una hamburguesa", "Dónde puedo comprar un helado",
+    "Quiero un vaso de mango", "Qué postres o snack de frutas puedo encontrar en el Cc",
+    "Quiero comida santandereana, qué me recomiendas?", "Almuerzos tipo bufete",
+    "que restaurante puedo encontrar abierto a esta hora", "Quiero plan de internet", "necesito un ortodoncista",
+    "Estoy buscando consultorio de dermatología cual es ?", "Hay servicio de oncologo", "Endoscopia digestiva",
+    "tienes servicio de vacunación?", "Hay una oficina de contadores públicos?",
+    "Existe una oficina de asesoria tributaria", "hay algun local que vende seguros?",
+    "Oye, qué bancos hay en el centro comercial.", "¿Dónde hago un giro?", "¿Dónde queda Paga Fácil?",
+    "hay cargador para carro eléctrico?", "dónde hay baños", "hay wifi?", "Si voy a cine, ¿me dan parqueadero?",
+    "Si compré en People Plays, ¿me dan parqueadero?",
+    "Si soy empleado del centro comercial tengo descuento en el parqueadero ?",
+    "Quiero saber sobre la zona de entretenimiento para adultos, cuales hay?", "Que planes puedo hacer con los niños?",
+    "Hay algún lugar para reuniones o algo así", "hay clases de yoga?", "cajasan tiene clases de zumbaterapia?",
+    "Cuántos años tiene de fundado el centro comercial el puente", "Cuántos locales tiene el centro comercial",
+    "en donde estan ubicadas las canchas de PADEL del centro comercial?",
+    "Buenos días, en que nivel de parqueadero esta ubicada la zona de motos",
+    "Quiero hablar con la gerente, dame su número", "Cómo se llama la administradora del centro comercial y el contacto",
+    "número de mercadeo", "hay vacantes de trabajo?", "Tienes promos en bolsos", "cual es el local 167",
+    "Ramona flowers", "Isem", "Que ofrece sanitas", "Me regalas el número de la barra",
+    "Tienes el instagram de Chevignon?", "Me puedes enviar la foto de la tienda people plays ?", "Dame la carta de 12b",
 ]
 
 # Tema de la respuesta → acción del examen
@@ -103,7 +132,8 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
     casos = ([("producto", [p], deben, nunca) for p, deben, nunca in CASOS]
              + [("nombre", [p], {esperado}, set()) for p, esperado in NOMBRES if esperado in existentes]
              + [("info", [p], acc, textos) for p, acc, textos in INFO]
-             + [("seguimiento", msgs, {local}, set()) for msgs, local in SEGUIMIENTOS if local in existentes])
+             + [("seguimiento", msgs, {local}, set()) for msgs, local in SEGUIMIENTOS if local in existentes]
+             + [("nueva", [p], None, None) for p in NUEVAS])
 
     async def evaluar(i, caso):
         tipo, msgs, a, b = caso
@@ -123,7 +153,9 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
             fila.update(tema=r.flujo, eligio=nombres, respuesta=r.texto,
                         respondio=m3.get("respondio") or ("any3" if motor == "any3" else "any2"),
                         revision=(m3.get("revision") or {}).get("intentos"))
-            if tipo in ("producto", "nombre"):
+            if tipo == "nueva":
+                fila["ok"] = None          # se compara a ojo
+            elif tipo in ("producto", "nombre"):
                 faltan = sorted({n for n in a if n in existentes} - set(nombres))
                 sobran = sorted(set(nombres) & b)
                 if tipo == "nombre" and set(nombres) != a:
@@ -149,18 +181,20 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
 
     t0 = time.perf_counter()
     filas = await asyncio.gather(*(evaluar(i, c) for i, c in enumerate(casos)))
-    bien = sum(1 for f in filas if f.get("ok"))
+    calificadas = [f for f in filas if f["tipo"] != "nueva"]
+    bien = sum(1 for f in calificadas if f.get("ok"))
     por_tipo = {}
-    for f in filas:
+    for f in calificadas:
         t = por_tipo.setdefault(f["tipo"], [0, 0])
         t[0] += 1 if f.get("ok") else 0
         t[1] += 1
     return {"motor": motor, "modelo": config.modelo() if motor == "any3" else "Any 2.0 (sus modelos)",
-            "total": len(filas), "bien": bien, "porcentaje": round(100 * bien / max(1, len(filas)), 1),
+            "total": len(calificadas), "bien": bien, "porcentaje": round(100 * bien / max(1, len(calificadas)), 1),
+            "sin_calificar": len(filas) - len(calificadas),
             "por_tipo": {k: f"{v[0]}/{v[1]}" for k, v in por_tipo.items()},
             "segundos_promedio": round(sum(f["segundos"] for f in filas) / max(1, len(filas)), 1),
             "duracion_s": round(time.perf_counter() - t0, 1),
-            "fallas": [f for f in filas if not f.get("ok")], "todas": filas}
+            "fallas": [f for f in calificadas if not f.get("ok")], "todas": filas}
 
 
 if __name__ == "__main__":
@@ -174,4 +208,4 @@ if __name__ == "__main__":
 
 
 def total_casos() -> int:
-    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS)
+    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS) + len(NUEVAS)
