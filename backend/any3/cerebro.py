@@ -214,6 +214,9 @@ con sus datos ("vende", "desc", "para") y decide:
 - AGREGAR de los posibles los que SÍ lo venden u ofrecen.
 Respeta los filtros del cliente: "para mujer/dama", "para hombre", "para niños/bebé", "para el colegio": solo
 quedan los que cumplen o venden para todos. Precio y calidad no filtran (no hay esos datos).
+Respeta el PROPÓSITO: si quiere COMPRAR algo, no entra un local donde eso solo se USA (una atracción con motos
+eléctricas para niños no vende motos); si quiere un USO concreto, no entra lo que no sirve para eso (una mochila
+artesanal tradicional no es un morral escolar; ropa deportiva no es un vestido de baño, salvo que lo declare).
 Si un local vende varias cosas y entre ellas está lo buscado, SÍ sirve. Ante la duda con uno de la lista, se
 queda; ante la duda con uno posible, no entra.
 Además di cuáles de los que quedan DECLARAN en sus datos lo buscado (o algo que claramente lo incluye) en

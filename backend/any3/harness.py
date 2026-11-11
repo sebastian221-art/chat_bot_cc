@@ -48,7 +48,24 @@ _PIDE = {"general": None, "precios": "carta", "telefono": "telefono", "ubicacion
 LINEA_MALL = "317 432 0138"
 
 
+# Contadores desde que arrancó el servidor (se ven en /any3/estado): cuántos respondió Any 3.0, cuántos pasó a
+# Any 2.0 por tema (normal) y cuántos por ERROR (lo que hay que vigilar al ponerla de principal).
+import collections as _col
+CONTADOR: _col.Counter = _col.Counter()
+SEGUNDOS: _col.deque = _col.deque(maxlen=300)
+_ERRORES_A_ANY2 = ("cerebro falló", "error")
+
+
 async def _any2(db, telefono, nombre, mensaje, ahora, modo, imagen, es_audio, motivo: str) -> Respuesta:
+    if modo == "produccion":
+        es_error = motivo.startswith(_ERRORES_A_ANY2)
+        CONTADOR["pasó a Any 2.0 por error" if es_error else "pasó a Any 2.0 (tema de Any 2.0)"] += 1
+        if es_error:
+            try:
+                from services.bandeja import registrar_problema
+                registrar_problema("Any 3.0 falló y respondió Any 2.0", telefono, motivo)
+            except Exception:
+                pass
     r = await procesar_any2(db, telefono, nombre, mensaje, ahora=ahora, modo=modo, imagen=imagen, es_audio=es_audio)
     r.meta["any3"] = {"respondio": "any2", "motivo": motivo}
     return r
@@ -113,7 +130,11 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
         except Exception:
             pass
         return await _any2(*args, motivo=f"error respondiendo: {e!r}"[:200])
-    return _salida(ctx, r, es_audio)
+    r = _salida(ctx, r, es_audio)
+    if modo == "produccion":
+        CONTADOR["respondió Any 3.0"] += 1
+        SEGUNDOS.append(time.monotonic() - ctx._any3_t0)
+    return r
 
 
 # ── Datos verificados a partir de lo que eligió el cerebro ─────────

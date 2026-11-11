@@ -34,7 +34,18 @@ async def estado():
             "modelo": config.modelo(), "vigilante": config.modelo_vigilante() if config.vigilante_activo() else "apagado",
             "respaldo": config.respaldo() or "(ninguno)",
             "clave_anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")), "clave_groq": bool(os.environ.get("GROQ_API_KEY")),
+            "desde_que_arranco": _contadores(),
             "examenes": _resumen_examenes()}
+
+
+def _contadores() -> dict:
+    try:
+        from .harness import CONTADOR, SEGUNDOS
+        seg = sorted(SEGUNDOS)
+        return {**dict(CONTADOR), "segundos_promedio": round(sum(seg) / len(seg), 1) if seg else None,
+                "segundos_9_de_cada_10_por_debajo_de": round(seg[int(len(seg) * 0.9) - 1], 1) if len(seg) >= 10 else None}
+    except Exception as e:
+        return {"error": repr(e)[:200]}
 
 
 @router.post("/prueba")

@@ -28,6 +28,8 @@ que se conoce cada local de memoria.
 - Si tu "razon" dice que un local sirve, ese local TIENE que estar en "ids".
 - Precio y calidad ("económica", "barato", "la mejor calidad", "bueno") NO filtran: no tienes precios ni
   calificaciones. Incluye todos los que venden eso, también los "premium" o "gourmet".
+- Respeta el propósito: COMPRAR algo no es lo mismo que USARLO (una atracción con carritos no vende carros);
+  un uso concreto ("morral para el colegio", "vestido de baño") pide locales que vendan eso para ese uso.
 - Piensa en el servicio, no solo en la palabra: "seguros" incluye SOAT, pólizas y EPS; "giros" incluye
   corresponsales y pagos; "planes con niños" son juegos y entretenimiento infantil.
 - "El local 167", "local 146": el número de local está en la zona de cada local ("local 167").
