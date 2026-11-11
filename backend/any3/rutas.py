@@ -4,8 +4,8 @@ Rutas de Any 3.0 (todas con sesión del panel, salvo /any3/estado que no muestra
   GET  /any3/estado        ¿está activa?, qué números atiende, qué modelo usa (sin secretos)
   POST /any3/prueba        probar un mensaje con Any 3.0 (igual que /any/prueba)
   GET  /any3/chat          chat de prueba en el navegador, con Any 3.0
-  POST /any3/examen        corre el examen del cerebro en segundo plano (?modelo=anthropic:claude-sonnet-5-5)
-  GET  /any3/examen        resultado del último examen
+  POST /any3/examen        examen con respuestas completas: ?motor=any3|any2|ambos (&modelo=… para Any 3.0)
+  GET  /any3/examen        resultados (?todas=true trae cada pregunta con su respuesta)
   GET  /any3/vacios        lo que preguntaron y no estaba en la base (datos por completar)
   GET  /any3/groq          límites de tokens de tu cuenta de Groq y si Any 3.0 cabe
 """
@@ -24,7 +24,7 @@ from any.entrada import Prueba, _sesion, _usuario_panel
 from . import config
 
 router = APIRouter(prefix="/any3", tags=["any3"])
-_examen: dict = {"estado": "sin correr"}
+_examenes: dict = {}      # motor → resultado del último examen ("any3", "any2")
 
 
 @router.get("/estado")
@@ -35,7 +35,8 @@ async def estado():
             "modelo": config.modelo(), "vigilante": config.modelo_vigilante() if config.vigilante_activo() else "apagado",
             "respaldo": config.respaldo() or "(ninguno)",
             "clave_anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")), "clave_groq": bool(os.environ.get("GROQ_API_KEY")),
-            "examen": {k: v for k, v in _examen.items() if k in ("estado", "modelo", "bien", "total", "porcentaje")}}
+            "examenes": {m: {k: v for k, v in e.items() if k in ("estado", "modelo", "bien", "total", "porcentaje")}
+                         for m, e in _examenes.items()}}
 
 
 @router.post("/prueba")
@@ -71,6 +72,7 @@ async def chat():
     botones = ('<button id="b-groq" type="button">Límites Groq</button>'
                '<button id="b-examen" type="button">Correr examen</button>'
                '<button id="b-ver" type="button">Ver examen</button>'
+               '<button id="b-exportar" type="button">Exportar examen</button>'
                '<button id="b-vacios" type="button">Datos faltantes</button>')
     html = html.replace('<button id="reiniciar" type="button">Reiniciar conversación</button>',
                         '<button id="reiniciar" type="button">Reiniciar conversación</button>' + botones, 1)
@@ -78,7 +80,16 @@ async def chat():
     return HTMLResponse(html)
 
 
-_HERRAMIENTAS = """<script>
+_HERRAMIENTAS = """<style>
+#traza table { width:100%; border-collapse:collapse; font-size:13px; }
+#traza td, #traza th { border-bottom:1px solid #e3e3e3; padding:5px 4px; vertical-align:top; text-align:left; }
+#traza tr.fila { cursor:pointer; } #traza tr.fila:hover { background:#f3f3f3; }
+#traza .det { background:#fafafa; } #traza .det pre { white-space:pre-wrap; margin:4px 0; font:12px/1.4 system-ui; }
+#traza .filtros button { margin:0 4px 6px 0; padding:4px 8px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; }
+#traza .resumen { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+#traza .resumen div { border:1px solid #ddd; border-radius:8px; padding:6px 10px; }
+</style>
+<script>
 function _esc(t) { return String(t ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]); }
 function _panel(titulo, html) { $("traza").innerHTML = "<h2>" + _esc(titulo) + "</h2>" + html; }
 async function _json(ruta, opciones) {
@@ -91,23 +102,60 @@ $("b-groq").onclick = async () => {
   _panel("Límites de Groq", "<p><b>" + _esc(j.veredicto || j.error) + "</b></p><pre style='white-space:pre-wrap'>" + _esc(JSON.stringify(j, null, 1)) + "</pre>");
 };
 $("b-examen").onclick = async () => {
-  const modelo = prompt("Modelo (vacío = el configurado). Ej: groq:openai/gpt-oss-120b", "") || "";
-  const j = await _json("/any3/examen" + (modelo ? "?modelo=" + encodeURIComponent(modelo) : ""), { method: "POST" });
-  _panel("Examen", "<p>" + _esc(j.estado) + " · " + _esc(j.modelo || "") + "</p><p>Con Groq va de a una pregunta: puede tardar 10–20 minutos. Toca «Ver examen» para ver el avance.</p>");
+  const motor = (prompt("¿Qué examinar? Escribe: ambos, any3 o any2", "ambos") || "").trim().toLowerCase();
+  if (!motor) return;
+  const j = await _json("/any3/examen?motor=" + encodeURIComponent(motor), { method: "POST" });
+  _panel("Examen", "<p>" + _esc(j.estado) + "</p><p>Corre las mismas preguntas con cada motor y guarda la respuesta COMPLETA de cada una. Tarda unos minutos: toca «Ver examen» para ver el avance.</p>");
 };
-$("b-ver").onclick = async () => {
-  const j = await _json("/any3/examen");
-  let h = "<p><b>" + _esc(j.estado) + "</b> · " + _esc(j.modelo || "") + " · directorio " + _esc(j.directorio || "") + "</p>";
-  if (j.estado === "corriendo") h += "<p>Van " + _esc(j.progreso) + " de 97 preguntas…</p>";
-  if (j.total) h += "<p style='font-size:20px'><b>" + j.bien + " / " + j.total + "</b> (" + j.porcentaje + " %) · " + j.segundos_promedio + " s por pregunta</p>";
-  if (j.error) h += "<p class='error'>" + _esc(j.error) + "</p>";
-  for (const f of (j.fallas || [])) {
-    h += "<div style='border-top:1px solid #ddd;padding:6px 0'><b>❌ " + _esc(f.pregunta) + "</b><br>eligió: " + _esc((f.eligio || []).join(", ") || f.accion || "") +
-         (f.faltan && f.faltan.length ? "<br>faltaron: " + _esc(f.faltan.join(", ")) : "") +
-         (f.sobran && f.sobran.length ? "<br>sobraron: " + _esc(f.sobran.join(", ")) : "") +
-         (f.problema ? "<br>" + _esc(f.problema) : "") + "<br><small>" + _esc(f.razon || "") + "</small></div>";
+let _datos = null, _filtro = "todas";
+function _celda(f) { return !f ? "—" : (f.ok ? "✅" : "❌"); }
+function _detalle(nombre, f) {
+  if (!f) return "<p><b>" + nombre + ":</b> sin correr</p>";
+  return "<p><b>" + nombre + " " + _celda(f) + "</b> · " + _esc(f.tema || "") + (nombre === "Any 3.0" && f.respondio === "any2" ? " · (lo pasó a Any 2.0)" : "") + " · " + _esc(f.segundos) + " s" +
+    (f.eligio && f.eligio.length ? "<br>locales: " + _esc(f.eligio.join(", ")) : "") +
+    (f.faltan && f.faltan.length ? "<br><b>faltaron:</b> " + _esc(f.faltan.join(", ")) : "") +
+    (f.sobran && f.sobran.length ? "<br><b>sobraron:</b> " + _esc(f.sobran.join(", ")) : "") +
+    (f.problema ? "<br><b>" + _esc(f.problema) + "</b>" : "") + "</p><pre>" + _esc(f.respuesta || "") + "</pre>";
+}
+function _pintar() {
+  const a3 = (_datos.any3 || {}), a2 = (_datos.any2 || {});
+  const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b><br>" + _esc(e.estado) + (e.estado === "corriendo" ? " · " + _esc(e.progreso) + " de " + _esc(e.total_casos) : "") +
+     (e.total ? "<br><span style='font-size:20px'><b>" + e.bien + " / " + e.total + "</b></span> (" + e.porcentaje + " %)<br>" + _esc(JSON.stringify(e.por_tipo || {})) + "<br>" + e.segundos_promedio + " s por pregunta" : "") +
+     (e.error ? "<br><span class='error'>" + _esc(e.error) + "</span>" : "") + "<br><small>" + _esc(e.modelo || "") + "</small></div>";
+  let h = "<div class='resumen'>" + res("Any 3.0", a3) + res("Any 2.0", a2) + "</div>";
+  h += "<div class='filtros'>" + ["todas", "fallas any3", "fallas any2", "diferencias"].map(x => "<button data-f='" + x + "'" + (x === _filtro ? " style='background:#eee'" : "") + ">" + x + "</button>").join("") + "</div>";
+  const f3 = {}, f2 = {}; (a3.todas || []).forEach(f => f3[f.n] = f); (a2.todas || []).forEach(f => f2[f.n] = f);
+  const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
+  h += "<table><tr><th>#</th><th>Pregunta</th><th>3.0</th><th>2.0</th></tr>";
+  for (const n of ns) {
+    const x = f3[n], y = f2[n];
+    if (_filtro === "fallas any3" && !(x && !x.ok)) continue;
+    if (_filtro === "fallas any2" && !(y && !y.ok)) continue;
+    if (_filtro === "diferencias" && !(x && y && x.ok !== y.ok)) continue;
+    const p = (x || y).pregunta;
+    h += "<tr class='fila' data-n='" + n + "'><td>" + n + "</td><td>" + _esc(p) + "</td><td>" + _celda(x) + "</td><td>" + _celda(y) + "</td></tr>" +
+         "<tr class='det' id='det-" + n + "' hidden><td colspan='4'>" + _detalle("Any 3.0", x) + _detalle("Any 2.0", y) + "</td></tr>";
   }
+  h += "</table>";
   _panel("Examen", h);
+  document.querySelectorAll("#traza .filtros button").forEach(b => b.onclick = () => { _filtro = b.dataset.f; _pintar(); });
+  document.querySelectorAll("#traza tr.fila").forEach(tr => tr.onclick = () => { const d = $("det-" + tr.dataset.n); d.hidden = !d.hidden; });
+}
+$("b-ver").onclick = async () => { _datos = await _json("/any3/examen?todas=true"); _pintar(); };
+$("b-exportar").onclick = async () => {
+  const d = await _json("/any3/examen?todas=true");
+  const f3 = {}, f2 = {}; ((d.any3 || {}).todas || []).forEach(f => f3[f.n] = f); ((d.any2 || {}).todas || []).forEach(f => f2[f.n] = f);
+  const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
+  const col = (f, k) => f ? (Array.isArray(f[k]) ? f[k].join(", ") : (k === "ok" ? (f.ok ? "BIEN" : "MAL") : (f[k] ?? ""))) : "";
+  const cab = ["#", "tipo", "pregunta", "any3_resultado", "any3_locales", "any3_faltaron", "any3_sobraron", "any3_problema", "any3_respuesta",
+               "any2_resultado", "any2_locales", "any2_faltaron", "any2_sobraron", "any2_problema", "any2_respuesta"];
+  const filas = [cab].concat(ns.map(n => { const x = f3[n], y = f2[n], b = x || y;
+    return [n, b.tipo, b.pregunta].concat(["ok", "eligio", "faltan", "sobran", "problema", "respuesta"].map(k => col(x, k)))
+                                  .concat(["ok", "eligio", "faltan", "sobran", "problema", "respuesta"].map(k => col(y, k))); }));
+  const csv = "\\ufeff" + filas.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(";")).join("\\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = "examen_any3_vs_any2.csv"; a.click();
 };
 $("b-vacios").onclick = async () => {
   const j = await _json("/any3/vacios");
@@ -120,33 +168,39 @@ $("b-vacios").onclick = async () => {
 
 
 @router.post("/examen")
-async def correr_examen(modelo: str = "", _u=Depends(_usuario_panel)):
-    if _examen.get("estado") == "corriendo":
-        return {"estado": "ya hay un examen corriendo", "progreso": _examen.get("progreso")}
-    _examen.clear()
-    _examen.update(estado="corriendo", modelo=modelo or config.modelo(), progreso=0, inicio=datetime.now(ZONA_HORARIA).isoformat())
+async def correr_examen(motor: str = "ambos", modelo: str = "", _u=Depends(_usuario_panel)):
+    """Corre el examen con Any 3.0, con Any 2.0 o con los dos (uno detrás del otro), en segundo plano."""
+    from .examen import correr, total_casos
+    motores = ["any3", "any2"] if motor == "ambos" else [motor]
+    if any(m not in ("any3", "any2") for m in motores):
+        raise HTTPException(400, "motor debe ser any3, any2 o ambos")
+    if any(_examenes.get(m, {}).get("estado") in ("corriendo", "en espera") for m in motores):
+        return {"estado": "ya hay un examen corriendo: toca «Ver examen»"}
+    for m in motores:
+        _examenes[m] = {"estado": "en espera", "progreso": 0, "total_casos": total_casos(),
+                        "modelo": (modelo or config.modelo()) if m == "any3" else "Any 2.0 (sus modelos)"}
 
     async def tarea():
-        from .examen import correr
-        db = _sesion()
-        try:
-            def progreso(_f):
-                _examen["progreso"] = _examen.get("progreso", 0) + 1
-            res = await correr(db, progreso=progreso, modelo=modelo)
-            _examen.update(res, estado="terminado")
-        except Exception as e:
-            _examen.update(estado="falló", error=repr(e)[:500])
-        finally:
-            db.close()
+        for m in motores:
+            e = _examenes[m]
+            e.update(estado="corriendo", inicio=datetime.now(ZONA_HORARIA).isoformat())
+
+            def progreso(_f, e=e):
+                e["progreso"] = e.get("progreso", 0) + 1
+            try:
+                res = await correr(m, progreso=progreso, modelo=modelo if m == "any3" else "")
+                e.update(res, estado="terminado")
+            except Exception as ex:
+                e.update(estado="falló", error=repr(ex)[:500])
     asyncio.create_task(tarea())
-    return {"estado": "corriendo", "modelo": _examen["modelo"], "ver": "GET /any3/examen"}
+    return {"estado": "corriendo: " + " y luego ".join("Any 3.0" if m == "any3" else "Any 2.0" for m in motores)}
 
 
 @router.get("/examen")
 async def ver_examen(todas: bool = False, _u=Depends(_usuario_panel)):
     if todas:
-        return _examen
-    return {k: v for k, v in _examen.items() if k != "todas"}
+        return _examenes
+    return {m: {k: v for k, v in e.items() if k != "todas"} for m, e in _examenes.items()}
 
 
 @router.get("/vacios")

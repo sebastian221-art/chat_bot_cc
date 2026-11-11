@@ -79,6 +79,7 @@ def candidatos(ctx, d: Directorio, maximo: int = 25) -> list[str]:
         from any.conocimiento.buscador import buscar_locales, seleccionar_relevantes
         res = buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True)
         primero = seleccionar_relevantes(res)
+        ctx._any3_seguras = [f"L{r.local.id}" for r in primero if f"L{r.local.id}" in d.locales]
         resto = sorted((r for r in res if r not in primero), key=lambda r: -r.puntaje)
         ids = []
         for r in list(primero) + resto:
@@ -197,4 +198,43 @@ async def elegir(ctx, d: Directorio) -> Eleccion:
         modo = "compacto"
         r = await _llamar(ctx, construir(ctx.db, d.hoy, compacto=True), modo)
     ctx.traza.paso("directorio", modo)
-    return validar(r.json(), d)
+    e = validar(r.json(), d)
+    if e.accion == "locales" and not e.es_local_concreto and e.ids:
+        await segunda_mirada(ctx, d, e)
+    return e
+
+
+_SEGUNDA = """Eres el revisor de Any, la asistente del Centro Comercial El Puente. Un cliente busca algo y ya se eligió una
+lista de locales. El buscador encontró OTROS locales que la lista no tiene. Revisa cada uno con sus datos y di
+cuáles TAMBIÉN responden a lo que busca el cliente (lo venden u ofrecen, según "vende" y "desc").
+Respeta los filtros del cliente: si pide "para mujer", "para niños", "para el colegio", solo entran los que
+cumplen. Si un local no tiene que ver (otra cosa, solo coincide una palabra del nombre o de la descripción), NO
+entra. Ante la duda, no entra.
+Responde SOLO JSON: {"agregar": ["L…"], "razon": "frase corta"}"""
+
+
+async def segunda_mirada(ctx, d: Directorio, e: Eleccion):
+    """El cerebro lee un directorio largo y a veces se le escapa un local que el buscador SÍ encontró por lo que
+    declara vender (examen 11/11: STOP JEANS en «jeans para mujer», Pololos en «malteada», TOTTO en «bolsos»).
+    Una revisión corta, solo de esos locales, decide si también entran. Nunca agrega locales fuera de esas pistas."""
+    import asyncio
+    from .directorio import linea_local
+    faltan = [i for i in getattr(ctx, "_any3_seguras", []) if i not in e.ids][:15]
+    if not faltan:
+        return
+    texto = (f"EL CLIENTE BUSCA: {e.consulta or ctx.mensaje}\n"
+             f"YA ELEGIDOS: {', '.join(d.nombre(i) for i in e.ids)}\n\nOTROS QUE ENCONTRÓ EL BUSCADOR:\n"
+             + "\n".join(linea_local(i, d.locales[i]) for i in faltan))
+    try:
+        r = await asyncio.wait_for(llm.completar(
+            [{"role": "system", "content": _SEGUNDA}, {"role": "user", "content": texto}],
+            json_salida=True, temperatura=0, max_tokens=3000, razonamiento="low", timeout_s=15), timeout=20)
+        ctx.traza.llm("segunda_mirada", r)
+        agregar = [str(x).strip().upper() for x in (r.json().get("agregar") or [])]
+    except Exception as ex:
+        ctx.traza.alerta(f"la segunda mirada falló (se deja la elección del cerebro): {ex}")
+        return
+    nuevos = [i for i in agregar if i in faltan and i not in e.ids]
+    ctx.traza.paso("segunda_mirada", {"revisados": [d.nombre(i) for i in faltan],
+                                      "agregados": [d.nombre(i) for i in nuevos]})
+    e.ids.extend(nuevos)

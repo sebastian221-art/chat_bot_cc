@@ -1,129 +1,177 @@
 """
-Examen del cerebro de Any 3.0 con preguntas REALES de clientes (las mismas del banco de Any 2.0 y más).
-Mide lo que importa: ¿eligió los locales correctos y ninguno que no sea?
+Examen con preguntas REALES de clientes. Corre la respuesta COMPLETA (lo que le llegaría al cliente) con el motor
+que se elija, para comparar Any 3.0 contra Any 2.0 con exactamente las mismas preguntas.
 
-  python -m any3.examen                     (necesita la clave del modelo en el entorno)
-  POST /any3/examen  y luego  GET /any3/examen   (desde el panel, en Railway, donde está la clave)
+  python -m any3.examen [any3|any2]          (necesita la clave del modelo en el entorno)
+  Desde /any3/chat: botones «Correr examen» y «Ver examen» (en Railway, donde está la clave)
 
-Para comparar modelos: ANY3_LLM=anthropic:claude-haiku-5-5 / anthropic:claude-sonnet-5-5 / groq:openai/gpt-oss-120b
+Qué se califica:
+  - productos: que salgan los locales que DEBEN y ninguno de los que NO pueden salir;
+  - nombres: que salga exactamente ese local;
+  - información: que lo atienda el tema correcto y que la respuesta traiga el dato clave (precio, correo…);
+  - seguimientos: conversaciones de 2 mensajes («háblame de X» → «¿y el teléfono?»).
+Cada pregunta usa un teléfono de prueba nuevo y al final se borra todo lo que dejó (conversación y trazas).
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime
 
 from any.evals.banco_busqueda import CASOS, NOMBRES
 
-# (pregunta, acción esperada, palabra que debe estar en el título de algún K elegido o None)
-INFO: list[tuple[str, str, str | None]] = [
-    ("¿Cuánto vale el parqueadero?", "info", "parqueadero"),
-    ("¿El parqueadero es gratis si compro en Jumbo?", "info", "parqueadero"),
-    ("¿Cuánto vale la mensualidad de moto?", "info", "parqueadero"),
-    ("¿A qué hora cierran hoy?", "info", "horario"),
-    ("¿Puedo entrar con mi perro?", "info", "mascotas"),
-    ("¿Cómo registro mis facturas para el sorteo?", None, None),
-    ("¿Dónde compro una tarjeta de regalo?", "info", "bono"),
-    ("¿Hay enfermería?", "info", "enfermeria"),
-    ("Necesito el correo de la gerente", "info", "gerencia"),
-    ("¿Cuál es la dirección del centro comercial?", "info", "direccion"),
-    ("¿Qué eventos hay este fin de semana?", "eventos", None),
-    ("¿Qué sorteos hay?", "sorteos_promos", None),
-    ("¿Qué películas hay en cine?", "cine", None),
-    ("Quiero pedir un domicilio de Zirus Pizza", "domicilios", None),
-    ("Me robaron el celular en el baño", "emergencia_queja", None),
-    ("Quiero arrendar un local", "administracion", None),
-    ("Hola", "conversacion", None),
-    ("Gracias, muy amable", "conversacion", None),
+# (pregunta, tema esperado, textos de los que AL MENOS UNO debe estar en la respuesta)
+INFO: list[tuple[str, str, list[str]]] = [
+    ("¿Cuánto vale el parqueadero?", "info", ["3.600", "3600"]),
+    ("¿El parqueadero es gratis si compro en Jumbo?", "info", ["35.000", "35000"]),
+    ("¿Cuánto vale la mensualidad de moto?", "info", ["60.000", "60000"]),
+    ("¿A qué hora cierran hoy?", "info", ["pm", "p. m", "p.m"]),
+    ("¿Puedo entrar con mi perro?", "info", ["mascota"]),
+    ("¿Cómo registro mis facturas para el sorteo?", "", ["registro-de-facturas", "punto de informacion"]),
+    ("¿Dónde compro una tarjeta de regalo?", "info", ["punto de informacion"]),
+    ("¿Hay enfermería?", "info", ["enfermer"]),
+    ("Necesito el correo de la gerente", "info", ["gerencia@elpuente.com.co"]),
+    ("¿Cuál es la dirección del centro comercial?", "info", ["calle 10"]),
+    ("¿Qué eventos hay este fin de semana?", "eventos", []),
+    ("¿Qué sorteos hay?", "sorteos_promos", []),
+    ("¿Qué películas hay en cine?", "cine", []),
+    ("Quiero pedir un domicilio de Zirus Pizza", "domicilios", []),
+    ("Me robaron el celular en el baño", "emergencia_queja", []),
+    ("Quiero arrendar un local", "administracion", []),
+    ("Hola", "conversacion", []),
+    ("Gracias, muy amable", "conversacion", []),
 ]
 
+# Conversaciones de varios mensajes: (mensajes, local que debe estar en la ÚLTIMA respuesta)
+SEGUIMIENTOS: list[tuple[list[str], str]] = [
+    (["Háblame de Zirus Pizza", "¿y el teléfono?"], "Zirus Pizza"),
+    (["¿Dónde queda Juan Valdez?", "¿y a qué hora abren?"], "Juan Valdez"),
+    (["Quiero comida mexicana", "¿tienen carta?"], "Mero Merito"),
+    (["Hola", "busco cascos para moto"], "King Helmets"),
+]
 
-def _ctx(db, mensaje: str):
-    from any.config import ZONA_HORARIA
-    from any.nucleo.estado import EstadoSesion
-    from any.nucleo.tipos import Contexto
-    from any.nucleo.trazas import Traza
-    return Contexto(db=db, telefono="examen-any3", nombre="", mensaje=mensaje, ahora=datetime.now(ZONA_HORARIA),
-                    historial=[], sesion_nueva=True, estado=EstadoSesion("examen-any3"),
-                    traza=Traza("examen-any3", mensaje, "eval"), modo="eval")
+# Tema de la respuesta → acción del examen
+_ACCION = {"servicios_mall": "info", "locales": "locales", "torre_medica": "locales"}
 
 
-async def _uno(db, d, pregunta: str):
-    from any3 import cerebro
-    t0 = time.perf_counter()
-    ctx = _ctx(db, pregunta)
-    for intento in range(3):
+def _nombres(r) -> list[str]:
+    lista = r.meta.get("lista_equidad")
+    if lista:
+        return list(lista)
+    loc = (r.entidades or {}).get("local")
+    if isinstance(loc, list):
+        return [str(x) for x in loc]
+    return [loc] if loc else []
+
+
+async def _conversar(motor: str, mensajes: list[str], tel: str):
+    from models.database import SessionLocal
+    from any.nucleo.guardias import borrar_datos
+    db = SessionLocal()
+    try:
+        borrar_datos(db, tel)
+        r = None
+        for m in mensajes:
+            if motor == "any3":
+                from any3.harness import procesar
+            else:
+                from any.nucleo.harness import procesar
+            r = await procesar(db, tel, "", m, modo="eval")
+        return r
+    finally:
         try:
-            el = await cerebro.elegir(ctx, d)
-            break
-        except Exception as e:
-            if intento < 2 and ("429" in str(e) or "rate" in str(e).lower()):
-                await asyncio.sleep(30)        # límite por minuto del proveedor: se espera y se repite
-                continue
-            return None, f"error: {e}"[:300], time.perf_counter() - t0, ctx.traza.tokens
-    return el, "", time.perf_counter() - t0, ctx.traza.tokens
+            borrar_datos(db, tel)
+        except Exception:
+            db.rollback()
+        db.close()
 
 
-async def correr(db, paralelo: int = 4, progreso=None, modelo: str = "") -> dict:
+async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: str = "") -> dict:
+    from any.conocimiento.texto import normalizar
     from any.nucleo.harness import _cargar_modelos
+    from models.database import SessionLocal
     from any3 import config
+    from any3.directorio import construir
     if modelo:
         config.MODELO_FORZADO.set(modelo)
-    if config.modelo().startswith("groq:"):
-        paralelo = 1          # Groq limita tokens por minuto: de a una pregunta
-    from any3.directorio import construir
     _cargar_modelos()
-    d = construir(db)
-    from any3.cerebro import modo_directorio
-    existentes = {l.nombre for l in d.locales.values()}
+    db = SessionLocal()
+    try:
+        existentes = {l.nombre for l in construir(db).locales.values()}
+    finally:
+        db.close()
     sem = asyncio.Semaphore(paralelo)
-    casos = ([("producto", p, deben, nunca) for p, deben, nunca in CASOS]
-             + [("nombre", p, {esperado}, set()) for p, esperado in NOMBRES]
-             + [("info", p, acc, k) for p, acc, k in INFO])
+    casos = ([("producto", [p], deben, nunca) for p, deben, nunca in CASOS]
+             + [("nombre", [p], {esperado}, set()) for p, esperado in NOMBRES if esperado in existentes]
+             + [("info", [p], acc, textos) for p, acc, textos in INFO]
+             + [("seguimiento", msgs, {local}, set()) for msgs, local in SEGUIMIENTOS if local in existentes])
 
-    async def evaluar(caso):
-        tipo, pregunta, a, b = caso
+    async def evaluar(i, caso):
+        tipo, msgs, a, b = caso
+        t0 = time.perf_counter()
+        fila = {"n": i + 1, "tipo": tipo, "pregunta": " → ".join(msgs)}
         async with sem:
-            el, error, seg, tokens = await _uno(db, d, pregunta)
-        fila = {"tipo": tipo, "pregunta": pregunta, "segundos": round(seg, 1), "tokens": tokens}
-        if el is None:
-            fila.update(ok=False, problema=error)
-        else:
-            nombres = [d.nombre(i) for i in el.ids]
-            fila.update(accion=el.accion, eligio=nombres, info=[d.nombre(i) for i in el.info_ids], razon=el.razon)
+            try:
+                r = await asyncio.wait_for(_conversar(motor, msgs, f"prueba-ex{motor[-1]}-{i}"), timeout=150)
+            except Exception as e:
+                r = None
+                fila.update(ok=False, problema=f"error: {e!r}"[:300])
+        fila["segundos"] = round(time.perf_counter() - t0, 1)
+        if r is not None:
+            nombres = _nombres(r)
+            accion = _ACCION.get(r.flujo, r.flujo)
+            m3 = r.meta.get("any3") or {}
+            fila.update(tema=r.flujo, eligio=nombres, respuesta=r.texto,
+                        respondio=m3.get("respondio") or ("any3" if motor == "any3" else "any2"),
+                        revision=(m3.get("revision") or {}).get("intentos"))
             if tipo in ("producto", "nombre"):
                 faltan = sorted({n for n in a if n in existentes} - set(nombres))
                 sobran = sorted(set(nombres) & b)
-                if tipo == "nombre" and set(nombres) != a & existentes and a & existentes:
+                if tipo == "nombre" and set(nombres) != a:
                     sobran = sorted(set(nombres) - a)
                 fila.update(ok=not faltan and not sobran, faltan=faltan, sobran=sobran)
+            elif tipo == "seguimiento":
+                local = next(iter(a))
+                ok = local in nombres or normalizar(local) in normalizar(r.texto)
+                fila.update(ok=ok, faltan=[] if ok else [local])
             else:
-                ok = a is None or el.accion == a
+                ok = not a or accion == a
+                texto = normalizar(r.texto).replace(" ", "")
                 if ok and b:
-                    from any.conocimiento.texto import normalizar
-                    ok = any(b in normalizar(d.nombre(i)) for i in el.info_ids) or \
-                        any(b in normalizar(d.nombre(i)) for i in el.ids)
-                fila.update(ok=ok)
+                    ok = any(normalizar(x).replace(" ", "") in texto for x in b)
+                    if not ok:
+                        fila["problema"] = f"la respuesta no trae: {' / '.join(b)}"
+                elif not ok:
+                    fila["problema"] = f"lo atendió «{r.flujo}» y debía ser «{a}»"
+                fila["ok"] = ok
         if progreso:
             progreso(fila)
         return fila
 
     t0 = time.perf_counter()
-    filas = await asyncio.gather(*(evaluar(c) for c in casos))
+    filas = await asyncio.gather(*(evaluar(i, c) for i, c in enumerate(casos)))
     bien = sum(1 for f in filas if f.get("ok"))
-    entrada = sum(f["tokens"]["entrada"] for f in filas)
-    return {"modelo": config.modelo(), "directorio": modo_directorio(), "total": len(filas), "bien": bien,
-            "porcentaje": round(100 * bien / max(1, len(filas)), 1),
+    por_tipo = {}
+    for f in filas:
+        t = por_tipo.setdefault(f["tipo"], [0, 0])
+        t[0] += 1 if f.get("ok") else 0
+        t[1] += 1
+    return {"motor": motor, "modelo": config.modelo() if motor == "any3" else "Any 2.0 (sus modelos)",
+            "total": len(filas), "bien": bien, "porcentaje": round(100 * bien / max(1, len(filas)), 1),
+            "por_tipo": {k: f"{v[0]}/{v[1]}" for k, v in por_tipo.items()},
             "segundos_promedio": round(sum(f["segundos"] for f in filas) / max(1, len(filas)), 1),
-            "tokens_entrada_total": entrada, "duracion_s": round(time.perf_counter() - t0, 1),
+            "duracion_s": round(time.perf_counter() - t0, 1),
             "fallas": [f for f in filas if not f.get("ok")], "todas": filas}
 
 
 if __name__ == "__main__":
-    from models.database import SessionLocal
-    res = asyncio.run(correr(SessionLocal()))
+    import sys
+    motor = sys.argv[1] if len(sys.argv) > 1 else "any3"
+    res = asyncio.run(correr(motor))
     for f in res["fallas"]:
-        print("❌", f["pregunta"], "→", f.get("accion"), f.get("eligio"), "faltan", f.get("faltan"),
-              "sobran", f.get("sobran"), f.get("problema", ""))
-    print(f"\n{res['modelo']}: {res['bien']}/{res['total']} ({res['porcentaje']} %) · "
-          f"{res['segundos_promedio']} s por pregunta")
+        print("❌", f["pregunta"], "→", f.get("eligio"), "faltan", f.get("faltan"), "sobran", f.get("sobran"),
+              f.get("problema", ""))
+    print(f"\n{res['motor']}: {res['bien']}/{res['total']} ({res['porcentaje']} %) · {res['por_tipo']}")
+
+
+def total_casos() -> int:
+    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS)
