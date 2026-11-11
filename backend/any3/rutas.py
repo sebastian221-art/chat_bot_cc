@@ -24,7 +24,6 @@ from any.entrada import Prueba, _sesion, _usuario_panel
 from . import config
 
 router = APIRouter(prefix="/any3", tags=["any3"])
-_examenes: dict = {}      # motor → resultado del último examen ("any3", "any2")
 
 
 @router.get("/estado")
@@ -35,8 +34,7 @@ async def estado():
             "modelo": config.modelo(), "vigilante": config.modelo_vigilante() if config.vigilante_activo() else "apagado",
             "respaldo": config.respaldo() or "(ninguno)",
             "clave_anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")), "clave_groq": bool(os.environ.get("GROQ_API_KEY")),
-            "examenes": {m: {k: v for k, v in e.items() if k in ("estado", "modelo", "bien", "total", "porcentaje")}
-                         for m, e in _examenes.items()}}
+            "examenes": _resumen_examenes()}
 
 
 @router.post("/prueba")
@@ -94,18 +92,28 @@ function _esc(t) { return String(t ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","
 function _panel(titulo, html) { $("traza").innerHTML = "<h2>" + _esc(titulo) + "</h2>" + html; }
 async function _json(ruta, opciones) {
   const r = await fetch(ruta, { ...(opciones || {}), headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) } });
-  return r.json();
+  let j = null;
+  try { j = await r.json(); } catch (e) { j = { detail: "respuesta no válida del servidor (" + r.status + ")" }; }
+  if (!r.ok) {
+    if (r.status === 401) { j.detail = "Tu sesión venció: recarga la página y vuelve a entrar."; }
+    throw new Error(j.detail || ("error " + r.status));
+  }
+  return j;
 }
+function _fallo(titulo, e) { _panel(titulo, "<p class='error'>" + _esc(e.message || e) + "</p>"); }
 $("b-groq").onclick = async () => {
   _panel("Límites de Groq", "<p>Consultando…</p>");
-  const j = await _json("/any3/groq");
+  let j;
+  try { j = await _json("/any3/groq"); } catch (e) { return _fallo("Límites de Groq", e); }
   _panel("Límites de Groq", "<p><b>" + _esc(j.veredicto || j.error) + "</b></p><pre style='white-space:pre-wrap'>" + _esc(JSON.stringify(j, null, 1)) + "</pre>");
 };
 $("b-examen").onclick = async () => {
   const motor = (prompt("¿Qué examinar? Escribe: ambos, any3 o any2", "ambos") || "").trim().toLowerCase();
   if (!motor) return;
-  const j = await _json("/any3/examen?motor=" + encodeURIComponent(motor), { method: "POST" });
-  _panel("Examen", "<p>" + _esc(j.estado) + "</p><p>Corre las mismas preguntas con cada motor y guarda la respuesta COMPLETA de cada una. Tarda unos minutos: toca «Ver examen» para ver el avance.</p>");
+  let j;
+  try { j = await _json("/any3/examen?motor=" + encodeURIComponent(motor), { method: "POST" }); } catch (e) { return _fallo("Examen", e); }
+  _panel("Examen", "<p>" + _esc(j.estado) + "</p>");
+  setTimeout(_verExamen, 1500);
 };
 let _datos = null, _filtro = "todas";
 function _celda(f) { return !f ? "—" : (f.ok === null || f.ok === undefined ? "⚪" : (f.ok ? "✅" : "❌")); }
@@ -119,7 +127,7 @@ function _detalle(nombre, f) {
 }
 function _pintar() {
   const a3 = (_datos.any3 || {}), a2 = (_datos.any2 || {});
-  const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b><br>" + _esc(e.estado) + (e.estado === "corriendo" ? " · " + _esc(e.progreso) + " de " + _esc(e.total_casos) : "") +
+  const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b><br>" + _esc(e.estado) + (["corriendo", "en espera"].includes(e.estado) ? " · <b>" + _esc(e.progreso) + " de " + _esc(e.total_casos) + "</b> preguntas (se actualiza solo)" : "") +
      (e.total ? "<br><span style='font-size:20px'><b>" + e.bien + " / " + e.total + "</b></span> (" + e.porcentaje + " %)" + (e.sin_calificar ? "<br>+ " + e.sin_calificar + " nuevas para comparar a ojo" : "") + "<br>" + _esc(JSON.stringify(e.por_tipo || {})) + "<br>" + e.segundos_promedio + " s por pregunta" : "") +
      (e.error ? "<br><span class='error'>" + _esc(e.error) + "</span>" : "") + "<br><small>" + _esc(e.modelo || "") + "</small></div>";
   let h = "<div class='resumen'>" + res("Any 3.0", a3) + res("Any 2.0", a2) + "</div>";
@@ -142,9 +150,19 @@ function _pintar() {
   document.querySelectorAll("#traza .filtros button").forEach(b => b.onclick = () => { _filtro = b.dataset.f; _pintar(); });
   document.querySelectorAll("#traza tr.fila").forEach(tr => tr.onclick = () => { const d = $("det-" + tr.dataset.n); d.hidden = !d.hidden; });
 }
-$("b-ver").onclick = async () => { _datos = await _json("/any3/examen?todas=true"); _pintar(); };
+let _reloj = null;
+async function _verExamen() {
+  clearTimeout(_reloj);
+  try { _datos = await _json("/any3/examen?todas=true"); } catch (e) { return _fallo("Examen", e); }
+  if (!_datos.any3 && !_datos.any2) { _panel("Examen", "<p>Todavía no hay ningún examen guardado. Toca «Correr examen».</p>"); return; }
+  _pintar();
+  const vivo = ["any3", "any2"].some(m => _datos[m] && ["corriendo", "en espera"].includes(_datos[m].estado));
+  if (vivo) _reloj = setTimeout(() => { if ($("traza").querySelector(".resumen")) _verExamen(); }, 5000);   // se actualiza solo
+}
+$("b-ver").onclick = _verExamen;
 $("b-exportar").onclick = async () => {
-  const d = await _json("/any3/examen?todas=true");
+  let d;
+  try { d = await _json("/any3/examen?todas=true"); } catch (e) { return _fallo("Exportar", e); }
   const f3 = {}, f2 = {}; ((d.any3 || {}).todas || []).forEach(f => f3[f.n] = f); ((d.any2 || {}).todas || []).forEach(f => f2[f.n] = f);
   const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
   const col = (f, k) => f ? (Array.isArray(f[k]) ? f[k].join(", ") : (k === "ok" ? (f.ok === null || f.ok === undefined ? "A OJO" : (f.ok ? "BIEN" : "MAL")) : (f[k] ?? ""))) : "";
@@ -159,7 +177,8 @@ $("b-exportar").onclick = async () => {
   a.download = "examen_any3_vs_any2.csv"; a.click();
 };
 $("b-vacios").onclick = async () => {
-  const j = await _json("/any3/vacios");
+  let j;
+  try { j = await _json("/any3/vacios"); } catch (e) { return _fallo("Datos faltantes", e); }
   const lista = (xs) => (xs || []).map(x => "<li>" + _esc(x.fecha) + " — " + _esc(x.mensaje) + "</li>").join("") || "<li>nada</li>";
   _panel("Datos faltantes", "<p>Revisadas: " + _esc(j.revisadas) + "</p><h2>No estaba en la base</h2><ul>" + lista(j.no_estaba_en_la_base) +
     "</ul><h2>Solo «probablemente»</h2><ul>" + lista(j.solo_probable) + "</ul><h2>El vigilante corrigió</h2><ul>" + lista(j.el_vigilante_corrigio) + "</ul>");
@@ -168,40 +187,63 @@ $("b-vacios").onclick = async () => {
 """
 
 
+def _resumen_examenes() -> dict:
+    try:
+        from .almacen import leer
+        return {m: {k: v for k, v in e.items() if k in ("estado", "modelo", "bien", "total", "porcentaje", "progreso")}
+                for m, e in leer().items()}
+    except Exception as e:
+        return {"error": repr(e)[:200]}
+
+
 @router.post("/examen")
 async def correr_examen(motor: str = "ambos", modelo: str = "", _u=Depends(_usuario_panel)):
-    """Corre el examen con Any 3.0, con Any 2.0 o con los dos (uno detrás del otro), en segundo plano."""
+    """Corre el examen con Any 3.0, con Any 2.0 o con los dos (uno detrás del otro), en segundo plano.
+    El avance y los resultados se guardan en la base (sobreviven a reinicios y a varios procesos)."""
+    from .almacen import guardar, leer
     from .examen import correr, total_casos
     motores = ["any3", "any2"] if motor == "ambos" else [motor]
     if any(m not in ("any3", "any2") for m in motores):
         raise HTTPException(400, "motor debe ser any3, any2 o ambos")
-    if any(_examenes.get(m, {}).get("estado") in ("corriendo", "en espera") for m in motores):
+    actuales = leer()
+    if any(actuales.get(m, {}).get("estado") in ("corriendo", "en espera") for m in motores):
         return {"estado": "ya hay un examen corriendo: toca «Ver examen»"}
+    estados = {}
     for m in motores:
-        _examenes[m] = {"estado": "en espera", "progreso": 0, "total_casos": total_casos(),
-                        "modelo": (modelo or config.modelo()) if m == "any3" else "Any 2.0 (sus modelos)"}
+        estados[m] = {"estado": "en espera", "progreso": 0, "total_casos": total_casos(), "todas": [],
+                      "modelo": (modelo or config.modelo()) if m == "any3" else "Any 2.0 (sus modelos)"}
+        guardar(m, estados[m])
 
     async def tarea():
         for m in motores:
-            e = _examenes[m]
+            e = estados[m]
             e.update(estado="corriendo", inicio=datetime.now(ZONA_HORARIA).isoformat())
+            guardar(m, e)
 
-            def progreso(_f, e=e):
+            def progreso(fila, e=e, m=m):
                 e["progreso"] = e.get("progreso", 0) + 1
+                e["todas"].append(fila)
+                try:
+                    guardar(m, e)          # cada pregunta queda guardada apenas termina
+                except Exception:
+                    pass
             try:
                 res = await correr(m, progreso=progreso, modelo=modelo if m == "any3" else "")
                 e.update(res, estado="terminado")
             except Exception as ex:
                 e.update(estado="falló", error=repr(ex)[:500])
+            guardar(m, e)
     asyncio.create_task(tarea())
     return {"estado": "corriendo: " + " y luego ".join("Any 3.0" if m == "any3" else "Any 2.0" for m in motores)}
 
 
 @router.get("/examen")
 async def ver_examen(todas: bool = False, _u=Depends(_usuario_panel)):
+    from .almacen import leer
+    datos = leer()
     if todas:
-        return _examenes
-    return {m: {k: v for k, v in e.items() if k != "todas"} for m, e in _examenes.items()}
+        return datos
+    return {m: {k: v for k, v in e.items() if k != "todas"} for m, e in datos.items()}
 
 
 @router.get("/vacios")
