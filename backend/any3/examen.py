@@ -114,7 +114,8 @@ async def _conversar(motor: str, mensajes: list[str], tel: str):
         db.close()
 
 
-async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: str = "") -> dict:
+async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: str = "", conjunto: str = "todo") -> dict:
+    """conjunto: «todo» (banco + nuevas a ojo + prueba final) o «final» (solo la prueba final, preguntas nuevas)."""
     from any.conocimiento.texto import normalizar
     from any.nucleo.harness import _cargar_modelos
     from models.database import SessionLocal
@@ -134,6 +135,11 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
              + [("info", [p], acc, textos) for p, acc, textos in INFO]
              + [("seguimiento", msgs, {local}, set()) for msgs, local in SEGUIMIENTOS if local in existentes]
              + [("nueva", [p], None, None) for p in NUEVAS])
+    from any3 import examen_final
+    if conjunto == "final":
+        casos = examen_final.casos(existentes)
+    else:
+        casos += examen_final.casos(existentes)
 
     async def evaluar(i, caso):
         tipo, msgs, a, b = caso
@@ -146,6 +152,7 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
                 r = None
                 fila.update(ok=False, problema=f"error: {e!r}"[:300])
         fila["segundos"] = round(time.perf_counter() - t0, 1)
+        clase = tipo.replace("final_", "")
         if r is not None:
             nombres = _nombres(r)
             accion = _ACCION.get(r.flujo, r.flujo)
@@ -153,18 +160,17 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
             fila.update(tema=r.flujo, eligio=nombres, respuesta=r.texto,
                         respondio=m3.get("respondio") or ("any3" if motor == "any3" else "any2"),
                         revision=(m3.get("revision") or {}).get("intentos"))
-            if tipo == "nueva":
+            if clase == "nueva":
                 fila["ok"] = None          # se compara a ojo
-            elif tipo in ("producto", "nombre"):
+            elif clase in ("producto", "nombre", "no_hay"):
                 faltan = sorted({n for n in a if n in existentes} - set(nombres))
                 sobran = sorted(set(nombres) & b)
-                if tipo == "nombre" and set(nombres) != a:
+                if clase == "nombre" and set(nombres) != a:
                     sobran = sorted(set(nombres) - a)
                 fila.update(ok=not faltan and not sobran, faltan=faltan, sobran=sobran)
-            elif tipo == "seguimiento":
-                local = next(iter(a))
-                ok = local in nombres or normalizar(local) in normalizar(r.texto)
-                fila.update(ok=ok, faltan=[] if ok else [local])
+            elif clase == "seguimiento":
+                ok = any(l in nombres or normalizar(l) in normalizar(r.texto) for l in a)
+                fila.update(ok=ok, faltan=[] if ok else sorted(a))
             else:
                 ok = not a or accion in a.split("|")
                 texto = normalizar(r.texto).replace(" ", "")
@@ -207,5 +213,8 @@ if __name__ == "__main__":
     print(f"\n{res['motor']}: {res['bien']}/{res['total']} ({res['porcentaje']} %) · {res['por_tipo']}")
 
 
-def total_casos() -> int:
-    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS) + len(NUEVAS)
+def total_casos(conjunto: str = "todo") -> int:
+    from any3 import examen_final
+    if conjunto == "final":
+        return examen_final.total()
+    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS) + len(NUEVAS) + examen_final.total()

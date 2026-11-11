@@ -199,42 +199,59 @@ async def elegir(ctx, d: Directorio) -> Eleccion:
         r = await _llamar(ctx, construir(ctx.db, d.hoy, compacto=True), modo)
     ctx.traza.paso("directorio", modo)
     e = validar(r.json(), d)
-    if e.accion == "locales" and not e.es_local_concreto and e.ids:
-        await segunda_mirada(ctx, d, e)
+    if not e.es_local_concreto and (e.accion == "locales" or (e.accion == "no_hay" and getattr(ctx, "_any3_seguras", []))):
+        await revisar_lista(ctx, d, e)
     return e
 
 
-_SEGUNDA = """Eres el revisor de Any, la asistente del Centro Comercial El Puente. Un cliente busca algo y ya se eligió una
-lista de locales. El buscador encontró OTROS locales que la lista no tiene. Revisa cada uno con sus datos y di
-cuáles TAMBIÉN responden a lo que busca el cliente (lo venden u ofrecen, según "vende" y "desc").
-Respeta los filtros del cliente: si pide "para mujer", "para niños", "para el colegio", solo entran los que
-cumplen. Si un local no tiene que ver (otra cosa, solo coincide una palabra del nombre o de la descripción), NO
-entra. Ante la duda, no entra.
-Responde SOLO JSON: {"agregar": ["L…"], "razon": "frase corta"}"""
+_REVISOR = """Eres el REVISOR de listas de Any, la asistente del Centro Comercial El Puente (San Gil).
+Un cliente busca algo. Ya se armó una lista de locales y el buscador encontró otros posibles. Revisa CADA local
+con sus datos ("vende", "desc", "para") y decide:
+- QUITAR de la lista los que NO venden u ofrecen lo que el cliente busca. Ejemplos de lo que se quita: un
+  restaurante en una búsqueda de ropa porque se llama "Casual"; una tienda de bolsos en una búsqueda de zapatos
+  si no vende zapatos; una zapatería de cuero en una búsqueda de "tenis" si no dice que vende tenis; un local que
+  solo coincide por una palabra de la descripción o del nombre.
+- AGREGAR de los posibles los que SÍ lo venden u ofrecen.
+Respeta los filtros del cliente: "para mujer/dama", "para hombre", "para niños/bebé", "para el colegio": solo
+quedan los que cumplen o venden para todos. Precio y calidad no filtran (no hay esos datos).
+Si un local vende varias cosas y entre ellas está lo buscado, SÍ sirve. Ante la duda con uno de la lista, se
+queda; ante la duda con uno posible, no entra.
+Responde SOLO JSON: {"quitar": ["L…"], "agregar": ["L…"], "razon": "frase corta"}"""
 
 
-async def segunda_mirada(ctx, d: Directorio, e: Eleccion):
-    """El cerebro lee un directorio largo y a veces se le escapa un local que el buscador SÍ encontró por lo que
-    declara vender (examen 11/11: STOP JEANS en «jeans para mujer», Pololos en «malteada», TOTTO en «bolsos»).
-    Una revisión corta, solo de esos locales, decide si también entran. Nunca agrega locales fuera de esas pistas."""
+async def revisar_lista(ctx, d: Directorio, e: Eleccion):
+    """Segunda IA, con poco texto y los datos COMPLETOS de cada local, revisa la lista del cerebro:
+      - quita los que no son (el cerebro leyendo 137 locales a veces mete uno de más: «Calzado Rich» en «tenis»);
+      - agrega los que el buscador encontró con seguridad y el cerebro pasó por alto (STOP JEANS, Pololos, TOTTO);
+      - si el cerebro dijo «no hay» pero el buscador sí encontró algo, decide si de verdad sirve («seguros» → SOAT).
+    Límites en código: nunca quita más de la mitad, y solo agrega locales que encontró el buscador."""
     import asyncio
     from .directorio import linea_local
-    faltan = [i for i in getattr(ctx, "_any3_seguras", []) if i not in e.ids][:15]
-    if not faltan:
+    elegidos = list(e.ids)
+    posibles = [i for i in getattr(ctx, "_any3_seguras", []) if i not in elegidos][:15]
+    if len(elegidos) < 2 and not posibles:
         return
-    texto = (f"EL CLIENTE BUSCA: {e.consulta or ctx.mensaje}\n"
-             f"YA ELEGIDOS: {', '.join(d.nombre(i) for i in e.ids)}\n\nOTROS QUE ENCONTRÓ EL BUSCADOR:\n"
-             + "\n".join(linea_local(i, d.locales[i]) for i in faltan))
+    texto = (f"EL CLIENTE BUSCA: {e.consulta or ctx.mensaje}\n(mensaje original: {ctx.mensaje})\n\n"
+             f"LISTA ARMADA:\n" + ("\n".join(linea_local(i, d.locales[i]) for i in elegidos) or "(vacía)")
+             + "\n\nPOSIBLES QUE ENCONTRÓ EL BUSCADOR:\n"
+             + ("\n".join(linea_local(i, d.locales[i]) for i in posibles) or "(ninguno)"))
     try:
         r = await asyncio.wait_for(llm.completar(
-            [{"role": "system", "content": _SEGUNDA}, {"role": "user", "content": texto}],
-            json_salida=True, temperatura=0, max_tokens=3000, razonamiento="low", timeout_s=15), timeout=20)
-        ctx.traza.llm("segunda_mirada", r)
-        agregar = [str(x).strip().upper() for x in (r.json().get("agregar") or [])]
+            [{"role": "system", "content": _REVISOR}, {"role": "user", "content": texto}],
+            json_salida=True, temperatura=0, max_tokens=4000, razonamiento="medium", timeout_s=20), timeout=25)
+        ctx.traza.llm("revisor_lista", r)
+        j = r.json()
     except Exception as ex:
-        ctx.traza.alerta(f"la segunda mirada falló (se deja la elección del cerebro): {ex}")
+        ctx.traza.alerta(f"el revisor de la lista falló (se deja la elección del cerebro): {ex}")
         return
-    nuevos = [i for i in agregar if i in faltan and i not in e.ids]
-    ctx.traza.paso("segunda_mirada", {"revisados": [d.nombre(i) for i in faltan],
-                                      "agregados": [d.nombre(i) for i in nuevos]})
-    e.ids.extend(nuevos)
+    quitar = [i for i in (str(x).strip().upper() for x in (j.get("quitar") or [])) if i in elegidos]
+    agregar = [i for i in (str(x).strip().upper() for x in (j.get("agregar") or [])) if i in posibles]
+    if quitar and len(quitar) > len(elegidos) / 2:
+        ctx.traza.alerta(f"el revisor quería quitar {len(quitar)} de {len(elegidos)}: se ignora (demasiado)")
+        quitar = []
+    e.ids = [i for i in elegidos if i not in quitar] + agregar
+    if e.accion == "no_hay" and e.ids:
+        e.accion = "locales"
+        e.certeza = "alta"
+    ctx.traza.paso("revisor_lista", {"quitados": [d.nombre(i) for i in quitar], "agregados": [d.nombre(i) for i in agregar],
+                                     "revisados_posibles": [d.nombre(i) for i in posibles], "razon": j.get("razon")})

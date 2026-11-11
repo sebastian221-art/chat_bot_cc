@@ -127,6 +127,8 @@ def construir(db, hoy=None, compacto: bool = False) -> Directorio:
     info_lineas = []
     n = 0
     for f in fragmentos_del_mall(db):
+        if re.search(r"(?i)use tab to navigate|menu items", f.contenido or ""):
+            continue          # texto basura copiado de la página web (no es información)
         n += 1
         id_ = f"K{n}"
         d.info[id_] = f.dict()

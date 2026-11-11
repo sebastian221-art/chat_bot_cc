@@ -110,8 +110,10 @@ $("b-groq").onclick = async () => {
 $("b-examen").onclick = async () => {
   const motor = (prompt("¿Qué examinar? Escribe: ambos, any3 o any2", "ambos") || "").trim().toLowerCase();
   if (!motor) return;
+  const conjunto = (prompt("¿Qué preguntas? Escribe: todo (banco + nuevas + prueba final) o final (solo la prueba final, preguntas nuevas)", "final") || "").trim().toLowerCase();
+  if (!conjunto) return;
   let j;
-  try { j = await _json("/any3/examen?motor=" + encodeURIComponent(motor), { method: "POST" }); } catch (e) { return _fallo("Examen", e); }
+  try { j = await _json("/any3/examen?motor=" + encodeURIComponent(motor) + "&conjunto=" + encodeURIComponent(conjunto), { method: "POST" }); } catch (e) { return _fallo("Examen", e); }
   _panel("Examen", "<p>" + _esc(j.estado) + "</p>");
   setTimeout(_verExamen, 1500);
 };
@@ -127,10 +129,11 @@ function _detalle(nombre, f) {
 }
 function _pintar() {
   const a3 = (_datos.any3 || {}), a2 = (_datos.any2 || {});
-  const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b><br>" + _esc(e.estado) + (["corriendo", "en espera"].includes(e.estado) ? " · <b>" + _esc(e.progreso) + " de " + _esc(e.total_casos) + "</b> preguntas (se actualiza solo)" : "") +
+  const res = (n, e) => !e.estado ? "" : "<div><b>" + n + "</b>" + (e.conjunto ? " · " + _esc(e.conjunto === "final" ? "prueba final" : "todo") : "") + "<br>" + _esc(e.estado) + (["corriendo", "en espera"].includes(e.estado) ? " · <b>" + _esc(e.progreso) + " de " + _esc(e.total_casos) + "</b> preguntas (se actualiza solo)" : "") +
      (e.total ? "<br><span style='font-size:20px'><b>" + e.bien + " / " + e.total + "</b></span> (" + e.porcentaje + " %)" + (e.sin_calificar ? "<br>+ " + e.sin_calificar + " nuevas para comparar a ojo" : "") + "<br>" + _esc(JSON.stringify(e.por_tipo || {})) + "<br>" + e.segundos_promedio + " s por pregunta" : "") +
      (e.error ? "<br><span class='error'>" + _esc(e.error) + "</span>" : "") + "<br><small>" + _esc(e.modelo || "") + "</small></div>";
   let h = "<div class='resumen'>" + res("Any 3.0", a3) + res("Any 2.0", a2) + "</div>";
+  if (a3.conjunto && a2.conjunto && a3.conjunto !== a2.conjunto) h += "<p class='error'>Ojo: Any 3.0 corrió «" + _esc(a3.conjunto) + "» y Any 2.0 «" + _esc(a2.conjunto) + "»: las filas no se corresponden. Córrelos con «ambos».</p>";
   h += "<div class='filtros'>" + ["todas", "fallas any3", "fallas any2", "diferencias", "nuevas (a ojo)"].map(x => "<button data-f='" + x + "'" + (x === _filtro ? " style='background:#eee'" : "") + ">" + x + "</button>").join("") + "</div>";
   const f3 = {}, f2 = {}; (a3.todas || []).forEach(f => f3[f.n] = f); (a2.todas || []).forEach(f => f2[f.n] = f);
   const ns = [...new Set([...Object.keys(f3), ...Object.keys(f2)].map(Number))].sort((x, y) => x - y);
@@ -197,11 +200,13 @@ def _resumen_examenes() -> dict:
 
 
 @router.post("/examen")
-async def correr_examen(motor: str = "ambos", modelo: str = "", _u=Depends(_usuario_panel)):
+async def correr_examen(motor: str = "ambos", modelo: str = "", conjunto: str = "todo", _u=Depends(_usuario_panel)):
     """Corre el examen con Any 3.0, con Any 2.0 o con los dos (uno detrás del otro), en segundo plano.
     El avance y los resultados se guardan en la base (sobreviven a reinicios y a varios procesos)."""
     from .almacen import guardar, leer
     from .examen import correr, total_casos
+    if conjunto not in ("todo", "final"):
+        raise HTTPException(400, "conjunto debe ser todo o final")
     motores = ["any3", "any2"] if motor == "ambos" else [motor]
     if any(m not in ("any3", "any2") for m in motores):
         raise HTTPException(400, "motor debe ser any3, any2 o ambos")
@@ -210,7 +215,8 @@ async def correr_examen(motor: str = "ambos", modelo: str = "", _u=Depends(_usua
         return {"estado": "ya hay un examen corriendo: toca «Ver examen»"}
     estados = {}
     for m in motores:
-        estados[m] = {"estado": "en espera", "progreso": 0, "total_casos": total_casos(), "todas": [],
+        estados[m] = {"estado": "en espera", "progreso": 0, "total_casos": total_casos(conjunto), "todas": [],
+                      "conjunto": conjunto,
                       "modelo": (modelo or config.modelo()) if m == "any3" else "Any 2.0 (sus modelos)"}
         guardar(m, estados[m])
 
@@ -228,7 +234,7 @@ async def correr_examen(motor: str = "ambos", modelo: str = "", _u=Depends(_usua
                 except Exception:
                     pass
             try:
-                res = await correr(m, progreso=progreso, modelo=modelo if m == "any3" else "")
+                res = await correr(m, progreso=progreso, modelo=modelo if m == "any3" else "", conjunto=conjunto)
                 e.update(res, estado="terminado")
             except Exception as ex:
                 e.update(estado="falló", error=repr(ex)[:500])
