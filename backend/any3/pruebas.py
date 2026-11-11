@@ -31,6 +31,9 @@ def manejador(mensajes, herramientas, json_salida):
     sistema = "\n".join(m["content"] for m in mensajes if m["role"] == "system")
     if "Eres el CEREBRO" in sistema:
         ESCENA["llamadas_cerebro"] = ESCENA.get("llamadas_cerebro", 0) + 1
+        if ESCENA.get("limite_groq") and "| desc:" in sistema:
+            from any.llm import ErrorLLM
+            raise ErrorLLM("HTTP 413: Request too large for model on tokens per minute (TPM): Limit 8000")
         if ESCENA.get("cerebro_falla"):
             return LLMRespuesta(texto="esto no es json", modelo="simulado:any3")
         return LLMRespuesta(texto=json.dumps(ESCENA["cerebro"]), modelo="simulado:any3")
@@ -150,6 +153,17 @@ async def correr(db) -> list[str]:
     print("11. Aclarar: pregunta corta, sin inventar")
     r = await turno("eso", {"accion": "aclarar", "aclaracion": "¿Me cuentas qué estás buscando?"})
     check("¿Me cuentas qué estás buscando?" in r.texto, "hizo la pregunta del cerebro")
+
+    print("12b. Si Groq rechaza el directorio completo por tamaño, usa el corto y responde igual")
+    from any3 import cerebro as cer
+    cer._COMPACTO_HASTA = 0
+    r = await turno("tenis", {"accion": "locales", "ids": ids, "busqueda": "tenis"}, limite_groq=True)
+    pasos = r.meta["traza"]["pasos"]
+    check(any(p["paso"] == "directorio" and p["detalle"] == "compacto" for p in pasos) and "footprints" in r.texto.lower(),
+          "respondió con el directorio corto")
+    r = await turno("tenis", {"accion": "locales", "ids": ids, "busqueda": "tenis"}, limite_groq=True)
+    check(ESCENA.get("llamadas_cerebro") == 1, "los siguientes mensajes van directo con el corto (sin intento fallido)")
+    cer._COMPACTO_HASTA = 0
 
     print("12. Números que NO son de Any 3.0 no entran")
     from any3 import atiende

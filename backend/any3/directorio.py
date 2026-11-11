@@ -54,7 +54,7 @@ def _corto(t: str, n: int) -> str:
 _RELLENO_VENDE = {"plazoleta de comidas", "la ceiba", "venta", "tienda", "almacen", "local", "centro comercial"}
 
 
-def _vende(l: Local) -> str:
+def _vende(l: Local, limite: int = 240) -> str:
     """Lo que el local declara vender, sin las frases de relleno del formulario («dónde venden collares»),
     sin repetir el nombre ni la zona."""
     fuera = {normalizar(l.nombre), normalizar(l.zona or "")}
@@ -66,10 +66,10 @@ def _vende(l: Local) -> str:
             continue
         vistos.add(n)
         out.append(re.sub(r"(?i)\s+en san gil$", "", p.strip()))
-    return _corto(", ".join(out), 240)
+    return _corto(", ".join(out), limite)
 
 
-def linea_local(id_: str, l: Local) -> str:
+def linea_local(id_: str, l: Local, compacto: bool = False) -> str:
     if l.es_torre:
         lugar = "Torre Médica y Empresarial" + "".join(
             f", {x}" for x in [l.piso, f"oficina {l.numero}" if l.numero and l.numero.upper() != "S/N" else ""] if x)
@@ -78,6 +78,10 @@ def linea_local(id_: str, l: Local) -> str:
     else:
         lugar = l.zona or "zona sin registrar"
     desc, publico = partir_descripcion(l.descripcion or "")
+    if compacto:     # para modelos con límite de tokens por minuto (Groq): lo esencial para elegir bien
+        vende = _vende(l, 120) or _corto(desc, 90) or "-"
+        extra = f" | para: {_corto(publico, 30)}" if publico and re.search(r"(?i)mujer|hombre|niñ|infantil|bebe", publico) else ""
+        return f"{id_} | {l.nombre} | {lugar} | {l.rubro or '-'} | {vende}{extra}"
     partes = [id_, l.nombre, lugar, l.rubro or "-", "vende: " + (_vende(l) or "-")]
     d = _corto(re.sub(r"(?i),?\s*(ubicad[oa] )?en (el municipio de )?san gil,? santander|,?\s*san gil,? santander", "", desc), 180)
     if d:
@@ -101,10 +105,11 @@ def _ig(l: Local):
     return instagram_de(l)
 
 
-def construir(db, hoy=None) -> Directorio:
+def construir(db, hoy=None, compacto: bool = False) -> Directorio:
+    """compacto=True: versión corta (~3 veces menos tokens) para modelos con límite de tokens por minuto."""
     from datetime import date
     hoy = hoy or date.today()
-    clave = (id(db.get_bind()), hoy)
+    clave = (id(db.get_bind()), hoy, compacto)
     c = _cache.get(clave)
     if c and time.monotonic() - c[0] < TTL_S:
         return c[1]
@@ -113,7 +118,7 @@ def construir(db, hoy=None) -> Directorio:
     for l in sorted(locales(db, incluir_torre=True, incluir_servicios=True), key=lambda x: normalizar(x.nombre)):
         id_ = f"L{l.id}"
         d.locales[id_] = l
-        (torre if l.es_torre else servicios if l.es_servicio else comercio).append(linea_local(id_, l))
+        (torre if l.es_torre else servicios if l.es_servicio else comercio).append(linea_local(id_, l, compacto))
 
     # Información oficial: completa (es poca, ~6 000 caracteres) para que el cerebro sepa qué hay
     from any.conocimiento.buscador import fragmentos_del_mall
@@ -123,7 +128,7 @@ def construir(db, hoy=None) -> Directorio:
         n += 1
         id_ = f"K{n}"
         d.info[id_] = f.dict()
-        info_lineas.append(f"{id_} | {f.titulo} | {_corto(f.contenido, 700)}")
+        info_lineas.append(f"{id_} | {f.titulo} | {_corto(f.contenido, 160 if compacto else 700)}")
     try:
         from any.conocimiento.areas import directorio as areas
         for a in areas():
@@ -133,7 +138,7 @@ def construir(db, hoy=None) -> Directorio:
             contenido = "; ".join(f"{k}: {v}" for k, v in a.items() if k not in ("area",) and v)
             d.info[id_] = {"titulo": titulo, "contenido": contenido, "fuente": "areas", "area": a}
             sin_links = re.sub(r"https?://\S+", "", contenido)
-            info_lineas.append(f"{id_} | {titulo} | {_corto(sin_links, 200)}")
+            info_lineas.append(f"{id_} | {titulo}" + ("" if compacto else f" | {_corto(sin_links, 200)}"))
     except Exception:
         pass
 
@@ -163,7 +168,8 @@ def construir(db, hoy=None) -> Directorio:
         db.rollback()
 
     bloques = [
-        "## LOCALES COMERCIALES (ID | nombre | zona | categoría | vende | descripción | para quién | qué datos tiene)",
+        ("## LOCALES COMERCIALES (ID | nombre | zona | categoría | qué vende)" if compacto else
+         "## LOCALES COMERCIALES (ID | nombre | zona | categoría | vende | descripción | para quién | qué datos tiene)"),
         "\n".join(comercio),
         "## SERVICIOS DEL CENTRO COMERCIAL",
         "\n".join(servicios) or "(ninguno)",
@@ -179,6 +185,7 @@ def construir(db, hoy=None) -> Directorio:
         "\n".join(pr_lineas) or "(ninguna)",
     ]
     d.texto = "\n".join(bloques)
-    _cache.clear()
+    for k in [k for k in _cache if k[:2] != clave[:2]]:
+        _cache.pop(k, None)
     _cache[clave] = (time.monotonic(), d)
     return d

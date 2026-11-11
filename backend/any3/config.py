@@ -8,6 +8,7 @@ Configuración de Any 3.0 (variables de entorno, sin secretos en el código).
   ANY3_LLM_VIGILANTE   modelo que revisa las respuestas (por defecto el mismo).
   ANY3_LLM_RESPALDO    modelo si el principal falla (por defecto Groq gpt-oss-120b).
   ANY3_VIGILANTE       "0" para apagar la revisión (no recomendado).
+  ANY3_DIRECTORIO      auto | completo | compacto (compacto = ~3 veces menos tokens, para Groq con límite bajo).
 """
 from __future__ import annotations
 
@@ -66,3 +67,10 @@ def respaldo() -> str:
 
 def vigilante_activo() -> bool:
     return _env("ANY3_VIGILANTE", "1") != "0"
+
+
+def directorio_modo() -> str:
+    """ANY3_DIRECTORIO: completo (mejor), compacto (para límites bajos de tokens) o auto (completo y, si el
+    proveedor lo rechaza por tamaño, compacto)."""
+    m = _env("ANY3_DIRECTORIO", "auto").lower()
+    return m if m in ("auto", "completo", "compacto") else "auto"

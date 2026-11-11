@@ -7,6 +7,7 @@ Rutas de Any 3.0 (todas con sesión del panel, salvo /any3/estado que no muestra
   POST /any3/examen        corre el examen del cerebro en segundo plano (?modelo=anthropic:claude-sonnet-5-5)
   GET  /any3/examen        resultado del último examen
   GET  /any3/vacios        lo que preguntaron y no estaba en la base (datos por completar)
+  GET  /any3/groq          límites de tokens de tu cuenta de Groq y si Any 3.0 cabe
 """
 from __future__ import annotations
 
@@ -67,7 +68,55 @@ async def chat():
         html = f.read()
     html = (html.replace('"/any/prueba"', '"/any3/prueba"').replace("Any 2.0", "Any 3.0")
             .replace('value="prueba-any2"', 'value="prueba-any3"').replace('|| "prueba-any2"', '|| "prueba-any3"'))
+    botones = ('<button id="b-groq" type="button">Límites Groq</button>'
+               '<button id="b-examen" type="button">Correr examen</button>'
+               '<button id="b-ver" type="button">Ver examen</button>'
+               '<button id="b-vacios" type="button">Datos faltantes</button>')
+    html = html.replace('<button id="reiniciar" type="button">Reiniciar conversación</button>',
+                        '<button id="reiniciar" type="button">Reiniciar conversación</button>' + botones, 1)
+    html = html.replace("</body>", _HERRAMIENTAS + "</body>", 1)
     return HTMLResponse(html)
+
+
+_HERRAMIENTAS = """<script>
+function _esc(t) { return String(t ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]); }
+function _panel(titulo, html) { $("traza").innerHTML = "<h2>" + _esc(titulo) + "</h2>" + html; }
+async function _json(ruta, opciones) {
+  const r = await fetch(ruta, { ...(opciones || {}), headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) } });
+  return r.json();
+}
+$("b-groq").onclick = async () => {
+  _panel("Límites de Groq", "<p>Consultando…</p>");
+  const j = await _json("/any3/groq");
+  _panel("Límites de Groq", "<p><b>" + _esc(j.veredicto || j.error) + "</b></p><pre style='white-space:pre-wrap'>" + _esc(JSON.stringify(j, null, 1)) + "</pre>");
+};
+$("b-examen").onclick = async () => {
+  const modelo = prompt("Modelo (vacío = el configurado). Ej: groq:openai/gpt-oss-120b", "") || "";
+  const j = await _json("/any3/examen" + (modelo ? "?modelo=" + encodeURIComponent(modelo) : ""), { method: "POST" });
+  _panel("Examen", "<p>" + _esc(j.estado) + " · " + _esc(j.modelo || "") + "</p><p>Con Groq va de a una pregunta: puede tardar 10–20 minutos. Toca «Ver examen» para ver el avance.</p>");
+};
+$("b-ver").onclick = async () => {
+  const j = await _json("/any3/examen");
+  let h = "<p><b>" + _esc(j.estado) + "</b> · " + _esc(j.modelo || "") + " · directorio " + _esc(j.directorio || "") + "</p>";
+  if (j.estado === "corriendo") h += "<p>Van " + _esc(j.progreso) + " de 97 preguntas…</p>";
+  if (j.total) h += "<p style='font-size:20px'><b>" + j.bien + " / " + j.total + "</b> (" + j.porcentaje + " %) · " + j.segundos_promedio + " s por pregunta</p>";
+  if (j.error) h += "<p class='error'>" + _esc(j.error) + "</p>";
+  for (const f of (j.fallas || [])) {
+    h += "<div style='border-top:1px solid #ddd;padding:6px 0'><b>❌ " + _esc(f.pregunta) + "</b><br>eligió: " + _esc((f.eligio || []).join(", ") || f.accion || "") +
+         (f.faltan && f.faltan.length ? "<br>faltaron: " + _esc(f.faltan.join(", ")) : "") +
+         (f.sobran && f.sobran.length ? "<br>sobraron: " + _esc(f.sobran.join(", ")) : "") +
+         (f.problema ? "<br>" + _esc(f.problema) : "") + "<br><small>" + _esc(f.razon || "") + "</small></div>";
+  }
+  _panel("Examen", h);
+};
+$("b-vacios").onclick = async () => {
+  const j = await _json("/any3/vacios");
+  const lista = (xs) => (xs || []).map(x => "<li>" + _esc(x.fecha) + " — " + _esc(x.mensaje) + "</li>").join("") || "<li>nada</li>";
+  _panel("Datos faltantes", "<p>Revisadas: " + _esc(j.revisadas) + "</p><h2>No estaba en la base</h2><ul>" + lista(j.no_estaba_en_la_base) +
+    "</ul><h2>Solo «probablemente»</h2><ul>" + lista(j.solo_probable) + "</ul><h2>El vigilante corrigió</h2><ul>" + lista(j.el_vigilante_corrigio) + "</ul>");
+};
+</script>
+"""
 
 
 @router.post("/examen")
@@ -129,3 +178,42 @@ async def vacios(limite: int = 300, _u=Depends(_usuario_panel)):
                 "el_vigilante_corrigio": corregidas}
     finally:
         db.close()
+
+
+@router.get("/groq")
+async def limites_groq(_u=Depends(_usuario_panel)):
+    """Pregunta a Groq cuántos tokens por minuto permite TU cuenta (con una llamada mínima) y si el directorio
+    completo de Any 3.0 cabe. Sin mostrar la clave."""
+    import httpx
+    from .cerebro import _prompt
+    from .directorio import construir
+    clave = os.environ.get("GROQ_API_KEY", "")
+    if not clave:
+        return {"error": "No hay GROQ_API_KEY en las variables"}
+    modelo = config.GROQ.split(":", 1)[1]
+    async with httpx.AsyncClient(timeout=20) as http:
+        r = await http.post("https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {clave}"},
+                            json={"model": modelo, "messages": [{"role": "user", "content": "hola"}], "max_tokens": 5})
+    h = {k: v for k, v in r.headers.items() if k.lower().startswith("x-ratelimit")}
+    db = _sesion()
+    try:
+        base = len(_prompt("cerebro.md")) + 1200
+        completo = (len(construir(db).texto) + base) // 3.5
+        compacto = (len(construir(db, compacto=True).texto) + base) // 3.5
+    finally:
+        db.close()
+    tpm = int(h.get("x-ratelimit-limit-tokens") or 0)
+    if not tpm:
+        veredicto = "Groq no informó el límite (mira la respuesta)"
+    elif tpm >= completo * 3 + 15000:
+        veredicto = "Cabe el directorio COMPLETO con margen: Any 3.0 funciona a su máxima calidad con Groq."
+    elif tpm >= compacto * 2 + 10000:
+        veredicto = ("El completo no cabe con margen: Any 3.0 usará el directorio CORTO (funciona, un poco menos "
+                     "preciso). Pon ANY3_DIRECTORIO=compacto para no perder tiempo intentando el completo.")
+    else:
+        veredicto = ("Tu límite de tokens por minuto es muy bajo para Any 3.0 (y aprieta también a Any 2.0). "
+                     "Sube de plan en console.groq.com/settings/billing o usa la clave de Claude.")
+    return {"estado_http": r.status_code, "limites": h, "tokens_por_mensaje_aprox": {
+        "cerebro_completo": int(completo), "cerebro_corto": int(compacto), "redactor_y_vigilante": 9000},
+        "veredicto": veredicto, "error": r.text[:300] if r.status_code != 200 else ""}

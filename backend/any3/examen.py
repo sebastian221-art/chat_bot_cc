@@ -52,10 +52,15 @@ async def _uno(db, d, pregunta: str):
     from any3 import cerebro
     t0 = time.perf_counter()
     ctx = _ctx(db, pregunta)
-    try:
-        el = await cerebro.elegir(ctx, d)
-    except Exception as e:
-        return None, f"error: {e}"[:200], time.perf_counter() - t0, ctx.traza.tokens
+    for intento in range(3):
+        try:
+            el = await cerebro.elegir(ctx, d)
+            break
+        except Exception as e:
+            if intento < 2 and ("429" in str(e) or "rate" in str(e).lower()):
+                await asyncio.sleep(30)        # límite por minuto del proveedor: se espera y se repite
+                continue
+            return None, f"error: {e}"[:300], time.perf_counter() - t0, ctx.traza.tokens
     return el, "", time.perf_counter() - t0, ctx.traza.tokens
 
 
@@ -64,9 +69,12 @@ async def correr(db, paralelo: int = 4, progreso=None, modelo: str = "") -> dict
     from any3 import config
     if modelo:
         config.MODELO_FORZADO.set(modelo)
+    if config.modelo().startswith("groq:"):
+        paralelo = 1          # Groq limita tokens por minuto: de a una pregunta
     from any3.directorio import construir
     _cargar_modelos()
     d = construir(db)
+    from any3.cerebro import modo_directorio
     existentes = {l.nombre for l in d.locales.values()}
     sem = asyncio.Semaphore(paralelo)
     casos = ([("producto", p, deben, nunca) for p, deben, nunca in CASOS]
@@ -104,7 +112,7 @@ async def correr(db, paralelo: int = 4, progreso=None, modelo: str = "") -> dict
     filas = await asyncio.gather(*(evaluar(c) for c in casos))
     bien = sum(1 for f in filas if f.get("ok"))
     entrada = sum(f["tokens"]["entrada"] for f in filas)
-    return {"modelo": config.modelo(), "total": len(filas), "bien": bien,
+    return {"modelo": config.modelo(), "directorio": modo_directorio(), "total": len(filas), "bien": bien,
             "porcentaje": round(100 * bien / max(1, len(filas)), 1),
             "segundos_promedio": round(sum(f["segundos"] for f in filas) / max(1, len(filas)), 1),
             "tokens_entrada_total": entrada, "duracion_s": round(time.perf_counter() - t0, 1),

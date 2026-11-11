@@ -115,9 +115,49 @@ def validar(j: dict, d: Directorio) -> Eleccion:
     return e
 
 
-async def elegir(ctx, d: Directorio) -> Eleccion:
+_COMPACTO_HASTA = 0.0      # si el proveedor rechazó el directorio completo por tamaño, se usa el corto un rato
+
+
+def _es_por_tamano(e: Exception) -> bool:
+    t = str(e).lower()
+    return any(x in t for x in ("413", "too large", "tokens per minute", "rate_limit", "429", "context_length",
+                                "maximum context"))
+
+
+def modo_directorio() -> str:
+    import time
+    from . import config
+    m = config.directorio_modo()
+    if m != "auto":
+        return m
+    return "compacto" if time.monotonic() < _COMPACTO_HASTA else "completo"
+
+
+async def _llamar(ctx, d: Directorio, modo: str):
     import asyncio
     r = await asyncio.wait_for(llm.completar(mensajes(ctx, d), json_salida=True, temperatura=0, max_tokens=2500,
                                              razonamiento="medium", timeout_s=20), timeout=45)
-    ctx.traza.llm("cerebro", r)
+    ctx.traza.llm(f"cerebro_{modo}", r)
+    return r
+
+
+async def elegir(ctx, d: Directorio) -> Eleccion:
+    """Lee el directorio completo. Si el proveedor lo rechaza por tamaño o por límite de tokens por minuto (Groq),
+    repite con el directorio corto y lo sigue usando 10 minutos (configurable con ANY3_DIRECTORIO)."""
+    import time
+    from .directorio import construir
+    global _COMPACTO_HASTA
+    modo = modo_directorio()
+    if modo == "compacto":
+        d = construir(ctx.db, d.hoy, compacto=True)
+    try:
+        r = await _llamar(ctx, d, modo)
+    except Exception as e:
+        if modo == "compacto" or not _es_por_tamano(e):
+            raise
+        ctx.traza.alerta(f"el modelo rechazó el directorio completo por tamaño: se usa el corto ({str(e)[:160]})")
+        _COMPACTO_HASTA = time.monotonic() + 600
+        modo = "compacto"
+        r = await _llamar(ctx, construir(ctx.db, d.hoy, compacto=True), modo)
+    ctx.traza.paso("directorio", modo)
     return validar(r.json(), d)
