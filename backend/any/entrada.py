@@ -205,8 +205,19 @@ async def _atender_mensaje(m: dict, saltar_visto: bool = False):
                 await whatsapp.send_text_message(
                     telefono, "Por ahora puedo leer mensajes de texto, fotos y notas de voz 🙏. ¿Me lo escribes?")
                 return
-            r = await procesar(db, telefono, m.get("nombre", ""), m.get("texto", ""), modo="produccion",
-                               imagen=imagen, es_audio=es_audio)
+            r = None
+            if _es_any3(telefono):   # Any 3.0 (agente) solo para los números de prueba; si falla, responde Any 2.0
+                try:
+                    from any3.harness import procesar as procesar_any3
+                    r = await procesar_any3(db, telefono, m.get("nombre", ""), m.get("texto", ""), modo="produccion",
+                                            imagen=imagen, es_audio=es_audio)
+                except Exception:
+                    log.exception("Any 3.0 falló: responde Any 2.0")
+                    db.rollback()
+                    r = None
+            if r is None:
+                r = await procesar(db, telefono, m.get("nombre", ""), m.get("texto", ""), modo="produccion",
+                                   imagen=imagen, es_audio=es_audio)
             procesado = True
             await enviar(telefono, r)
         except Exception as e:
@@ -222,6 +233,14 @@ async def _atender_mensaje(m: dict, saltar_visto: bool = False):
                     log.exception("Tampoco se pudo enviar el mensaje de disculpa")
         finally:
             db.close()
+
+
+def _es_any3(telefono: str) -> bool:
+    try:
+        from any3 import atiende
+        return atiende(telefono)
+    except Exception:
+        return False
 
 
 async def enviar(telefono: str, r):

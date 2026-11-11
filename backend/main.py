@@ -224,6 +224,10 @@ app.include_router(respaldo_router)            # GET /respaldo/excel — respald
 from routers.verificacion import router as verificacion_router
 app.include_router(verificacion_router)        # planilla de verificación de datos (descargar / importar)
 app.include_router(__import__("any.entrada", fromlist=["router"]).router)  # Any 2.0 (/any/*)
+try:   # Any 3.0 (agente, en prueba con ANY3_NUMEROS): si no carga, Any 2.0 sigue igual
+    app.include_router(__import__("any3.rutas", fromlist=["router"]).router)   # /any3/*
+except Exception as _e:
+    logging.getLogger("any3").error("Any 3.0 no cargó: %r", _e)
 
 static_path = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_path, exist_ok=True)
