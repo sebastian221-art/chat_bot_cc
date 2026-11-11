@@ -339,6 +339,18 @@ async def _responder(ctx, el, d) -> Respuesta:
 
 # ── Salida (igual que Any 2.0) ────────────────────────────────────
 
+_VACIO = re.compile(r"[ \t]*(?:[•·\-–]\s*)?(?:📸|📞|💬|👉|📲)?\s*\*?(?:instagram|whatsapp|tel[eé]fono|horario)\*?\s*:?\s*\*?\s*"
+                    r"\(?(?:no disponible|no registrad[oa]|sin dato|n/?a)\)?\*?\.?[ \t]*", re.I)
+
+
+def _sin_datos_vacios(t: str) -> str:
+    """«📸 Instagram: (no disponible)» en una ficha: si el cliente no lo pidió, el dato que falta no se escribe
+    (regla de la persona; el examen del 11/11 mostró que el modelo a veces la rompe)."""
+    nuevo = _VACIO.sub("", t)
+    return re.sub(r"\n{3,}", "\n\n", nuevo).strip() if nuevo != t else t
+
+
+
 def _salida(ctx, r: Respuesta, es_audio: bool) -> Respuesta:
     db, estado, traza = ctx.db, ctx.estado, ctx.traza
     r = guardias.revisar_salida(ctx, r)
@@ -352,6 +364,7 @@ def _salida(ctx, r: Respuesta, es_audio: bool) -> Respuesta:
             db.rollback()
     if r.texto:
         r.texto = guardias.corregir_lugares(guardias.nombres_en_mayuscula(ctx, r.texto))
+        r.texto = _sin_datos_vacios(r.texto)
     guardias.aviso_privacidad(ctx, r)
     if r.entidades:
         from any.nucleo.router import limpiar_entidades

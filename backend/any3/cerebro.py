@@ -216,7 +216,10 @@ Respeta los filtros del cliente: "para mujer/dama", "para hombre", "para niños/
 quedan los que cumplen o venden para todos. Precio y calidad no filtran (no hay esos datos).
 Si un local vende varias cosas y entre ellas está lo buscado, SÍ sirve. Ante la duda con uno de la lista, se
 queda; ante la duda con uno posible, no entra.
-Responde SOLO JSON: {"quitar": ["L…"], "agregar": ["L…"], "razon": "frase corta"}"""
+Además di cuáles de los que quedan DECLARAN en sus datos lo buscado (o algo que claramente lo incluye) en
+"lo_declaran". Un concesionario de carros no declara vender llantas; una tienda de juegos con carritos
+eléctricos no vende motos eléctricas.
+Responde SOLO JSON: {"quitar": ["L…"], "agregar": ["L…"], "lo_declaran": ["L…"], "razon": "frase corta"}"""
 
 
 async def revisar_lista(ctx, d: Directorio, e: Eleccion):
@@ -250,8 +253,13 @@ async def revisar_lista(ctx, d: Directorio, e: Eleccion):
         ctx.traza.alerta(f"el revisor quería quitar {len(quitar)} de {len(elegidos)}: se ignora (demasiado)")
         quitar = []
     e.ids = [i for i in elegidos if i not in quitar] + agregar
+    declaran = {str(x).strip().upper() for x in (j.get("lo_declaran") or [])} & set(e.ids)
     if e.accion == "no_hay" and e.ids:
         e.accion = "locales"
-        e.certeza = "alta"
+        e.certeza = "alta" if declaran else "probable"
+    elif e.ids and "lo_declaran" in j and not declaran:
+        # nadie dice venderlo: se responde como «podrías encontrarlo… confírmalo», nunca como un hecho
+        e.certeza = "probable"
     ctx.traza.paso("revisor_lista", {"quitados": [d.nombre(i) for i in quitar], "agregados": [d.nombre(i) for i in agregar],
+                                     "lo_declaran": [d.nombre(i) for i in declaran], "certeza": e.certeza,
                                      "revisados_posibles": [d.nombre(i) for i in posibles], "razon": j.get("razon")})
