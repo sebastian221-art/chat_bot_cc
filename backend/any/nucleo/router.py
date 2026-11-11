@@ -201,10 +201,15 @@ def _corregir_servicio_que_es_local(ctx: Contexto, d: Decision) -> Decision:
         de_servicio = {raiz(c.palabra) for c in serv if c.grupo} | {raiz(x) for x in (
             "atencion", "cliente", "plazoleta", "comida", "comidas", "centro", "comercial", "informacion", "punto",
             "local", "locales", "tienda", "tiendas", "servicio", "servicios", "domingo", "sabado", "festivo", "hoy")}
+        res = buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True)
         if any(c.grupo and c.grupo not in ("horario", "parqueadero") for c in serv):
-            return d
-        fuertes = [r for r in buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True)
-                   if any(raiz(normalizar(f)) not in de_servicio for f in r.fuertes)]
+            # 11/11 «Quiero plan de internet»: «internet» es del wifi del mall, pero CLARO vende PLANES de internet.
+            # Si un local tiene 2+ de las cosas pedidas y al menos una no es de servicios del mall, es ese local.
+            completo = [r for r in res if len(r.fuertes or []) >= 2
+                        and any(raiz(normalizar(f)) not in de_servicio for f in r.fuertes)]
+            if not completo:
+                return d
+        fuertes = [r for r in res if any(raiz(normalizar(f)) not in de_servicio for f in r.fuertes)]
         if fuertes:
             ctx.traza.alerta(f"el modelo lo mandó a servicios, pero lo ofrece un local ({fuertes[0].local.nombre}): va a locales")
             ent = {k: v for k, v in d.entidades.items() if k != "servicio"}
@@ -251,9 +256,38 @@ async def _router_ia(ctx: Contexto) -> Decision:
     ent = j.get("entidades") or {}
     ent = {k: v for k, v in ent.items() if k in CLAVES_ENTIDADES and v not in (None, "", [], {})} \
         if isinstance(ent, dict) else {}
+    ent = limpiar_entidades(ent)
     nombrados = [f for f, frases in TEMA_NOMBRADO.items() if alguna_frase(frases, ctx.mensaje)]
     if len(nombrados) == 1 and nombrados[0] != flujo and flujo in TEMA_NOMBRADO:
         ctx.traza.alerta(f"el router dejó {flujo} pero el cliente nombró {nombrados[0]}: gana el tema nombrado")
         flujo = nombrados[0]
     return Decision(flujo, ent, bool(j.get("es_seguimiento")),
                     str(j.get("consulta_reescrita") or ctx.mensaje)[:500], str(j.get("razon") or "")[:300], "ia")
+
+
+def limpiar_entidades(ent: dict) -> dict:
+    """11/11: el modelo a veces devuelve {"categoria": ["ropa deportiva"]} (lista) y el código buscaba el texto
+    «['ropa deportiva']»; o mete la pregunta entera como categoría («¿Dónde puedo encontrar…»), que luego se
+    recordaba turnos y turnos. Aquí se deja todo en el formato que el resto del sistema espera."""
+    out = {}
+    for k, v in (ent or {}).items():
+        if k == "categoria":
+            if isinstance(v, (list, tuple)):
+                v = " y ".join(str(x).strip() for x in v if str(x).strip())     # «gomitas y caramelos»
+            v = str(v).strip()
+            if not v or "?" in v or "¿" in v or len(v.split()) > 6 or re.match(r"^\[.*\]$", v) or \
+                    re.match(r"(?i)^(d[oó]nde|qu[eé]|cu[aá]l|c[oó]mo|hay|tienen|me puedes)\b", v):
+                continue          # es la pregunta, no una categoría
+            v = v.strip(" ¡!.\"'")
+        elif k == "local" and isinstance(v, (list, tuple)):
+            v = [str(x).strip() for x in v if str(x).strip()]
+            if len(v) == 1:
+                v = v[0]
+            if not v:
+                continue
+        elif isinstance(v, str):
+            v = v.strip()
+            if not v or len(v) > 80:
+                continue
+        out[k] = v
+    return out

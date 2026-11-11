@@ -66,6 +66,63 @@ def quitar_rubros_como_lugar(ctx, texto: str) -> str:
     return texto
 
 
+def quitar_locales_inventados(ctx, datos, texto: str) -> str:
+    """11/11: «Quiero una manilla» → los datos traían solo Accesorios J&A y la IA agregó First Class, Koaj, Stop
+    Jeans y Yoyo de mensajes anteriores. Toda línea que nombre (en *negrita*) un local que NO está en los datos de
+    este turno se quita. La línea «De paso» (la novedad) no se toca."""
+    if not texto:
+        return texto
+    try:
+        catalogo_ = {normalizar(l.nombre): l.nombre for l in locales(ctx.db, incluir_torre=True)}
+    except Exception:
+        return texto
+    permitidos_txt = normalizar(json.dumps(datos.hechos, ensure_ascii=False, default=str)) + " " + \
+        normalizar(" ".join(datos.meta.get("lista_equidad") or []))
+    salida, quitadas = [], []
+    for linea in texto.split("\n"):
+        if "de paso" in normalizar(linea):
+            salida.append(linea)
+            continue
+        malos = [catalogo_[n] for n in (normalizar(x.strip(" .,:;!¡?¿")) for x in re.findall(r"\*([^*\n]{3,60})\*", linea))
+                 if n in catalogo_ and n not in permitidos_txt]
+        if malos:
+            quitadas += malos
+            continue
+        salida.append(linea)
+    if quitadas:
+        ctx.traza.alerta(f"la respuesta nombraba locales que no estaban en los datos ({', '.join(quitadas)}): se quitaron")
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(salida)).strip()
+    return texto
+
+
+_CANTIDAD = re.compile(r"(?i)(\*?)\b(\d{1,3})\b(\*?)(\s+)(locales|local|opciones|opción|opcion|tiendas|tienda|lugares|lugar|sitios|restaurantes|establecimientos)\b")
+
+
+def corregir_cantidad(ctx, datos, texto: str) -> str:
+    """«Tienes *2* locales que venden gomitas» cuando hay 1, «Tengo 5 opciones» cuando son 6: el número lo pone
+    el código, contando lo que de verdad se muestra."""
+    modo = datos.hechos.get("modo")
+    if modo == "lista":
+        n = len(datos.meta.get("lista_equidad") or [])
+    elif modo == "ficha" and datos.meta.get("de_busqueda"):
+        n = 1
+    else:
+        return texto
+    if not n:
+        return texto
+
+    def poner(m):
+        if int(m.group(2)) == n:
+            return m.group(0)
+        sust = m.group(5)
+        if n == 1:
+            sust = {"locales": "local", "opciones": "opción", "tiendas": "tienda", "lugares": "lugar", "sitios": "sitio",
+                    "restaurantes": "restaurante", "establecimientos": "establecimiento"}.get(sust.lower(), sust)
+        ctx.traza.alerta(f"la respuesta decía {m.group(2)} {m.group(5)} y son {n}: se corrigió")
+        return f"{m.group(1)}{n}{m.group(3)}{m.group(4)}{sust}"
+    return _CANTIDAD.sub(poner, texto)
+
+
 _NEGACION = re.compile(r"(?i)\b(no hay|no tenemos|no contamos|no tengo registrad\w*|no existe|no encontr\w*)\b")
 
 
@@ -412,10 +469,15 @@ class Locales(Flujo):
             termino, res = consulta, buscar_locales(db, consulta)
         # "firma de contadores", "asesoría tributaria": no son locales comerciales sino oficinas de la Torre.
         # Si una oficina de la Torre cubre MÁS de lo pedido que cualquier local comercial, se responde con la Torre.
-        con_torre = [r for r in buscar_locales(db, termino, incluir_torre=True) if r.fuertes]
+        todos_res = buscar_locales(db, termino, incluir_torre=True)
+        if any(r.nombre_exacto for r in todos_res) and not any(r.nombre_exacto for r in res):
+            res = [r for r in todos_res if r.nombre_exacto]     # nombró (casi) a una oficina de la Torre
+        con_torre = [r for r in todos_res if r.fuertes]
         mejor_torre = max((len(r.fuertes) for r in con_torre if r.local.es_torre), default=0)
         mejor_local = max((len(r.fuertes) for r in res if r.fuertes), default=0)
-        if mejor_torre > mejor_local:
+        if any(r.nombre_exacto for r in res):
+            pass                    # nombró un local u oficina: es ese, no se compara con nadie
+        elif mejor_torre > mejor_local:
             res = con_torre
         elif mejor_torre and mejor_torre == mejor_local and not busca_salud(f"{ctx.mensaje} {termino}"):
             # empate: un local y una oficina de la Torre ofrecen lo mismo («seguros» → Gopass y EPS Sura): van los dos
@@ -435,13 +497,16 @@ class Locales(Flujo):
             extra = []   # "ropa para niños": ya cumplen las dos cosas; no se abre a toda la ropa
         else:
             extra = [r.local for r in res if r.local.id not in ids and (r.cercanos or r.fuertes)]
-        if 1 <= len(seleccion) < 4 and mx > 0:
+        nombrado_exacto = any(r.nombre_exacto for r in relevantes)
+        if 1 <= len(seleccion) < 4 and mx > 0 and not nombrado_exacto:
             ids = {l.id for l in seleccion} | {l.id for l in extra}
             amplios = [l for l in self._candidatos_amplios(ctx, termino)[0] if l.id not in ids]
             fuertes = getattr(ctx, "_fuertes_amplios", set())
             seleccion += [l for l in amplios if l.id in fuertes]       # Gopass dice «SOAT»: va seguro
             extra += [l for l in amplios if l.id not in fuertes]
-        if seleccion and mx == 0:
+        if nombrado_exacto:
+            pass                    # el nombre manda: ni juez ni candidatos amplios
+        elif seleccion and mx == 0:
             # Nadie declara venderlo: solo lo menciona su descripción ("gimnasio" en un parque infantil).
             # No es seguro: el juez decide si de verdad lo ofrecen; si dice que ninguno, no hay.
             juzgado = await self._juez(ctx, termino, [], (seleccion + extra)[:MAX_CANDIDATOS_JUEZ])
@@ -482,6 +547,12 @@ class Locales(Flujo):
             # Un solo local ("¿hay gimnasio?" → GIMNASIO CAJASAN): va su ficha completa, con foto de portada
             datos = self._ficha(seleccion[0], pide)
             datos.entidades["categoria"] = termino
+            if not any(r.nombre_exacto for r in relevantes):
+                # 11/11 «Gomitas»: la IA escribió «tienes 2 locales que venden gomitas:» y no puso ninguno
+                datos.meta["de_busqueda"] = True
+                datos.hechos["nota"] = (f"Buscó «{termino}» y el ÚNICO local que lo tiene es {seleccion[0].nombre}. "
+                                        f"Dilo así («{seleccion[0].nombre} es el local que tiene …») y da su ficha. "
+                                        f"NO digas que hay más locales, no des una cantidad y no nombres otros locales.")
             return datos
         return self._datos_lista(seleccion, termino, pide)
 
@@ -550,10 +621,20 @@ class Locales(Flujo):
         """Todo local u oficina que mencione lo buscado (o un sinónimo) en su nombre, productos o descripción."""
         db = ctx.db
         texto = f"{ctx.mensaje} {termino}"
-        claves = palabras_clave(texto)
+        from ..conocimiento.buscador import _grupo_modificador, _RAIZ_MODIF
+        # «niños», «mujer», «colegio» dicen PARA QUIÉN, no qué: no traen candidatos (antes «carrito para niños»
+        # metía a Offcorss y Tomaticos porque su texto dice «niños»)
+        claves = [c for c in palabras_clave(texto) if not any(c.startswith(r) or r.startswith(c) for r in _RAIZ_MODIF if len(r) >= 3)]
         especificas = []
-        for c in conceptos(texto, "locales"):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
-            if c.grupo:
+        from ..conocimiento.buscador import PALABRAS_GENERICAS
+        cons = conceptos(texto, "locales")
+        declaradas = {p for r in buscar_locales(db, texto, incluir_torre=True) for p in (r.fuertes or [])}
+        concretos = [c for c in cons if normalizar(c.palabra) not in PALABRAS_GENERICAS and not _grupo_modificador(c)
+                     and c.palabra in declaradas]
+        if concretos:      # «quiero comer TACOS»: «comer» no puede meter a todos los restaurantes
+            claves = [k for k in claves if not any(normalizar(c.palabra).startswith(k) for c in cons if c not in concretos)]
+        for c in (concretos or cons):          # sinónimos del grupo («seguros» → soat, póliza, aseguradora)
+            if c.grupo and not _grupo_modificador(c):
                 raices = [r for r in sorted(c.raices) if len(r) >= 4]
                 claves += [r for r in raices if r not in claves]
                 # una palabra del grupo escrita en la descripción («SOAT») cuenta como que lo ofrece,
@@ -569,7 +650,8 @@ class Locales(Flujo):
             todos = locales(db, incluir_torre=True, incluir_servicios=False)
             campos = {l.id: normalizar(f"{l.nombre} {' '.join(l.productos)} {l.descripcion or ''}") for l in todos}
             for c in claves:
-                hits = [l for l in todos if re.search(rf"\b{re.escape(c)}", campos[l.id])]
+                # palabra completa (con hasta 3 letras de plural/género): «sombr» (sombras) no es «sombreros»
+                hits = [l for l in todos if re.search(rf"\b{re.escape(c)}\w{{0,3}}\b", campos[l.id])]
                 if len(hits) > 12:      # «pago» sale en casi todas las descripciones: no dice nada
                     continue
                 for l in hits:
@@ -666,12 +748,15 @@ class Locales(Flujo):
 
     def componer(self, ctx: Contexto, datos: Datos, texto: str) -> str:
         texto = quitar_rubros_como_lugar(ctx, texto)
+        texto = quitar_locales_inventados(ctx, datos, texto)
         if datos.hechos.get("modo") in ("lista", "info_relacionada"):
             texto = no_negar_lo_que_hay(ctx, texto)
         lista = datos.meta.get("lista")
-        if not lista:
-            return texto
-        return poner_lista(texto, lista)
+        if lista:
+            texto = poner_lista(texto, lista)
+        else:      # sin lista, una marca {LISTA} que dejó la IA no puede llegar al cliente
+            texto = re.sub(r"\n{3,}", "\n\n", _MARCA_VARIANTES.sub("", texto).replace(MARCA_LISTA, "")).strip()
+        return corregir_cantidad(ctx, datos, texto)
 
     def respaldo(self, ctx: Contexto, datos: Datos) -> str | None:
         h = datos.hechos

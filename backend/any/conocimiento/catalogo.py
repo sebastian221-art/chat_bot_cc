@@ -57,6 +57,8 @@ class Local:
     raices_rubro: set = field(default_factory=set)
     raices_productos: set = field(default_factory=set)
     raices_descripcion: set = field(default_factory=set)
+    raices_productos_top: set = field(default_factory=set)   # los primeros productos: lo principal que vende
+    raices_publico: set = field(default_factory=set)         # «Para: Mujeres», «Ideal para: Moda»: a quién va dirigido
 
     @property
     def fijo(self) -> str | None:
@@ -128,6 +130,36 @@ def _rubro_y_productos(tags: str, nombre: str) -> tuple[str, list[str]]:
     return rubro, productos
 
 
+N_PRODUCTOS_PRINCIPALES = 10
+
+# Cosas de dos palabras que NO son la primera palabra: «ropa vieja» (plato) no es ropa, «ropa de cama» no es ropa
+# para vestir, «vestido de baño» no es un vestido.
+_COMPUESTOS = [(re.compile(r"(?i)\bropa\s+vieja\b"), "ropavieja"), (re.compile(r"(?i)\bropa\s+de\s+(cama|hogar)\b"), "ropadecama"),
+               (re.compile(r"(?i)\bvestidos?\s+de\s+ba[ñn]o\b"), "vestidodebaño")]
+
+
+def _compuestos(t: str) -> str:
+    for rx, rep in _COMPUESTOS:
+        t = rx.sub(rep, t or "")
+    return t
+
+# El formulario de los locales le pegó a casi todas las descripciones el mismo relleno: «Para: Familiar / General.
+# Ideal para: Moda / Compras Diarias. Métodos de pago: … Cercanía a parqueadero: … | Instagram: …». Ese relleno
+# metía «niños», «mujeres», «familia», «parqueadero» en 113 locales y los hacía salir en búsquedas que no eran suyas.
+_RELLENO = re.compile(r"(?is)(?:\.\s*|\s)(?:para|ideal para|m[eé]todos de pago|cercan[ií]a a parqueadero)\s*:")
+
+
+def partir_descripcion(desc: str) -> tuple[str, str]:
+    """(lo que de verdad describe al local, el público «Para: … Ideal para: …»)."""
+    d = re.split(r"\s\|\s*(?:instagram|otros contactos)\s*:", desc or "", flags=re.I)[0]
+    m = _RELLENO.search(d)
+    if not m:
+        return d, ""
+    resto = d[m.start():]
+    publico = " ".join(re.findall(r"(?is)\b(?:para|ideal para)\s*:\s*([^.:|]*?)(?=\.\s|\s+\w[\w ]*:|$)", resto))
+    return d[:m.start()], publico
+
+
 def _es_basura(nombre: str) -> bool:
     n = normalizar(nombre).strip(" :.")
     return not n or n in {"telefono", "tel", "celular", "nombre", "local"} or nombre.strip().endswith(":")
@@ -179,10 +211,17 @@ def _construir(db: Session) -> dict:
             categoria=s.category or "", es_torre=es_torre, es_servicio=cat in CATEGORIAS_SERVICIO,
             es_cine=cat == "cine", piso=piso, fotos=fotos,
         )
-        loc.raices_nombre = set(raices(loc.nombre, quitar_vacias=False))
+        # palabras de 3 letras del nombre («Sur», «de», «La») no cuentan: «sura» → «sur» metía a «Fenalco Sur de
+        # Santander» en los seguros. El nombre completo se reconoce aparte (Tru, vo5, FDS siguen funcionando).
+        loc.raices_nombre = set(raices(" ".join(w for w in re.findall(r"\w+", loc.nombre) if len(w) >= 4 or
+                                                 any(ch.isdigit() for ch in w) or (w.isupper() and len(w) >= 2)),
+                                       quitar_vacias=False))
         loc.raices_rubro = set(raices(loc.rubro))
-        loc.raices_productos = set(r for p in productos for r in raices(re.sub(r"(?i)\bropa\s+vieja\b", "ropavieja", p)))
-        loc.raices_descripcion = set(raices(loc.descripcion))
+        loc.raices_productos = set(r for p in productos for r in raices(_compuestos(p)))
+        texto_desc, publico = partir_descripcion(loc.descripcion)
+        loc.raices_descripcion = set(raices(_compuestos(texto_desc)))
+        loc.raices_productos_top = set(r for p in productos[:N_PRODUCTOS_PRINCIPALES] for r in raices(_compuestos(p)))
+        loc.raices_publico = set(raices(publico))
         locales.append(loc)
     return {"locales": locales, "por_id": {l.id: l for l in locales}}
 

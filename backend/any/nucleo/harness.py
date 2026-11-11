@@ -141,7 +141,8 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
     if not borrado:
         guardias.aviso_privacidad(ctx, r)
         if r.entidades:
-            estado.ultimas_entidades = {**estado.ultimas_entidades, **r.entidades}
+            from .router import limpiar_entidades     # no recordar basura («['gomitas']», preguntas enteras)
+            estado.ultimas_entidades = limpiar_entidades({**estado.ultimas_entidades, **r.entidades})
         estado.ultimo_flujo = r.flujo
         try:
             est.guardar_turno(db, telefono, nombre, "user",

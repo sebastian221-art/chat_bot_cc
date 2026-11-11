@@ -27,20 +27,30 @@ locales:
     generales: [zapato, zapatos, calzado, zapateria]
     especificos: [sandalia, sandalias, bota, botas, tacon, tacones, chancla, chanclas]
   # 10/11: «Quiero naranja» no encontraba nada: pedir una fruta de jugo es pedir jugo.
+  # 11/11: «Labiales», «Gomitas» (Road Trip dice «gomas»), «manilla», «carrito para niños»: el cliente pide la
+  # cosa concreta y el local escribe otra palabra del mismo grupo.
+  maquillaje: [maquillaje, maquillajes, cosmeticos, cosmetico, labial, labiales, pintalabios, rubor, pestañina, delineador, sombras, base de maquillaje, polvo compacto]
+  golosinas: [golosina, golosinas, gomita, gomitas, gomas, caramelo, caramelos, confite, confites, chupeta, chupetas, mecato, dulces]
+  pulseras: [manilla, manillas, pulsera, pulseras, brazalete, brazaletes]
+  carritos: [carrito, carritos, kart, karts, carros electricos, carro electrico, motos electricas, moto electrica]
   jugos: [jugo, jugos, jugo natural, jugos naturales, zumo, jugo de naranja, naranja, naranjada, limonada, limonadas, jugo de fruta, jugos de fruta]
   # Solo lo que es lavar CARROS/MOTOS. «lavar», «lavado» o «autolavado» solos no: King Helmets lava cascos y Gopass
   # dice «autolavados» (pago por la app), y salían como lavaderos.
   lavadero: [lavadero, lavaderos, lavautos, car wash, carwash, lavadero de carros, lavadero de motos, lavadero de carro, lavo el carro, lavo mi carro, lavo la moto, lavo mi moto, lavan carros, lavar el carro, lavar mi carro, lavar carro, lavar carros, lavar la moto, lavar mi moto, lavar moto, lavado de carros, lavado de carro, lavado de motos, lavado de moto, lavado de vehiculos, lavada del carro, limpieza de carros, limpieza de vehiculos]
   seguros: [seguros, aseguradora, aseguradoras, poliza, polizas, soat, sura, mapfre, allianz, positiva, previsora, colpatria]
-  textil_hogar: [cobija, cobijas, cobertor, cobertores, edredon, edredones, frazada, frazadas, sabana, sabanas, almohada, almohadas, toalla, toallas, ropa de cama, lenceria de hogar, juego de cama]
+  # 11/11: separados; juntos, «toallas» traía a los de colchones (venden almohadas)
+  cobijas: [cobija, cobijas, cobertor, cobertores, edredon, edredones, frazada, frazadas]
+  sabanas: [sabana, sabanas, ropa de cama, juego de cama]
+  almohadas: [almohada, almohadas]
+  toallas: [toalla, toallas]
   mexicana: [mexicana, mexicano, mexicanos, comida mexicana, tacos, taco, burrito, burritos, quesadilla, quesadillas, nachos, enchiladas]
   contador: [contador, contadores, contadora, contable, contables, contabilidad, contaduria, tributario, tributaria, tributarios, impuestos, declaracion de renta, revisor fiscal]
   abogado: [abogado, abogados, abogada, juridico, juridica, juridicos, asesoria legal, asesoria juridica, derecho, demanda]
   tenis:
-    generales: [tenis, tennis, sneakers, zapatilla, zapatillas, zapatillas deportivas]
+    generales: [tenis, tennis, sneakers, zapatilla, zapatillas, zapatillas deportivas, calzado deportivo]
     amplia_a: calzado   # el juez también revisa todo el calzado (una tienda deportiva vende tenis)
   ropa:
-    generales: [ropa, vestuario, moda, prenda, prendas, almacen de ropa]
+    generales: [ropa, vestuario, prenda, prendas, almacen de ropa]
     especificos: [vestido, vestidos, camisa, camisas, pantalon, pantalones, jean, jeans, falda, faldas, blusa, blusas, chaqueta, chaquetas]
   infantil: [niño, niños, niña, niñas, bebe, bebes, infantil, infantiles, kids]
   deportivo: [deporte, deportes, deportiva, deportivas, deportivo, deportivos, correr, running]
@@ -56,12 +66,12 @@ locales:
   optica: [optica, opticas, gafas, lentes, anteojos, examen visual]
   belleza:
     generales: [belleza, salon de belleza, estetica]
-    especificos: [peluqueria, peluquerias, uñas, manicure, maquillaje, cosmeticos, barberia, barberias]
+    especificos: [peluqueria, peluquerias, uñas, manicure, barberia, barberias]
   supermercado: [supermercado, mercado, mercar]
   licores: [licor, licores, trago, cerveza, cervezas, vino, vinos, whisky, aguardiente, bar, bares]
   discoteca: [discoteca, discotecas, discoteque, club nocturno]
   vida_nocturna: [entretenimiento para adultos, plan para adultos, planes para adultos, para adultos, rumba, rumbear, vida nocturna, salir de noche, gastrobar, casino, casinos, karaoke]
   gimnasio: [gimnasio, gimnasios, gym, crossfit, hacer ejercicio]
   ocasion_formal:
-    generales: [grado, grados, graduacion, ceremonia, matrimonio, boda, fiesta formal, ropa formal, traje, vestido de gala]
+    generales: [grado, grados, graduacion, ceremonia, matrimonio, boda, fiesta formal, ropa formal, traje, vestido de gala, elegante, elegantes, elegancia, gala, de gala]
     amplia_a: ropa   # el juez elige entre las tiendas de ropa las que sirven para la ocasión

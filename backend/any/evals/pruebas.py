@@ -1020,6 +1020,61 @@ def test_servicio_que_en_realidad_es_un_local():
 
 
 
+def test_entidades_limpias_y_plan_de_internet():
+    """11/11: categoría como lista («['ropa deportiva']») o como la pregunta entera; «Quiero plan de internet» se
+    fue al wifi del mall y dijo que no sabía (CLARO vende planes de internet)."""
+    import types
+    from any.nucleo.router import _corregir_servicio_que_es_local, limpiar_entidades
+    from any.nucleo.tipos import Decision
+    assert limpiar_entidades({"categoria": ["ropa deportiva"]}) == {"categoria": "ropa deportiva"}
+    assert limpiar_entidades({"categoria": ["gomitas", "caramelos"]}) == {"categoria": "gomitas y caramelos"}
+    assert limpiar_entidades({"categoria": "¿Dónde puedo encontrar ropa?"}) == {}
+    assert limpiar_entidades({"categoria": "['cobijas']"}) == {}
+    assert limpiar_entidades({"local": ["Koaj"]}) == {"local": "Koaj"}
+    db = _db()
+    from any.conocimiento.catalogo import locales
+    if any(l.nombre == "CLARO" for l in locales(db)):
+        class _T:
+            def alerta(self, *_): pass
+        ir = lambda m: _corregir_servicio_que_es_local(types.SimpleNamespace(mensaje=m, db=db, traza=_T()),
+                                                       Decision("servicios_mall", {"servicio": "wifi"}, False, m, "", "ia")).flujo
+        assert ir("Quiero plan de internet") == "locales"
+        assert ir("hay wifi?") == "servicios_mall"
+
+
+def test_banco_busqueda_productos():
+    """11/11: banco de preguntas REALES de producto/categoría con los locales que deben y no pueden salir
+    (any/evals/banco_busqueda.py). Antes del cambio: 39 de 61 bien."""
+    from any.evals.banco_busqueda import evaluar
+    total, fallas = evaluar(_db())
+    assert not fallas, f"{len(fallas)}/{total} fallan:\n" + "\n".join(fallas[:15])
+
+
+def test_respuesta_no_inventa_locales_ni_cantidades():
+    """11/11: «Quiero una manilla» → la IA agregó 4 locales que no estaban en los datos; «Gomitas» → «tienes 2
+    locales» y no puso ninguno; «Tengo 5 opciones» con 6 en la lista."""
+    import types
+    from any.flujos.locales import Locales
+
+    class _T:
+        def alerta(self, *_): pass
+        def paso(self, *_): pass
+        def llm(self, *_): pass
+    db = _db()
+    L = Locales()
+    ctx = types.SimpleNamespace(db=db, mensaje="Quiero una manilla", traza=_T(), decision=None,
+                                estado=types.SimpleNamespace(ultimas_entidades={}))
+    d = asyncio.run(L._reunir(ctx))
+    texto = ("Aquí tienes los locales con manillas:\n• *KOAJ* — Pasillo Vélez\n• *STOP JEANS* — Pasillo Vélez\n"
+             "Tengo *9* opciones.\nDe paso: *HAPPYLANDIA* 50% los lunes")
+    out = L.componer(ctx, d, texto)
+    assert "KOAJ" not in out and "STOP JEANS" not in out, out
+    assert "HAPPYLANDIA" in out                      # la línea «De paso» no se toca
+    n = len(d.meta.get("lista_equidad") or []) or 1
+    assert f"*{n}*" in out, out
+    assert "{LISTA}" not in L.componer(ctx, type(d)(hechos={"modo": "ficha", "local": {"nombre": "x"}}), "Hola {LISTA}")
+
+
 def test_todos_los_locales_por_nombre_en_todas_las_formas():
     """10/11: «que no vuelva a fallar»: cada local se encuentra por su nombre escrito de muchas formas
     (con o sin tildes, en minúscula, solo o dentro de una pregunta)."""
