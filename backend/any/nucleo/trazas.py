@@ -92,7 +92,7 @@ class Traza:
                 phone_number=self.telefono[:20],
                 mensaje_usuario=self.mensaje,
                 herramienta_elegida=f"any:{decision.flujo if decision else respuesta.flujo}"[:50],
-                metodo_decision="any2",
+                metodo_decision="any3" if decision is not None and getattr(decision, "metodo", "") == "any3" else "any2",
                 razon_decision=(f"[{decision.metodo}] {decision.razon}" if decision else "")[:2000],
                 respuesta_bot="\n\n".join(respuesta.mensajes()),
                 fotos_enviadas=len(fotos),

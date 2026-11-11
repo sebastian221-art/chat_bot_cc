@@ -71,13 +71,42 @@ def _ultimo(ctx, d: Directorio) -> str:
     return "; ".join(partes) or "(nada)"
 
 
+def candidatos(ctx, d: Directorio, maximo: int = 25) -> list[str]:
+    """Pistas del buscador por palabras de Any 2.0 (lo que encuentra por lo que cada local declara vender).
+    El cerebro las REVISA una por una y busca más: así no se le escapa un local perdido en un directorio largo
+    (pasó en el examen con Groq: popsy y ROAD TRIP venden gomitas y no los vio)."""
+    try:
+        from any.conocimiento.buscador import buscar_locales, seleccionar_relevantes
+        res = buscar_locales(ctx.db, ctx.mensaje, incluir_torre=True)
+        primero = seleccionar_relevantes(res)
+        resto = sorted((r for r in res if r not in primero), key=lambda r: -r.puntaje)
+        ids = []
+        for r in list(primero) + resto:
+            i = f"L{r.local.id}"
+            if i in d.locales and i not in ids:
+                ids.append(i)
+        return ids[:maximo]
+    except Exception as e:
+        try:
+            ctx.db.rollback()
+        except Exception:
+            pass
+        ctx.traza.alerta(f"el buscador de pistas falló: {e}")
+        return []
+
+
 def mensajes(ctx, d: Directorio) -> list[dict]:
     a = ctx.ahora
     fijo = _prompt("cerebro.md") + "\n\n# DIRECTORIO COMPLETO DEL CENTRO COMERCIAL\n" + d.texto
     variable = (f"Hoy es {_DIAS[a.weekday()]} {a.day:02d}/{a.month:02d}/{a.year}, "
                 f"{a.strftime('%I:%M %p').lstrip('0').lower()} (hora de Colombia).")
+    pistas = candidatos(ctx, d)
+    ctx.traza.paso("pistas_buscador", [f"{i} {d.nombre(i)}" for i in pistas])
+    texto_pistas = ("\n".join(f"- {i} {d.nombre(i)}" for i in pistas) if pistas else "(el buscador no encontró nada)")
     usuario = (f"CONVERSACIÓN RECIENTE:\n{_conversacion(ctx)}\n\n"
                f"Lo último que se habló: {_ultimo(ctx, d)}\n\n"
+               f"PISTAS DEL BUSCADOR POR PALABRAS (pueden sobrar o faltar: revisa CADA una contra su línea del "
+               f"directorio y busca además otros locales que sirvan):\n{texto_pistas}\n\n"
                f"MENSAJE NUEVO DEL CLIENTE: {ctx.mensaje}")
     return [{"role": "system", "content": fijo}, {"role": "system", "content": variable},
             {"role": "user", "content": usuario}]
@@ -134,10 +163,18 @@ def modo_directorio() -> str:
 
 
 async def _llamar(ctx, d: Directorio, modo: str):
+    """Si el modelo devuelve vacío (con Groq pasó: gastó el cupo pensando en listas largas de ropa), se repite
+    con más cupo y razonamiento corto."""
     import asyncio
-    r = await asyncio.wait_for(llm.completar(mensajes(ctx, d), json_salida=True, temperatura=0, max_tokens=2500,
-                                             razonamiento="medium", timeout_s=20), timeout=45)
-    ctx.traza.llm(f"cerebro_{modo}", r)
+    msgs = mensajes(ctx, d)
+    r = None
+    for intento, (razonamiento, cupo) in enumerate((("medium", 8000), ("low", 8000))):
+        r = await asyncio.wait_for(llm.completar(msgs, json_salida=True, temperatura=0, max_tokens=cupo,
+                                                 razonamiento=razonamiento, timeout_s=25), timeout=45)
+        ctx.traza.llm(f"cerebro_{modo}" + ("_reintento" if intento else ""), r)
+        if (r.texto or "").strip():
+            return r
+        ctx.traza.alerta("el cerebro devolvió una respuesta vacía: se repite")
     return r
 
 
