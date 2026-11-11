@@ -62,6 +62,14 @@ class Cine(Flujo):
             hechos["cartelera_es_de"] = f"hoy, {ctx.ahora:%d/%m/%Y} (los horarios de otros días no están cargados)"
             hechos["cartelera"] = [{"titulo": f.title, "funciones": f.showtimes or "", "estreno": bool(f.is_premiere)}
                                    for f in funciones] or "la cartelera no está cargada en este momento"
+            # UN póster de referencia (el primer estreno, si hay), no uno por película (pedido 11/11)
+            for f in sorted(funciones, key=lambda x: not x.is_premiere):
+                poster = foto_principal(db, "cine_funcion", f.id, orden=("poster", "otra"))
+                if poster:
+                    datos.adjuntos.append(Adjunto(tipo="imagen", url=poster, leyenda=f.title))
+                    hechos["imagen"] = (f"se adjunta UN póster de referencia: el de «{f.title}». No digas que envías "
+                                        f"los pósters de las demás.")
+                    break
         nombre_peli = d.entidades.get("pelicula") if d else None
         if nombre_peli and not peli:
             hechos["pelicula_pedida_no_esta_en_cartelera"] = nombre_peli

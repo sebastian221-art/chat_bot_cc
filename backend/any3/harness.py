@@ -53,7 +53,7 @@ LINEA_MALL = "317 432 0138"
 import collections as _col
 CONTADOR: _col.Counter = _col.Counter()
 SEGUNDOS: _col.deque = _col.deque(maxlen=300)
-_ERRORES_A_ANY2 = ("cerebro falló", "error")
+_ERRORES_A_ANY2 = ("cerebro falló", "error")      # «tema de Any 2.0: …» es normal (cine, domicilios, QR…)
 
 
 async def _any2(db, telefono, nombre, mensaje, ahora, modo, imagen, es_audio, motivo: str) -> Respuesta:
@@ -96,6 +96,9 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
         ctx._any3_t0 = t0
         if guardias.privacidad(ctx) is not None:      # pedir borrar datos, etc.: lo maneja Any 2.0
             return await _any2(*args, motivo="privacidad")
+        regla = _regla_fija_de_any2(db, mensaje)
+        if regla:                                     # emergencia, QR de zona, «?», salón de eventos: reglas exactas
+            return await _any2(*args, motivo=f"tema de Any 2.0: {regla}")
         traza.paso("contexto", {"motor": "any3", "turnos_historial": len(historial), "sesion_nueva": sesion_nueva,
                                 "recordado": estado.ultimas_entidades})
     except Exception as e:
@@ -135,6 +138,23 @@ async def procesar(db, telefono: str, nombre: str, mensaje: str, ahora: datetime
         CONTADOR["respondió Any 3.0"] += 1
         SEGUNDOS.append(time.monotonic() - ctx._any3_t0)
     return r
+
+
+def _regla_fija_de_any2(db, mensaje: str) -> str | None:
+    """Las reglas exactas que Any 2.0 aplica ANTES de pensar (no dependen de la IA): se respetan igual.
+    Así Any 3.0 hace todo lo que hace Any 2.0: una emergencia nunca pasa por el modelo, el QR de una zona se
+    registra, un «?» suelto pide aclarar y el alquiler de salones va con los números de reservas."""
+    from any.nucleo.router import regla_emergencia, regla_salon_eventos
+    from any.flujos.navegacion_qr import codigo_qr
+    if regla_emergencia(mensaje):
+        return "emergencia"
+    if codigo_qr(db, mensaje):
+        return "QR de zona"
+    if not re.search(r"[0-9A-Za-zÁÉÍÓÚáéíóúÑñÜü]", mensaje or ""):
+        return "mensaje sin palabras"
+    if regla_salon_eventos(mensaje):
+        return "salón de eventos"
+    return None
 
 
 # ── Datos verificados a partir de lo que eligió el cerebro ─────────

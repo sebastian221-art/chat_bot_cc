@@ -80,7 +80,7 @@ def _dias_del_evento(fecha_texto, hoy):
     return {ini + timedelta(days=i) for i in range((fin - ini).days + 1)}
 
 
-MAX_AFICHES = 4
+MAX_AFICHES = 1     # 11/11 (pedido del centro comercial): en la lista general va UN afiche de referencia, no uno por evento
 
 
 def _quitar_promesa_de_afiches(ctx, texto: str, imagenes: int) -> str:
@@ -118,7 +118,8 @@ class Eventos(Flujo):
     max_tokens = 600
 
     def componer(self, ctx, datos, texto):
-        """Adjunta el afiche de cada evento que la respuesta nombra (máximo 4, en el orden en que aparecen)."""
+        """Lista general: adjunta UN afiche de referencia (el del primer evento que nombra la respuesta).
+        Si preguntan por un evento concreto, va el afiche de ese evento (eso lo hace reunir)."""
         from ..conocimiento.texto import normalizar
         afiches = datos.meta.get("afiches") or {}
         if afiches and texto:
@@ -165,8 +166,8 @@ class Eventos(Flujo):
                 # Antes decía «los afiches se envían aparte» y el modelo prometía «los afiches de ambos eventos»
                 # aunque solo uno tuviera afiche. Ahora sabe cuáles tienen, y no debe hablar de afiches.
                 hechos["eventos_con_afiche"] = sorted(afiches)
-                hechos["afiches"] = ("el sistema adjunta solo el afiche de los eventos de 'eventos_con_afiche' que "
-                                     "nombres; no escribas nada sobre afiches ni imágenes en la respuesta")
+                hechos["afiches"] = ("el sistema adjunta UN solo afiche de referencia (el del primer evento que "
+                                     "nombres); no escribas nada sobre afiches ni imágenes en la respuesta")
             nombre = d.entidades.get("evento") if d else None
             if nombre:
                 hechos["evento_pedido_no_encontrado"] = nombre

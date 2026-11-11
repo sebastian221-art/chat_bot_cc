@@ -88,9 +88,20 @@ class SorteosPromos(Flujo):
         elif p:
             hechos["promocion"] = ficha_promo(db, p)
             datos.entidades["promo"] = p.title
+            foto = foto_principal(db, "marketing", p.id, respaldo=getattr(p, "photo_url", None))
+            if foto:
+                datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=p.title))
         else:
             hechos["sorteos_vigentes"] = [ficha_sorteo(x) for x in sorteos] or "no hay sorteos vigentes"
             hechos["promociones_vigentes"] = [ficha_promo(db, x) for x in promos] or "no hay promociones vigentes"
+            # Lista general: UNA imagen de referencia (el sorteo principal), no una por cada uno (pedido 11/11)
+            for x in sorteos:
+                foto = foto_principal(db, "raffle", x.id, respaldo=x.photo_url, orden=("afiche", "premio", "otra"))
+                if foto:
+                    datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=x.name))
+                    hechos["imagen"] = (f"se adjunta UNA imagen de referencia: la de «{x.name}». No digas que envías "
+                                        f"imágenes de los demás.")
+                    break
             if len(promos) == 1:
                 datos.entidades["promo"] = promos[0].title
         return datos

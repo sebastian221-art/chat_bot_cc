@@ -16,6 +16,7 @@ Cómo se usa:
   3. Subir el archivo. Solo se cambian las celdas distintas a lo que hay en la base.
      Para CREAR uno nuevo, escribe «nuevo» en la columna id y llena la fila. Para BORRAR un evento, sorteo,
      promoción o dato de conocimiento, agrega una columna «borrar» y escribe «sí» en esa fila.
+     Para VACIAR una celda (p. ej. un horario o un Instagram que ya no aplica), escribe «(borrar)».
 
 El Instagram de un local no tiene campo propio en la base: Any lo lee del link de la carta o de
 la descripción. Si se cambia en la planilla, se escribe en la descripción ("Instagram: …").
@@ -334,10 +335,24 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                 nuevo = fila[pos[titulo]]
                 if solo_cambios and (nuevo is None or str(nuevo).strip() == ""):
                     continue
+                borrar_celda = str(nuevo or "").strip().lower() in ("(borrar)", "(vacío)", "(vacio)")
                 if campo == "@revisado":
                     revisados += str(nuevo or "").strip().lower() in ("sí", "si", "x", "ok")
                     continue
                 if campo == "@notas":
+                    continue
+                if campo == "@instagram" and borrar_celda:
+                    # «(borrar)»: el local ya no tiene ese Instagram (lo pidió el centro comercial)
+                    if _instagram(obj):
+                        obj.description = re.sub(r"(?i)\s*\|?\s*instagram:\s*$", "", _IG.sub("", obj.description or "").strip()).strip(" |")
+                        if _IG.search(obj.catalogo_link or ""):
+                            obj.catalogo_link = None
+                        cambios.append(f"{hoja} · {obj.id} · instagram → (sin Instagram)")
+                    continue
+                if borrar_celda and campo not in ("name", "title", "content", "category", "floor", "active"):
+                    if getattr(obj, campo, None) not in (None, ""):
+                        cambios.append(f"{hoja} · {obj.id} · {titulo}: «{str(_a_celda(getattr(obj, campo)))[:40]}» → (vacío)")
+                        setattr(obj, campo, None if campo in ("store_id", "catalogo_link") else "")
                     continue
                 if campo == "@instagram":
                     nuevo_ig = str(nuevo or "").strip()
