@@ -232,6 +232,10 @@ async def _datos_de_flujo(ctx, el, d, flujo_obj) -> Datos:
         if el.ids:
             locs = [d.locales[i] for i in el.ids][:8]
             datos.hechos["locales_relacionados"] = [l.ficha() for l in locs]
+            datos.hechos["como_usar_locales_relacionados"] = (
+                "Si la información oficial no dice dónde queda o cómo se accede a lo que piden, y uno de estos locales lo "
+                "ofrece, dalo como opción concreta con su ubicación (zona, o piso y oficina si es de la Torre) y su "
+                "contacto. No respondas solo «no tengo el dato» cuando aquí hay algo útil.")
             datos.meta.setdefault("telefonos_validos", []).extend(l.telefono for l in locs if l.telefono)
             datos.entidades["any3_ids"] = el.ids[:20]
     return datos
