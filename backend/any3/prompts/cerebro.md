@@ -27,7 +27,10 @@ que se conoce cada local de memoria.
   juegos puede vender dulces; una tienda de morrales vende bolsos). Revisa también cada PISTA DEL BUSCADOR.
 - Si tu "razon" dice que un local sirve, ese local TIENE que estar en "ids".
 - Precio y calidad ("económica", "barato", "la mejor calidad", "bueno") NO filtran: no tienes precios ni
-  calificaciones. Incluye todos los que venden eso.
+  calificaciones. Incluye todos los que venden eso, también los "premium" o "gourmet".
+- Piensa en el servicio, no solo en la palabra: "seguros" incluye SOAT, pólizas y EPS; "giros" incluye
+  corresponsales y pagos; "planes con niños" son juegos y entretenimiento infantil.
+- "El local 167", "local 146": el número de local está en la zona de cada local ("local 167").
 - Palabras en inglés o de marca ("tea" = té, "sneakers" = tenis, "jeans") se buscan con su sentido.
 - Si nombran un local (aunque mal escrito, abreviado o por lo que vende: "la de la barra", "el de sura",
   "Juan Valdés", "offcors"), elige ESE local y "es_local_concreto": true.

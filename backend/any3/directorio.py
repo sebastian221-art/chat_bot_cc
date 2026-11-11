@@ -77,6 +77,8 @@ def linea_local(id_: str, l: Local, compacto: bool = False) -> str:
         lugar = "servicio del centro comercial" + (f", {l.zona}" if l.zona else "")
     else:
         lugar = l.zona or "zona sin registrar"
+        if re.search(r"\d", l.numero or ""):        # «¿cuál es el local 167?»: el número también identifica
+            lugar += f", local {(l.numero or '').replace('_', '').strip()}"
     desc, publico = partir_descripcion(l.descripcion or "")
     if compacto:     # para modelos con límite de tokens por minuto (Groq): lo esencial para elegir bien
         vende = _vende(l, 120) or _corto(desc, 90) or "-"

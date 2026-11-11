@@ -6,6 +6,8 @@ Marca "grave" SOLO si pasa alguna de estas cosas:
 1. INVENTA: la respuesta trae un dato que NO está en los datos verificados ni en la conversación: un local,
    teléfono, precio, horario, fecha, link, ubicación, producto que vende, servicio, promoción. (Frases
    generales de cortesía no cuentan.)
+   Afirmar que algo NO existe o NO se ofrece ("no tenemos wifi", "no hay baños para…") sin que los datos lo
+   digan también es inventar: lo correcto es "no tengo esa información" o "no lo tengo registrado".
 2. CONTRADICE los datos (ej. dice que algo es gratis y los datos dicen que cuesta; da otro horario).
 3. NO RESPONDE lo que el cliente preguntó (pidió el teléfono y no lo da teniéndolo; preguntó por X y habla de Y).
 4. NIEGA lo que sí hay ("no tenemos…" cuando los datos traen locales o información que lo responde).

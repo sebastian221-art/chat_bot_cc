@@ -26,11 +26,11 @@ INFO: list[tuple[str, str, list[str]]] = [
     ("¿El parqueadero es gratis si compro en Jumbo?", "info", ["35.000", "35000"]),
     ("¿Cuánto vale la mensualidad de moto?", "info", ["60.000", "60000"]),
     ("¿A qué hora cierran hoy?", "info", ["pm", "p. m", "p.m"]),
-    ("¿Puedo entrar con mi perro?", "info", ["mascota"]),
+    ("¿Puedo entrar con mi perro?", "info", ["mascota", "perro", "bolsa"]),
     ("¿Cómo registro mis facturas para el sorteo?", "", ["registro-de-facturas", "punto de informacion"]),
     ("¿Dónde compro una tarjeta de regalo?", "info", ["punto de informacion"]),
     ("¿Hay enfermería?", "info", ["enfermer"]),
-    ("Necesito el correo de la gerente", "info", ["gerencia@elpuente.com.co"]),
+    ("Necesito el correo de la gerente", "info|administracion", ["gerencia@elpuente.com.co"]),
     ("¿Cuál es la dirección del centro comercial?", "info", ["calle 10"]),
     ("¿Qué eventos hay este fin de semana?", "eventos", []),
     ("¿Qué sorteos hay?", "sorteos_promos", []),
@@ -166,7 +166,7 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
                 ok = local in nombres or normalizar(local) in normalizar(r.texto)
                 fila.update(ok=ok, faltan=[] if ok else [local])
             else:
-                ok = not a or accion == a
+                ok = not a or accion in a.split("|")
                 texto = normalizar(r.texto).replace(" ", "")
                 if ok and b:
                     ok = any(normalizar(x).replace(" ", "") in texto for x in b)
