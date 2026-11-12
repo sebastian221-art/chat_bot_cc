@@ -39,6 +39,8 @@ class Eleccion:
     aclaracion: str = ""
     razon: str = ""
     descartados: list = field(default_factory=list)   # IDs que la IA dio y no existen (para la traza)
+    tambien_producto: str = ""                         # el nombre de la tienda también es un producto («Tennis»)
+    tambien: list = field(default_factory=list)        # locales que podrían tenerlo pero no lo declaran
 
     def dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if v not in (None, "", [], False)}
@@ -96,11 +98,31 @@ def candidatos(ctx, d: Directorio, maximo: int = 25) -> list[str]:
         return []
 
 
+def _parecido(a: str, b: str) -> bool:
+    import difflib
+    from any.conocimiento.texto import normalizar
+    a, b = normalizar(a), normalizar(b)
+    return bool(a) and (a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.8)
+
+
+def repite(ctx) -> bool:
+    """¿El mensaje es (casi) igual a uno de los 2 anteriores del cliente? (12/11: «Tennis», «Tennis», «TEENIS»,
+    «TENNIS»: cuatro veces lo mismo y la misma respuesta que no le servía)."""
+    previos = [t.texto for t in ctx.historial if t.rol == "user"][-2:]
+    return any(_parecido(ctx.mensaje, p) for p in previos)
+
+
 def mensajes(ctx, d: Directorio) -> list[dict]:
     a = ctx.ahora
     fijo = _prompt("cerebro.md") + "\n\n# DIRECTORIO COMPLETO DEL CENTRO COMERCIAL\n" + d.texto
     variable = (f"Hoy es {_DIAS[a.weekday()]} {a.day:02d}/{a.month:02d}/{a.year}, "
                 f"{a.strftime('%I:%M %p').lstrip('0').lower()} (hora de Colombia).")
+    aviso_repite = ""
+    if repite(ctx):
+        aviso_repite = ("⚠️ EL CLIENTE ESTÁ REPITIENDO lo que ya preguntó: tu respuesta anterior NO le sirvió. "
+                        "No repitas la misma interpretación: piensa qué otra cosa quiere decir (p. ej. el NOMBRE de una "
+                        "tienda en vez del producto, u otra tienda) o pregunta exactamente qué busca.\n\n")
+        ctx.traza.alerta("el cliente repite el mensaje: se le avisa al cerebro que cambie de interpretación")
     pistas = candidatos(ctx, d)
     ctx.traza.paso("pistas_buscador", [f"{i} {d.nombre(i)}" for i in pistas])
     texto_pistas = ("\n".join(f"- {i} {d.nombre(i)}" for i in pistas) if pistas else "(el buscador no encontró nada)")
@@ -108,7 +130,7 @@ def mensajes(ctx, d: Directorio) -> list[dict]:
                f"Lo último que se habló: {_ultimo(ctx, d)}\n\n"
                f"PISTAS DEL BUSCADOR POR PALABRAS (pueden sobrar o faltar: revisa CADA una contra su línea del "
                f"directorio y busca además otros locales que sirvan):\n{texto_pistas}\n\n"
-               f"MENSAJE NUEVO DEL CLIENTE: {ctx.mensaje}")
+               f"{aviso_repite}MENSAJE NUEVO DEL CLIENTE: {ctx.mensaje}")
     return [{"role": "system", "content": fijo}, {"role": "system", "content": variable},
             {"role": "user", "content": usuario}]
 
@@ -135,7 +157,8 @@ def validar(j: dict, d: Directorio) -> Eleccion:
                  es_local_concreto=bool(j.get("es_local_concreto")), pide=pide if pide in PIDE else "general",
                  busqueda=str(j.get("busqueda") or "").strip()[:80], consulta=str(j.get("consulta") or "").strip()[:300],
                  certeza=str(j.get("certeza") or "alta").strip().lower(), aclaracion=str(j.get("aclaracion") or "").strip(),
-                 razon=str(j.get("razon") or "").strip()[:300], descartados=descartados)
+                 razon=str(j.get("razon") or "").strip()[:300], descartados=descartados,
+                 tambien_producto=str(j.get("tambien_producto") or "").strip()[:60])
     if e.accion == "locales" and not e.ids:
         e.accion = "info" if e.info_ids else "no_hay"
     if e.accion == "info" and not e.info_ids and e.ids:
@@ -169,9 +192,17 @@ async def _llamar(ctx, d: Directorio, modo: str):
     import asyncio
     msgs = mensajes(ctx, d)
     r = None
-    for intento, (razonamiento, cupo) in enumerate((("medium", 8000), ("low", 8000))):
-        r = await asyncio.wait_for(llm.completar(msgs, json_salida=True, temperatura=0, max_tokens=cupo,
-                                                 razonamiento=razonamiento, timeout_s=25), timeout=45)
+    # 12/11: «chaqueta de cuero» tardó 33 s (el modelo se quedó pensando). Ahora cada intento tiene tope: si el
+    # primero (razonamiento medio) no termina en 12 s, se repite con razonamiento corto (tope 12 s).
+    for intento, (razonamiento, cupo, tope) in enumerate((("medium", 6000, 12), ("low", 4000, 12))):
+        try:
+            r = await asyncio.wait_for(llm.completar(msgs, json_salida=True, temperatura=0, max_tokens=cupo,
+                                                     razonamiento=razonamiento, timeout_s=tope), timeout=tope + 1)
+        except asyncio.TimeoutError:
+            ctx.traza.alerta(f"el cerebro tardó más de {tope} s (razonamiento {razonamiento}): se repite más rápido")
+            if intento:
+                raise
+            continue
         ctx.traza.llm(f"cerebro_{modo}" + ("_reintento" if intento else ""), r)
         if (r.texto or "").strip():
             return r
@@ -204,6 +235,39 @@ async def elegir(ctx, d: Directorio) -> Eleccion:
     return e
 
 
+_NO_CABEZA = {"quiero", "busco", "necesito", "donde", "venden", "hay", "tienda", "tiendas", "local", "locales",
+              "almacen", "comprar", "consigo", "conseguir", "algo", "unos", "unas", "algun", "alguna", "buen", "buena",
+              "mejor", "barato", "barata", "economico", "economica", "para", "horario", "telefono", "numero", "carta",
+              "lugar", "lugares", "sitio"}
+
+
+def _raiz(p: str) -> str:
+    for suf in ("es", "s"):
+        if len(p) > 4 and p.endswith(suf):
+            return p[: -len(suf)]
+    return p
+
+
+def declara(local, busqueda: str) -> bool:
+    """¿El local escribe en sus datos (productos, rubro o descripción; no basta el nombre) lo principal de lo que se
+    busca, o un sinónimo de la lista de sinónimos? Lo principal es el primer concepto con contenido («chaqueta»
+    en «chaqueta de cuero», «sudadera» en «sudaderas para niños»; «tenis» incluye «calzado deportivo»).
+    Es la mitad de código de «responder de lo que se sabe»."""
+    from any.conocimiento.buscador import _grupo_modificador, conceptos
+    from any.conocimiento.texto import contiene_frase
+    campos = (local.raices_productos | local.raices_productos_top | local.raices_rubro | local.raices_descripcion)
+    texto = " | ".join([local.rubro or ""] + list(local.productos or []))
+    # «bolsos y zapatos», «tenis o sandalias»: basta con que declare una de las partes
+    for parte in re.split(r"\s+(?:y|o|e|u)\s+|,|/", busqueda or ""):
+        cabeza = next((c for c in conceptos(parte) if c.palabra not in _NO_CABEZA and len(c.palabra) > 2
+                       and not _grupo_modificador(c)), None)
+        if cabeza is None:
+            continue
+        if cabeza.raices & campos or any(contiene_frase(f, texto) for f in (cabeza.frases or [])):
+            return True
+    return False
+
+
 _REVISOR = """Eres el REVISOR de listas de Any, la asistente del Centro Comercial El Puente (San Gil).
 Un cliente busca algo. Ya se armó una lista de locales y el buscador encontró otros posibles. Revisa CADA local
 con sus datos ("vende", "desc", "para") y decide:
@@ -219,8 +283,9 @@ eléctricas para niños no vende motos); si quiere un USO concreto, no entra lo 
 artesanal tradicional no es un morral escolar; ropa deportiva no es un vestido de baño, salvo que lo declare).
 Si un local vende varias cosas y entre ellas está lo buscado, SÍ sirve. Ante la duda con uno de la lista, se
 queda; ante la duda con uno posible, no entra.
-Además di cuáles de los que quedan DECLARAN en sus datos lo buscado (o algo que claramente lo incluye) en
-"lo_declaran". Un concesionario de carros no declara vender llantas; una tienda de juegos con carritos
+Además di en "lo_declaran" TODOS los locales (de la lista y de los posibles) que DECLARAN en sus datos lo
+buscado o algo que claramente lo incluye ("chaquetas" incluye chaqueta de cuero; "ropa infantil" NO declara
+sudaderas). Si un posible lo declara, también va en "agregar". Un concesionario de carros no declara vender llantas; una tienda de juegos con carritos
 eléctricos no vende motos eléctricas.
 Responde SOLO JSON: {"quitar": ["L…"], "agregar": ["L…"], "lo_declaran": ["L…"], "razon": "frase corta"}"""
 
@@ -244,7 +309,7 @@ async def revisar_lista(ctx, d: Directorio, e: Eleccion):
     try:
         r = await asyncio.wait_for(llm.completar(
             [{"role": "system", "content": _REVISOR}, {"role": "user", "content": texto}],
-            json_salida=True, temperatura=0, max_tokens=4000, razonamiento="medium", timeout_s=20), timeout=25)
+            json_salida=True, temperatura=0, max_tokens=3000, razonamiento="low", timeout_s=10), timeout=11)
         ctx.traza.llm("revisor_lista", r)
         j = r.json()
     except Exception as ex:
@@ -255,14 +320,31 @@ async def revisar_lista(ctx, d: Directorio, e: Eleccion):
     if quitar and len(quitar) > len(elegidos) / 2:
         ctx.traza.alerta(f"el revisor quería quitar {len(quitar)} de {len(elegidos)}: se ignora (demasiado)")
         quitar = []
-    e.ids = [i for i in elegidos if i not in quitar] + agregar
-    declaran = {str(x).strip().upper() for x in (j.get("lo_declaran") or [])} & set(e.ids)
-    if e.accion == "no_hay" and e.ids:
-        e.accion = "locales"
-        e.certeza = "alta" if declaran else "probable"
-    elif e.ids and "lo_declaran" in j and not declaran:
-        # nadie dice venderlo: se responde como «podrías encontrarlo… confírmalo», nunca como un hecho
-        e.certeza = "probable"
+    quedan = [i for i in elegidos if i not in quitar]
+    # Quién DECLARA en sus datos lo buscado: lo que diga la IA + lo que el código encuentra escrito tal cual
+    # (12/11: «chaqueta de cuero» → ESPRIT dice «chaquetas» y la IA no lo agregó).
+    # El código solo clasifica a los ya elegidos (nunca agrega por una palabra suelta: «comida» está en todos los
+    # restaurantes); un posible entra solo si la IA dice que lo declara.
+    elegidos_ = quedan + [i for i in agregar if i not in quedan]
+    por_ia = {str(x).strip().upper() for x in (j.get("lo_declaran") or [])}
+    por_codigo = {i for i in elegidos_ if declara(d.locales[i], e.busqueda or e.consulta or ctx.mensaje)}
+    declaran = [i for i in elegidos_ if i in (por_ia | por_codigo)] + \
+        [i for i in posibles if i in por_ia and i not in elegidos_]
+    if declaran:
+        # Se responde con lo que SE SABE: primero los que lo declaran; los demás van aparte, como sugerencia
+        e.ids = declaran
+        e.tambien = [i for i in elegidos_ if i not in declaran][:8]
+        if e.accion == "no_hay":
+            e.accion = "locales"
+        e.certeza = "alta"
+    else:
+        e.ids = quedan + agregar
+        if e.accion == "no_hay" and e.ids:
+            e.accion = "locales"
+        if e.ids and "lo_declaran" in j:
+            # nadie dice venderlo: se responde como «podrías encontrarlo… confírmalo», nunca como un hecho
+            e.certeza = "probable"
     ctx.traza.paso("revisor_lista", {"quitados": [d.nombre(i) for i in quitar], "agregados": [d.nombre(i) for i in agregar],
                                      "lo_declaran": [d.nombre(i) for i in declaran], "certeza": e.certeza,
+                                     "tambien_podrian": [d.nombre(i) for i in e.tambien],
                                      "revisados_posibles": [d.nombre(i) for i in posibles], "razon": j.get("razon")})

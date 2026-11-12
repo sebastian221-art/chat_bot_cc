@@ -151,8 +151,9 @@ async def correr(db) -> list[str]:
     check(r.flujo == "servicios_mall" and k and "parqueadero" in str(hechos).lower(), "el fragmento elegido llegó a los datos")
 
     print("11. Aclarar: pregunta corta, sin inventar")
-    r = await turno("eso", {"accion": "aclarar", "aclaracion": "¿Me cuentas qué estás buscando?"})
-    check("¿Me cuentas qué estás buscando?" in r.texto, "hizo la pregunta del cerebro")
+    r = await turno("eso", {"accion": "aclarar", "aclaracion": "¿Me cuentas qué estás buscando?"},
+                    texto="¡Hola! 😊 ¿Me cuentas qué estás buscando para ayudarte?")
+    check("qué estás buscando" in r.texto and r.flujo == "conversacion", "hizo la pregunta con la voz de Any")
 
     print("12b. Si Groq rechaza el directorio completo por tamaño, usa el corto y responde igual")
     from any3 import cerebro as cer

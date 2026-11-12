@@ -36,6 +36,12 @@ que se conoce cada local de memoria.
 - Palabras en inglés o de marca ("tea" = té, "sneakers" = tenis, "jeans") se buscan con su sentido.
 - Si nombran un local (aunque mal escrito, abreviado o por lo que vende: "la de la barra", "el de sura",
   "Juan Valdés", "offcors"), elige ESE local y "es_local_concreto": true.
+- NOMBRE QUE TAMBIÉN ES PRODUCTO: si el mensaje es el nombre de una tienda que además es un producto ("Tennis" es
+  una tienda y "tenis" son zapatos), y el contexto no deja claro que busca el producto, elige LA TIENDA
+  ("es_local_concreto": true) y pon el producto en "tambien_producto" (ej. "tenis"). Si venía hablando de ropa,
+  marcas o pidió "almacén/tienda/marca", es la tienda.
+- NOMBRE QUE NO EXISTE: si parece el nombre de una tienda ("Polito") y no está en el directorio, es "no_hay"
+  con "busqueda" = ese nombre (nunca "aclarar").
 - Seguimientos: "¿y el teléfono?", "¿y la carta?", "¿y hay más?", "¿y para niños?" se refieren a lo último que se
   habló (mira la conversación y "Lo último que se habló"). Resuelve a qué local/tema se refiere.
 - Consultorios y oficinas de la Torre (médicos, abogados, contadores, odontólogos…) también son locales: elígelos
@@ -82,6 +88,7 @@ general | telefono | ubicacion | horario | carta | instagram | foto | precios
   "consulta": "la pregunta completa ya interpretada con el contexto (ej. '¿cuál es el WhatsApp de Zirus Pizza?')",
   "certeza": "alta | probable",
   "aclaracion": "",
+  "tambien_producto": "",
   "razon": "una frase corta: por qué elegiste eso"
 }
 Reglas del JSON: solo IDs que EXISTEN en el directorio; ningún ID repetido; nada de texto fuera del JSON.

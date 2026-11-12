@@ -178,6 +178,11 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
             if not el.es_local_concreto:
                 datos.hechos["nota"] = (f"Es el ÚNICO local que encontré para «{el.busqueda or ctx.mensaje}»: "
                                         f"dilo así, con naturalidad, y da sus datos.")
+            if el.tambien_producto:
+                datos.hechos["tambien_puede_ser_producto"] = (
+                    f"«{ctx.mensaje}» es el nombre de esta tienda, pero también puede ser el producto "
+                    f"«{el.tambien_producto}». Da la ficha de la tienda y cierra con UNA línea preguntando si más bien "
+                    f"busca dónde venden {el.tambien_producto}.")
         else:
             if pide == "carta":     # «¿qué restaurantes tienen carta?»: solo los que la tienen (como Any 2.0)
                 from any.flujos.locales import carta_de
@@ -199,12 +204,20 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
         if el.certeza == "probable":
             datos.hechos["certeza"] = ("Estos locales PROBABLEMENTE lo tienen (no lo declaran exactamente): dilo así, "
                                        "«puedes encontrarlo en…», y sugiere confirmar por WhatsApp antes de ir.")
+        if el.tambien:
+            datos.hechos["tambien_podrias_preguntar_en"] = (
+                "El sistema agrega al final una línea con otros locales que podrían tenerlo pero no lo tienen "
+                "registrado; tú no los nombres.")
         datos.entidades["any3_ids"] = el.ids[:20]
         return flujo, datos
 
     if el.accion == "no_hay":
         hechos = {"modo": "info_relacionada" if info else "sin_resultados", "busqueda": el.busqueda or ctx.mensaje,
-                  "linea_del_centro_comercial": LINEA_MALL}
+                  "linea_del_centro_comercial": LINEA_MALL,
+                  "como_responder": ("Di con calidez que no lo tienes registrado en el centro comercial (sin inventar "
+                                     "alternativas) y pregunta qué vende o qué necesita, para ayudarle a encontrar algo "
+                                     "parecido. Si es el nombre de una tienda, sugiere confirmarlo en el Punto de "
+                                     "Información o en la línea del centro comercial.")}
         if info:
             hechos["info_oficial_relacionada"] = info
         return flujo, Datos(hechos=hechos, entidades={"categoria": el.busqueda} if el.busqueda else {})
@@ -243,10 +256,16 @@ async def _datos_de_flujo(ctx, el, d, flujo_obj) -> Datos:
 
 # ── Redactar, vigilar, corregir ───────────────────────────────────
 
+_ESTILO = ("Formato: las horas SIEMPRE como vienen en los datos, en formato de 12 horas con a. m./p. m. (nunca «19:00»). "
+           "Emojis pocos y con sentido (😊 🙌 🎄 📍), nunca sueltos dentro de una frase ni en lugar de palabras. "
+           "Si el sistema pone una lista ({LISTA}), tú NO escribes nombres, enlaces ni contactos de locales.")
+
+
 async def _redactar(flujo_obj, ctx, datos: Datos, correccion: str = "") -> tuple[str, str]:
     """(texto crudo del modelo, texto compuesto). Mismos mensajes que Any 2.0 (persona + instrucciones del flujo +
     datos verificados + historial) con el modelo de Any 3.0."""
     msgs = flujo_obj._mensajes(ctx, datos)
+    msgs.insert(-1, {"role": "system", "content": _ESTILO})
     if correccion:
         msgs.insert(-1, {"role": "system", "content": (
             "REVISIÓN DE CALIDAD: tu respuesta anterior fue RECHAZADA por esto: " + correccion +
@@ -299,10 +318,17 @@ def _quitar_de_lista(ctx, datos: Datos, quitar: list[str], busqueda: str) -> Dat
 
 async def _responder(ctx, el, d) -> Respuesta:
     if el.accion == "aclarar":
-        saludo = "¡Hola! Soy Any, la asistente del Centro Comercial El Puente 😊\n\n" if ctx.sesion_nueva else ""
+        # 12/11: «¿Podrías especificar a qué te refieres con 'Polito'?» salía seco, sin la voz de Any.
         ctx.decision = Decision("conversacion", {}, False, el.consulta, el.razon, "any3")
-        ctx.traza.paso("datos_reunidos", {"flujo": "conversacion", "hechos": {"aclaracion": el.aclaracion}})
-        return Respuesta(saludo + el.aclaracion, "conversacion", meta={"any3": {"accion": "aclarar"}})
+        datos = Datos(hechos={"debes_preguntar": el.aclaracion,
+                              "como": "Haz esa pregunta corta, con calidez y en tu tono (saluda si es el primer mensaje). "
+                                      "No afirmes nada ni nombres locales."}, meta={"sin_promo": True})
+        ctx.traza.paso("datos_reunidos", {"flujo": "conversacion", "hechos": datos.hechos})
+        crudo, texto = await _redactar(FLUJOS["conversacion"], ctx, datos)
+        if not crudo.strip():
+            saludo = "¡Hola! Soy Any, la asistente del Centro Comercial El Puente 😊\n\n" if ctx.sesion_nueva else ""
+            texto = saludo + el.aclaracion
+        return Respuesta(texto, "conversacion", meta={"any3": {"accion": "aclarar"}})
 
     nombre_flujo, datos = _datos(ctx, el, d)
     flujo_obj = FLUJOS[nombre_flujo]
@@ -336,12 +362,15 @@ async def _responder(ctx, el, d) -> Respuesta:
     # Presupuesto de tiempo: el cliente no puede esperar de más. Si ya se fue mucho tiempo, no se vigila
     # (las guardias de código de Any 2.0 siguen aplicando igual).
     gastado = time.monotonic() - ctx._any3_t0
-    if gastado > 40:
+    if gastado > 25:
         ctx.traza.alerta(f"sin vigilante: ya iban {gastado:.0f} s")
     elif not datos.meta.get("respaldo") and not datos.respuesta_directa:
         v = await vigilante.revisar(ctx, _para_vigilar(ctx, datos), texto, el.consulta)
         revision["intentos"].append(v.dict())
         ctx.traza.paso("vigilante", v.dict())
+        if v.quitar and el.tambien:      # lo que el vigilante dice que no es, tampoco va como sugerencia
+            fuera = {normalizar(n) for n in v.quitar}
+            el.tambien = [i for i in el.tambien if normalizar(d.nombre(i)) not in fuera]
         if not v.ok and v.quitar and datos.meta.get("lista_equidad"):
             nuevo = _quitar_de_lista(ctx, datos, v.quitar, el.busqueda or el.consulta or ctx.mensaje)
             if nuevo is not None:
@@ -351,7 +380,7 @@ async def _responder(ctx, el, d) -> Respuesta:
                 texto = flujo_obj.componer(ctx, datos, crudo) if crudo else texto
             elif v.gravedad != "grave":
                 ctx.traza.alerta(f"vigilante quería quitar {v.quitar}, pero era demasiado: se deja la lista")
-        if v.gravedad == "grave" and time.monotonic() - ctx._any3_t0 > 55:
+        if v.gravedad == "grave" and time.monotonic() - ctx._any3_t0 > 30:
             ctx.traza.alerta("el vigilante encontró un problema grave pero ya no hay tiempo de reescribir: "
                              "se usa la respuesta armada por código")
             plan_b = flujo_obj.respaldo(ctx, datos)
@@ -377,6 +406,8 @@ async def _responder(ctx, el, d) -> Respuesta:
                     ctx.traza.alerta("vigilante rechazó dos veces y no hay respuesta por código: se envía la corregida")
                     texto = texto2 or texto
                     revision["final"] = "corregida_sin_aprobar"
+    texto = _eventos_completos(datos, texto)
+    texto = _linea_tambien(el, d, texto)
     meta = dict(datos.meta)
     meta["any3"] = {"accion": el.accion, "ids": el.ids, "info_ids": el.info_ids, "revision": revision}
     return Respuesta(texto, nombre_flujo, datos.adjuntos, entidades={**entidades, **datos.entidades}, meta=meta)
@@ -386,6 +417,71 @@ async def _responder(ctx, el, d) -> Respuesta:
 
 _VACIO = re.compile(r"[ \t]*(?:[•·\-–]\s*)?(?:📸|📞|💬|👉|📲)?\s*\*?(?:instagram|whatsapp|tel[eé]fono|horario)\*?\s*:?\s*\*?\s*"
                     r"\(?(?:no disponible|no registrad[oa]|sin dato|n/?a)\)?\*?\.?[ \t]*", re.I)
+
+
+_SOLO_ENLACES = re.compile(r"^\s*👉\s*https?://\S+(?:\s*·\s*📸?\s*https?://\S+)*\s*$")
+_ENLACE_FALSO = re.compile(r"(?:https?://)?wa\.me/\d{0,11}(?:\.{2,}|…|x{2,}|X{2,})\S*")
+
+
+def _limpiar_formato(t: str, es_lista: bool = True) -> str:
+    """12/11 (traza de «Tennis»): quedaban líneas de WhatsApp/Instagram sueltas, sin nombre de local y repetidas, y
+    enlaces cortados «wa.me/573...». Una línea que es SOLO enlaces se deja únicamente si va justo debajo de un
+    «• *Local*» (así las pone la lista del sistema); los enlaces falsos se quitan siempre."""
+    if not t:
+        return t
+    salida, anterior, vistas = [], "", set()
+    for linea in t.split("\n"):
+        if _ENLACE_FALSO.search(linea):
+            linea = _ENLACE_FALSO.sub("", linea)
+            if not re.search(r"[A-Za-zÁÉÍÓÚáéíóú0-9]{3}", re.sub(r"[👉📸·()\s]|WhatsApp", "", linea)):
+                continue
+        if es_lista and _SOLO_ENLACES.match(linea):
+            if not anterior.lstrip().startswith("•") or linea.strip() in vistas:
+                continue
+            vistas.add(linea.strip())
+        salida.append(linea)
+        if linea.strip():
+            anterior = linea
+    limpio = re.sub(r"\n{3,}", "\n\n", "\n".join(salida)).strip()
+    return limpio
+
+
+def _eventos_completos(datos: Datos, texto: str) -> str:
+    """12/11: en «¿qué eventos hay este mes?» se le pasó el Blackweekend. Si la respuesta es la lista general de
+    eventos y alguno no aparece, el código lo agrega con sus datos (nunca se pierde uno)."""
+    evs = datos.hechos.get("eventos_vigentes")
+    if not isinstance(evs, list) or datos.hechos.get("evento") or not texto:
+        return texto
+    plano = normalizar(texto)
+    faltan = []
+    for e in evs:
+        clave = next((w for w in normalizar(e.get("nombre", "")).split() if len(w) >= 5), "")
+        if clave and clave not in plano:
+            partes = [e.get("fecha"), e.get("hora"), (f"en {e['lugar']}" if e.get("lugar") else "")]
+            faltan.append(f"• *{e['nombre']}* – " + ", ".join(p for p in partes if p))
+    if not faltan:
+        return texto
+    lineas = texto.split("\n")
+    ult = max((i for i, l in enumerate(lineas) if l.lstrip().startswith("•")), default=None)
+    if ult is None:
+        return texto.rstrip() + "\n\n" + "\n".join(faltan)
+    return "\n".join(lineas[:ult + 1] + faltan + lineas[ult + 1:])
+
+
+def _linea_tambien(el, d, texto: str) -> str:
+    """Los locales que podrían tenerlo pero NO lo declaran van aparte, sin afirmarlo (responder de lo que se sabe)."""
+    if not el.tambien or not texto:
+        return texto
+    nombres = [d.locales[i].nombre for i in el.tambien if i in d.locales]
+    if not nombres:
+        return texto
+    linea = ("También podrías preguntar en " + ", ".join(f"*{n}*" for n in nombres[:-1])
+             + (" o " if len(nombres) > 1 else "") + f"*{nombres[-1]}*" + " (no lo tienen registrado; confírmalo por WhatsApp).")
+    lineas = texto.split("\n")
+    ult = max((i for i, l in enumerate(lineas) if l.strip().startswith(("👉", "•"))), default=None)
+    if ult is None:
+        return texto.rstrip() + "\n\n" + linea
+    return "\n".join(lineas[:ult + 1] + [linea] + lineas[ult + 1:])
 
 
 def _sin_datos_vacios(t: str) -> str:
@@ -409,7 +505,7 @@ def _salida(ctx, r: Respuesta, es_audio: bool) -> Respuesta:
             db.rollback()
     if r.texto:
         r.texto = guardias.corregir_lugares(guardias.nombres_en_mayuscula(ctx, r.texto))
-        r.texto = _sin_datos_vacios(r.texto)
+        r.texto = _limpiar_formato(_sin_datos_vacios(r.texto), es_lista=bool(r.meta.get("lista_equidad")))
     guardias.aviso_privacidad(ctx, r)
     if r.entidades:
         from any.nucleo.router import limpiar_entidades

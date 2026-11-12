@@ -49,7 +49,7 @@ async def revisar(ctx, hechos: dict, texto: str, interpretacion: str = "") -> Ve
         r = await asyncio.wait_for(llm.completar(
             [{"role": "system", "content": _prompt()}, {"role": "user", "content": usuario}],
             spec=config.modelo_vigilante(), json_salida=True, temperatura=0, max_tokens=1500, razonamiento="low",
-            timeout_s=15), timeout=20)
+            timeout_s=9), timeout=10)
         ctx.traza.llm("vigilante", r)
         j = r.json()
     except Exception as e:

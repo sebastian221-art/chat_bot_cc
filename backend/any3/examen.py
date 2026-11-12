@@ -44,6 +44,9 @@ INFO: list[tuple[str, str, list[str]]] = [
 
 # Conversaciones de varios mensajes: (mensajes, local que debe estar en la ÚLTIMA respuesta)
 SEGUIMIENTOS: list[tuple[list[str], str]] = [
+    # 12/11 (trazas reales): «Tennis» repetido era la TIENDA, no los zapatos
+    (["Chaquetas de jeans dama", "Tennis"], "Tennis"),
+    (["Tennis", "Tennis"], "Tennis"),
     (["Háblame de Zirus Pizza", "¿y el teléfono?"], "Zirus Pizza"),
     (["¿Dónde queda Juan Valdez?", "¿y a qué hora abren?"], "Juan Valdez"),
     (["Quiero comida mexicana", "¿tienen carta?"], "Mero Merito"),
@@ -76,6 +79,15 @@ NUEVAS: list[str] = [
     "número de mercadeo", "hay vacantes de trabajo?", "Tienes promos en bolsos", "cual es el local 167",
     "Ramona flowers", "Isem", "Que ofrece sanitas", "Me regalas el número de la barra",
     "Tienes el instagram de Chevignon?", "Me puedes enviar la foto de la tienda people plays ?", "Dame la carta de 12b",
+]
+
+# 12/11 (trazas reales): pedidos donde lo correcto es lo que el local DECLARA vender
+REALES: list[tuple[str, set, set]] = [
+    ("Quiero una chaqueta de cuero", {"ESPRIT", "OXFORD"}, {"Calzado Rich", "RIVANO", "VILLA SHOES"}),
+    ("Estoy buscando sudaderas para niños, donde las puedo conseguir", {"Offcorss", "Tomaticos"},
+     {"Calzado Rich", "Happylandia", "Super kars", "CASA DEL LIBRO"}),
+    ("Local que se llama polito ropa para niños", set(), {"Offcorss", "Tomaticos"}),
+    ("Dónde queda polito", set(), {"Offcorss", "Tomaticos", "Club House Pádel"}),
 ]
 
 # Tema de la respuesta → acción del examen
@@ -134,6 +146,7 @@ async def correr(motor: str = "any3", paralelo: int = 3, progreso=None, modelo: 
              + [("nombre", [p], {esperado}, set()) for p, esperado in NOMBRES if esperado in existentes]
              + [("info", [p], acc, textos) for p, acc, textos in INFO]
              + [("seguimiento", msgs, {local}, set()) for msgs, local in SEGUIMIENTOS if local in existentes]
+             + [("producto", [p], deben, nunca) for p, deben, nunca in REALES]
              + [("nueva", [p], None, None) for p in NUEVAS])
     from any3 import examen_final
     if conjunto == "final":
@@ -217,4 +230,4 @@ def total_casos(conjunto: str = "todo") -> int:
     from any3 import examen_final
     if conjunto == "final":
         return examen_final.total()
-    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS) + len(NUEVAS) + examen_final.total()
+    return len(CASOS) + len(NOMBRES) + len(INFO) + len(SEGUIMIENTOS) + len(REALES) + len(NUEVAS) + examen_final.total()
