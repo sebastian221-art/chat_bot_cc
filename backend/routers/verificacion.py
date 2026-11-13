@@ -169,8 +169,10 @@ def _crear(db: Session, hoja: str, modelo, cols, pos, fila, errores: list, n: in
     from sqlalchemy import func
     ya = db.query(modelo).filter(func.lower(getattr(modelo, clave)) == str(datos[clave]).lower()).first()
     if ya:
-        errores.append(f"{hoja} fila {n}: ya existe «{datos[clave]}» (id {ya.id}); no se creó otro")
-        return None
+        # No se duplica: se actualiza el que ya existe con el resto de la fila (p. ej. subirle la prioridad
+        # a un evento que se creó con una planilla anterior)
+        ya._ya_existia = True
+        return ya
     for campo, v in _POR_DEFECTO.items():
         if hasattr(modelo, campo) and campo not in datos:
             datos[campo] = v
@@ -307,7 +309,11 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                 obj = _crear(db, hoja, modelo, cols, pos, fila, errores, n)
                 if not obj:
                     continue
-                cambios.append(f"{hoja} · nuevo · «{getattr(obj, 'name', None) or getattr(obj, 'title', '')}»")
+                nombre_ = getattr(obj, 'name', None) or getattr(obj, 'title', '')
+                if getattr(obj, "_ya_existia", False):
+                    cambios.append(f"{hoja} · {obj.id} · «{nombre_}» ya existía: no se duplicó, se actualizó con la fila")
+                else:
+                    cambios.append(f"{hoja} · nuevo · «{nombre_}»")
             else:
                 try:
                     obj = db.get(modelo, int(float(id_)))
