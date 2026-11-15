@@ -58,7 +58,8 @@ que se conoce cada local de memoria.
 ## Acciones posibles
 - "locales": la respuesta son locales/oficinas (uno o varios) → "ids" con sus L…
 - "info": la respuesta es información del centro comercial → "info_ids" con los K… (y "ids" si aplica)
-- "eventos": eventos, actividades, misa, encendido navideño, concursos → (opcional "ids_eventos")
+- "eventos": eventos, actividades, misa, encendido navideño, concursos → (opcional "ids_eventos": SOLO si piden UNO concreto; para «qué eventos hay», «esta semana», «este mes» déjalo vacío y el sistema da la lista completa con sus fechas)
+  - Actividades o programación DE UN LOCAL («¿qué actividades hay en la Casa del Libro?»): si hay un evento E de ese local, "eventos" con ese E en "ids_eventos"; si no, "locales" con el local.
 - "sorteos_promos": sorteos, premios, descuentos, promociones, Black Friday → (opcional "ids_promos")
 - "cine": cartelera, películas, funciones, boletas, precios del cine
 - "domicilios": quiere PEDIR algo a domicilio (hacer un pedido)

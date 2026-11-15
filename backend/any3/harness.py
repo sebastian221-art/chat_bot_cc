@@ -31,7 +31,7 @@ from any.nucleo import estado as est
 from any.nucleo import guardias, mensajes, promociones
 from any.nucleo.harness import _cargar_modelos
 from any.nucleo.harness import procesar as procesar_any2
-from any.nucleo.tipos import Contexto, Decision, Respuesta
+from any.nucleo.tipos import Adjunto, Contexto, Decision, Respuesta
 from any.nucleo.trazas import Traza
 
 from . import cerebro, llm, vigilante
@@ -159,6 +159,43 @@ def _regla_fija_de_any2(db, mensaje: str) -> str | None:
 
 # ── Datos verificados a partir de lo que eligió el cerebro ─────────
 
+_PIDE_ACTIVIDADES = re.compile(r"\b(actividad\w*|programa\w*|evento\w*|agenda|talleres?|cronograma|que hay|"
+                               r"que van a hacer|planes?)\b")
+
+
+def _sumar_eventos_del_local(ctx, local, datos: Datos) -> None:
+    """Los eventos vigentes de ese local (15/11: «¿qué actividades hay en la Casa del Libro?» respondió la ficha
+    genérica y no el programa de noviembre que estaba cargado como evento)."""
+    try:
+        from any.conocimiento.fotos import foto_principal
+        from any.flujos.eventos import eventos_vigentes, ficha_evento
+        hoy = ctx.ahora.date()
+        nombre = normalizar(local.nombre)
+        if len(nombre) < 5:
+            return
+        evs = [e for e in eventos_vigentes(ctx.db, hoy)
+               if re.search(rf"\b{re.escape(nombre)}\b", normalizar(f"{e.name} {e.location}"))]
+    except Exception as e:
+        ctx.traza.alerta(f"eventos del local: {e}")
+        ctx.db.rollback()
+        return
+    if not evs:
+        return
+    datos.hechos["eventos_y_actividades_de_este_local"] = [ficha_evento(e, hoy) for e in evs]
+    if _PIDE_ACTIVIDADES.search(normalizar(ctx.mensaje)):
+        datos.hechos["como_responder"] = (
+            "El cliente pregunta por las actividades o la programación de este local: responde con el programa de "
+            "«eventos_y_actividades_de_este_local» COMPLETO, una línea por actividad con su día, hora y nombre, sin "
+            "resumir ni omitir ninguna (si son 11, van las 11) y con el link del grupo si viene. De la ficha del "
+            "local da solo la ubicación y el contacto en una línea.")
+        foto = foto_principal(ctx.db, "event", evs[0].id, respaldo=evs[0].photo_url)
+        if foto:
+            datos.adjuntos = [a for a in datos.adjuntos if a.tipo != "imagen"]
+            datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=evs[0].name))
+    else:
+        datos.hechos["como_usar_eventos"] = "Este local tiene un evento vigente: menciónalo en UNA línea al final."
+
+
 def _datos(ctx, el, d) -> tuple[str, Datos | None]:
     """(nombre del flujo cuyo redactor se usa, datos). Datos None = se usan los del propio flujo de Any 2.0."""
     from any.flujos.locales import Locales
@@ -175,6 +212,7 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
     if el.accion == "locales":
         if len(locs) == 1:
             datos = Locales()._ficha(locs[0], pide)
+            _sumar_eventos_del_local(ctx, locs[0], datos)
             if not el.es_local_concreto:
                 datos.hechos["nota"] = (f"Es el ÚNICO local que encontré para «{el.busqueda or ctx.mensaje}»: "
                                         f"dilo así, con naturalidad, y da sus datos.")
@@ -215,9 +253,11 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
         hechos = {"modo": "info_relacionada" if info else "sin_resultados", "busqueda": el.busqueda or ctx.mensaje,
                   "linea_del_centro_comercial": LINEA_MALL,
                   "como_responder": ("Di con calidez que no lo tienes registrado en el centro comercial (sin inventar "
-                                     "alternativas) y pregunta qué vende o qué necesita, para ayudarle a encontrar algo "
-                                     "parecido. Si es el nombre de una tienda, sugiere confirmarlo en el Punto de "
-                                     "Información o en la línea del centro comercial.")}
+                                     "alternativas). Si el cliente ya dijo claro qué busca (un producto o servicio, ej. "
+                                     "«veterinario»), NO le preguntes qué busca: ofrece la línea del centro comercial "
+                                     "para confirmarlo y ayuda con otra cosa. Si el pedido es vago, pregunta qué necesita. "
+                                     "Si es el nombre de una tienda, sugiere confirmarlo en el Punto de Información o en "
+                                     "la línea del centro comercial.")}
         if info:
             hechos["info_oficial_relacionada"] = info
         return flujo, Datos(hechos=hechos, entidades={"categoria": el.busqueda} if el.busqueda else {})
@@ -272,7 +312,7 @@ async def _redactar(flujo_obj, ctx, datos: Datos, correccion: str = "") -> tuple
             "\nEscríbela de nuevo corrigiendo eso. Usa SOLO los datos verificados; si un dato no está, no lo pongas.")})
     try:
         r = await asyncio.wait_for(llm.completar(msgs, temperatura=min(flujo_obj.temperatura, 0.4),
-                                                 max_tokens=max(flujo_obj.max_tokens, 600), razonamiento="low",
+                                                 max_tokens=max(flujo_obj.max_tokens, 1200), razonamiento="low",
                                                  timeout_s=20), timeout=30)
         ctx.traza.llm(f"redactor_{flujo_obj.nombre}" + ("_correccion" if correccion else ""), r)
         crudo = r.texto or ""
@@ -337,7 +377,7 @@ async def _responder(ctx, el, d) -> Respuesta:
         entidades["local"] = d.locales[el.ids[0]].nombre
     elif el.accion in ("locales", "no_hay") and el.busqueda:
         entidades["categoria"] = el.busqueda
-    if el.ids_eventos:
+    if len(el.ids_eventos) == 1:      # con varios va la lista completa (15/11: «eventos esta semana» mostró solo 1)
         entidades["evento"] = d.nombre(el.ids_eventos[0])
     ctx.decision = Decision(nombre_flujo, entidades, False, el.consulta, el.razon, "any3")
     try:

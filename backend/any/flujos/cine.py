@@ -57,7 +57,9 @@ class Cine(Flujo):
         datos = Datos(hechos=hechos, entidades={"tema": "cine"})
         peli = cd.pelicula_mencionada(funciones, texto)
         recordada = ctx.estado.ultimas_entidades.get("pelicula")
-        if not peli and recordada and d and d.es_seguimiento:
+        pide_toda = re.search(r"\b(peliculas|cartelera|todas|mas pelis|otras|unica|que (mas )?hay|que dan|que pasan)\b",
+                              normalizar(ctx.mensaje))
+        if not peli and recordada and d and d.es_seguimiento and not pide_toda:
             peli = next((f for f in funciones if f.title == recordada), None)
         if funciones and not horarios_de_hoy:
             hechos["horarios_no_confirmados"] = (

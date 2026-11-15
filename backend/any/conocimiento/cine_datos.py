@@ -118,12 +118,20 @@ def frescura(db: Session, ahora: datetime) -> int | None:
     return None if fecha is None else max(0, (hoy - fecha).days)
 
 
+_GENERICAS_CINE = {"pelicula", "peliculas", "cine", "cartelera", "funcion", "funciones", "horario", "horarios", "hoy",
+                   "manana", "estreno", "estrenos", "boleta", "boletas", "entrada", "entradas", "sala", "salas",
+                   "estas", "estan", "bien", "revisa", "unica", "solo", "todas", "todos", "otra", "otras"}
+
+
 def pelicula_mencionada(funciones: list, texto: str):
-    """La película que nombró el cliente (por palabras distintivas del título)."""
-    pal = set(palabras(texto))
+    """La película que nombró el cliente (por palabras distintivas del título).
+    Las palabras comunes no cuentan: «Hola, ¿cómo estás? ¿me dices la cartelera?» no es «CÓMO ROBAR UN BANCO»
+    (15/11: por ese «cómo» Any respondió que la única película era esa)."""
+    from .texto import VACIAS
+    pal = set(palabras(texto)) - VACIAS - _GENERICAS_CINE
     mejor, puntaje = None, 0
     for f in funciones:
-        claves = [p for p in palabras(f.title) if len(p) >= 4]
+        claves = [p for p in palabras(f.title) if len(p) >= 4 and p not in VACIAS and p not in _GENERICAS_CINE]
         if not claves:
             continue
         acierto = sum(1 for p in claves if p in pal)

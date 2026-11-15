@@ -44,6 +44,7 @@ def ficha_evento(e, hoy) -> dict:
     if dias is not None:
         d["es_hoy"] = hoy in dias
         d["es_este_fin_de_semana"] = bool({sab, sab + timedelta(days=1)} & dias)
+        d["es_en_los_proximos_7_dias"] = any(hoy + timedelta(days=i) in dias for i in range(7))
     else:   # recurrentes: "todos los domingos" (en la fecha o, si la fecha está vacía, en la descripción)
         import re
         from ..conocimiento.vigencia import recurrencia
@@ -55,6 +56,7 @@ def ficha_evento(e, hoy) -> dict:
             prox = next(hoy + timedelta(days=i) for i in range(8) if (hoy + timedelta(days=i)).weekday() in rec[1])
             dia = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][prox.weekday()]
             d["proxima_vez"] = "hoy" if prox == hoy else f"{dia} {prox.strftime('%d/%m/%Y')}"
+            d["es_en_los_proximos_7_dias"] = True
         f = (e.date or (rec[0] if rec else "")).lower()
         nombres = ["lunes", "martes", "miercoles", "miércoles", "jueves", "viernes", "sabado", "sábado", "domingo"]
         dia_hoy = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][hoy.weekday()]
@@ -115,7 +117,7 @@ class Eventos(Flujo):
     nombre = "eventos"
     descripcion = "eventos y actividades del centro comercial (concursos, carreras, ferias, misa) e inscripciones"
     temperatura = 0.5
-    max_tokens = 600
+    max_tokens = 1200       # un programa de 11 actividades (Casa del Libro) no cabía en 600
 
     def componer(self, ctx, datos, texto):
         """Lista general: adjunta UN afiche de referencia (el del primer evento que nombra la respuesta).
