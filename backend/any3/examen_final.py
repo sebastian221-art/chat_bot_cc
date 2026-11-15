@@ -67,7 +67,6 @@ PRODUCTOS: list[tuple[str, set, set]] = [
     ("Carritos eléctricos para que maneje mi hijo", {"Super kars", "ROAD TRIP"}, {"Nissan", "Sanautos Renault"}),
     ("Venden libros?", {"CASA DEL LIBRO"}, {"Jarris"}),
     ("Cursos técnicos para estudiar", {"Instituto Técnico Laboral Cajasan"}, {"Casino Diamonds"}),
-    ("Veterinario para mi perro", {"Santiago Herrera Arango (Médico Veterinario)"}, {"Dermato integral"}),
     ("Abogado de familia", {"Benítez y Bravo Abogados"}, {"Cala Asociados"}),
     ("Hemodiálisis", {"Unidad Renal RTS"}, {"Daniel Villareal"}),
     ("Ecografía", {"ISEM"}, {"Cala Asociados"}),
@@ -96,7 +95,7 @@ NOMBRES: list[tuple[str, str]] = [
 ]
 
 INFO: list[tuple[str, str, list[str]]] = [
-    ("¿Hasta qué hora está abierto el parqueadero?", "info", ["11"]),
+    ("¿Hasta qué hora está abierto el parqueadero?", "info", ["24 horas"]),
     ("¿Cuánto cobran la hora de carro en el parqueo?", "info", ["3.600", "3600"]),
     ("¿Cuánto vale la tarjeta para la mensualidad del parqueadero?", "info", ["20.000", "20000"]),
     ("¿Los primeros minutos del parqueadero son gratis?", "info", ["10 minutos", "10 min"]),
@@ -118,7 +117,7 @@ SEGUIMIENTOS: list[tuple[list[str], set]] = [
     (["¿Qué hay de Mercagan?", "¿tienen carta?"], {"Mercagan"}),
     (["Hola, buenas tardes", "¿dónde queda la droguería?"], {"Drogas La Principal del Fonce"}),
     (["Cuéntame de King Helmets", "¿a qué hora cierran?"], {"King Helmets"}),
-    (["Necesito un abogado", "¿y su teléfono?"], {"Benítez y Bravo Abogados", "Corporación Q&N Asociados"}),
+    (["Necesito un abogado", "¿y su teléfono?"], {"Benítez y Bravo Abogados"}),
     (["Quiero unos tenis", "¿cuál tiene Nike?"], {"D'ITALY tennis", "people plays"}),
 ]
 
@@ -127,6 +126,7 @@ NO_HAY: list[tuple[str, set]] = [
     ("¿Dónde venden armas?", {"Casino Diamonds", "King Helmets"}),
     ("¿Venden llantas para carro?", {"Speed Clean Car", "King Helmets"}),
     ("¿Hay tienda de mascotas con concentrado?", {"Drops", "Jumbo"}),
+    ("Veterinario para mi perro", {"Dermato integral", "Unidad Renal RTS"}),   # 14/11: el veterinario ya no está
 ]
 
 

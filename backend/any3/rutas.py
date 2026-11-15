@@ -35,7 +35,26 @@ async def estado():
             "respaldo": config.respaldo() or "(ninguno)",
             "clave_anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")), "clave_groq": bool(os.environ.get("GROQ_API_KEY")),
             "desde_que_arranco": _contadores(),
+            "cartelera_cine": _cartelera(),
             "examenes": _resumen_examenes()}
+
+
+def _cartelera() -> dict:
+    """De qué día es la cartelera que tiene Any (se actualiza sola cada madrugada y se reintenta de día)."""
+    db = _sesion()
+    try:
+        import json
+        from any.conocimiento import cine_datos as cd
+        from models.sync_estado import sync_get
+        dias = cd.frescura(db, datetime.now(ZONA_HORARIA))
+        return {"peliculas": len(cd.cartelera(db)), "dias_de_antiguedad": dias,
+                "estado": "al día" if dias == 0 else ("sin confirmar horarios de hoy" if dias is not None and dias <= 6
+                                                       else "vieja: Any no la muestra"),
+                **(json.loads(sync_get(db, "cine_cartelera") or "{}"))}
+    except Exception as e:
+        return {"error": repr(e)[:200]}
+    finally:
+        db.close()
 
 
 def _contadores() -> dict:

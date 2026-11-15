@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
     # solo lo registra — nunca tumba el servidor. Se puede apagar con
     # SYNC_AUTOMATICO=0 y lanzar a mano desde el panel (/sync/ahora).
     import asyncio, os
-    tarea_sync = None
+    tarea_sync = tarea_cine = None
     if os.environ.get("SYNC_AUTOMATICO", "1") != "0":
         async def _loop_sync():
             from services.sincronizador import ejecutar_sincronizacion
@@ -142,6 +142,30 @@ async def lifespan(app: FastAPI):
         tarea_sync = asyncio.create_task(_loop_sync())
         print(f"{GREEN}  ✓  Sincronizador web programado (todos los días a las {os.environ.get('SYNC_HORA', '3')}:00, hora Colombia){RESET}")
 
+        # Cartelera de Cinelandia siempre al día: si la de hoy no quedó cargada (la página falló a las 3 am, el
+        # servidor se reinició, etc.), se reintenta SOLO el cine cada 2 horas entre 7 am y 10 pm. Es liviano
+        # (unas pocas páginas, sin reindexar). Además Any no muestra horarios que no sean de hoy (flujos/cine.py).
+        async def _loop_cine():
+            from services.sincronizador import sincronizar_cine
+            from any.conocimiento.cine_datos import frescura
+            from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+            col = _tz(_td(hours=-5))
+            await asyncio.sleep(180)
+            while True:
+                ahora = _dt.now(col)
+                if 7 <= ahora.hour < 22:
+                    dbs = SessionLocal()
+                    try:
+                        if frescura(dbs, ahora) != 0:
+                            r = await sincronizar_cine(dbs)
+                            print(f"  🎬  Cartelera reintentada: {r.get('peliculas', 0)} películas {r.get('errores') or ''}")
+                    except Exception as e:
+                        print(f"{YELLOW}  ⚠  Reintento de cartelera falló: {e}{RESET}")
+                    finally:
+                        dbs.close()
+                await asyncio.sleep(2 * 3600)
+        tarea_cine = asyncio.create_task(_loop_cine())
+
     # ── BANDEJA A PRUEBA DE REINICIOS ──────────────────────────────
     # Al arrancar y cada minuto responde los mensajes que quedaron sin respuesta por un reinicio o una
     # caída (10/11/2026: Any «dejó de responder» unos minutos y esos mensajes se perdieron).
@@ -164,6 +188,8 @@ async def lifespan(app: FastAPI):
         tarea_bandeja.cancel()
     if tarea_sync:
         tarea_sync.cancel()
+    if tarea_cine:
+        tarea_cine.cancel()
     print(f"\n{GREY}  ─  Servidor detenido{RESET}\n")
 
 app = FastAPI(title=settings.APP_NAME, version="3.0.0", lifespan=lifespan,

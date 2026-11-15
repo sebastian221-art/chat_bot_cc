@@ -94,6 +94,30 @@ def cartelera(db: Session) -> list:
             .order_by(CineFuncion.title).all())
 
 
+def frescura(db: Session, ahora: datetime) -> int | None:
+    """Cuántos días tiene la cartelera cargada (0 = es la de hoy). None si no se sabe.
+    La fecha la deja el sincronizador (o la carga a mano) en sync_estado «cine_cartelera»; si no está,
+    se usa la última vez que se tocó una película. Así Any nunca presenta como «de hoy» una cartelera vieja."""
+    import json
+    from datetime import timedelta, timezone
+    col = timezone(timedelta(hours=-5))
+    hoy = (ahora.astimezone(col) if ahora.tzinfo else ahora).date()
+    fecha = None
+    try:
+        from models.sync_estado import sync_get
+        f = json.loads(sync_get(db, "cine_cartelera") or "{}").get("fecha") or ""
+        if re.fullmatch(r"\d{8}", f):
+            fecha = datetime.strptime(f, "%Y%m%d").date()
+    except Exception:
+        db.rollback()
+    if fecha is None:
+        marcas = [m for c in cartelera(db) for m in (c.updated_at, c.created_at) if m]
+        if marcas:
+            m = max(x if x.tzinfo else x.replace(tzinfo=timezone.utc) for x in marcas)
+            fecha = m.astimezone(col).date()
+    return None if fecha is None else max(0, (hoy - fecha).days)
+
+
 def pelicula_mencionada(funciones: list, texto: str):
     """La película que nombró el cliente (por palabras distintivas del título)."""
     pal = set(palabras(texto))

@@ -244,7 +244,7 @@ def _telefonos_validos(respuesta: Respuesta, ctx: Contexto) -> set[str]:
     return validos
 
 
-PASILLOS = ["Barichara", "Vélez", "Socorro", "Charalá", "Páramo", "Curití", "Pinchote"]
+PASILLOS = ["Barichara", "Vélez", "Socorro", "Charalá", "Páramo", "Curití", "Pinchote", "Jumbo"]   # Jumbo: base del 14/11
 
 
 def _corregir_pasillos(ctx: Contexto, t: str) -> str:
@@ -255,6 +255,8 @@ def _corregir_pasillos(ctx: Contexto, t: str) -> str:
     def cambiar(m):
         nombre = m.group(1)
         n = normalizar(nombre)
+        if n == "la":           # «Pasillo La Ceiba» (base del 14/11)
+            return m.group(0)
         if n in oficiales:
             return f"{m.group(0)[:-len(nombre)]}{oficiales[n]}" if nombre != oficiales[n] else m.group(0)
         cerca = difflib.get_close_matches(n, list(oficiales), n=1, cutoff=0.75)
@@ -269,7 +271,8 @@ def _corregir_pasillos(ctx: Contexto, t: str) -> str:
 NOMBRES_FIJOS = {"Punto de Información", "Torre Médica", "Plazoleta de Comidas La Ceiba", "Plaza Principal",
                  "Zona Terrazas", "Paseo de la Cruz", "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar",
                  "Cinelandia Múltiplex", "Pasillo Pinchote", "Plazoleta Guanentá", "Lobby Torre Empresarial",
-                 "Zona de Parqueaderos"}
+                 "Zona de Parqueaderos", "Pasillo La Ceiba", "Pasillo Jumbo", "Miradores del Fonce",
+                 "Cajasan Local 301"}
 CLAVES_NOMBRES = {"nombre", "lugar", "zona", "titulo", "local", "location", "donde_registrar"}
 
 

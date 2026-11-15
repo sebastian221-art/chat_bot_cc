@@ -26,6 +26,7 @@ ZONAS_OFICIALES = [
     "Pasillo Curití", "Plaza Principal", "Zona Terrazas", "Plazoleta de Comidas La Ceiba", "Paseo de la Cruz",
     "Paseo San Gil", "Paseo Chicamocha", "Dunas Club Bar", "Pasillo Pinchote", "Plazoleta Guanentá",
     "Lobby Torre Empresarial", "Zona de Parqueaderos",
+    "Pasillo La Ceiba", "Pasillo Jumbo", "Miradores del Fonce", "Cajasan Local 301",   # base del 14/11
 ]
 TAGS_GENERICOS = {"torre medica", "consultorio", "oficina", "salud", "administracion", "servicios", "mall", "cine"}
 CATEGORIAS_TORRE = {"torre medica y empresarial"}

@@ -1220,6 +1220,53 @@ def test_nombre_parecido():
         assert Locales._nombre_parecido(db, n) is None, n
 
 
+def test_cartelera_se_actualiza_sin_perder_posters():
+    """14/11: la cartelera de Cinelandia debe quedar SIEMPRE al día: lo que ya no está se borra (con su foto),
+    lo que sigue conserva su id y su póster del panel, y lo nuevo trae el póster de la web."""
+    from datetime import datetime, timedelta
+    from any.config import ZONA_HORARIA
+    from any.conocimiento import cine_datos as cd
+    from models.cine_funcion import CineFuncion
+    from models.entity_photo import EntityPhoto
+    from services.sincronizador import _guardar_cartelera, leer_cartelera
+    html = ('<div><a href="pelicula.php?id=7&fecha=20261115"><img alt="Póster de ZOOTOPIA 2" '
+            'src="/imagenes/peliculas/zoo.jpg"></a><a href="pelicula.php?id=7&fecha=20261115">ZOOTOPIA 2</a>'
+            '<span>FORMATO: 2D GENERO: Animación DURACIÓN: 100 MIN</span>'
+            '<a href="pelicula.php?id=7&fecha=20261115">3:00 PM</a></div>')
+    cart = leer_cartelera(html)
+    assert cart["hoy"][0]["title"] == "ZOOTOPIA 2" and cart["hoy"][0]["poster"].endswith("/imagenes/peliculas/zoo.jpg")
+    assert cart["hoy"][0]["poster"].startswith("https://www.cinelandia.com.co/")
+    db = _db()
+    cine = cd.local_cine(db)
+    if not cine:
+        return
+    try:
+        db.query(CineFuncion).filter(CineFuncion.store_id == cine.id).delete()
+        db.query(EntityPhoto).filter(EntityPhoto.entity_type == "cine_funcion").delete()
+        vieja, sigue = CineFuncion(store_id=cine.id, title="Película vieja"), CineFuncion(store_id=cine.id, title="Zootopia 2")
+        db.add_all([vieja, sigue])
+        db.flush()
+        db.add(EntityPhoto(entity_type="cine_funcion", entity_id=sigue.id, photo_url="https://panel/zoo.png", label="poster"))
+        db.add(EntityPhoto(entity_type="cine_funcion", entity_id=vieja.id, photo_url="https://panel/vieja.png", label="poster"))
+        db.flush()
+        id_sigue, id_vieja = sigue.id, vieja.id
+        cart["hoy"].append({**cart["hoy"][0], "id": "8", "title": "ESTRENO NUEVO", "poster": "https://www.cinelandia.com.co/n.jpg"})
+        r = _guardar_cartelera(db, cine.id, cart, [{}, {}])
+        assert r == {"nuevas": 1, "quitadas": 1, "posters_nuevos": 1}, r
+        titulos = {f.title: f for f in db.query(CineFuncion).filter(CineFuncion.store_id == cine.id)}
+        assert set(titulos) == {"ZOOTOPIA 2", "ESTRENO NUEVO"} and titulos["ZOOTOPIA 2"].id == id_sigue
+        assert titulos["ZOOTOPIA 2"].showtimes == "3:00 PM"
+        fotos = lambda i: [x.photo_url for x in db.query(EntityPhoto).filter(EntityPhoto.entity_type == "cine_funcion",
+                                                                              EntityPhoto.entity_id == i)]
+        assert fotos(id_sigue) == ["https://panel/zoo.png"] and fotos(id_vieja) == []
+        assert fotos(titulos["ESTRENO NUEVO"].id) == ["https://www.cinelandia.com.co/n.jpg"]
+        ahora = datetime.now(ZONA_HORARIA)
+        assert cd.frescura(db, ahora) is not None
+        assert (cd.frescura(db, ahora + timedelta(days=9)) or 0) >= 8
+    finally:
+        db.rollback()
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

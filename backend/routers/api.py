@@ -838,6 +838,7 @@ def sync_estado(db: Session = Depends(get_db)):
         "ultimo_resumen": _json.loads(ultimo) if ultimo else None,
         "afiche_url": sync_get(db, "afiche_url"),
         "afiche_leido": _json.loads(afiche) if afiche else None,
+        "cine_cartelera": _json.loads(sync_get(db, "cine_cartelera") or "null"),   # cuándo y de qué día
     }
 
 
@@ -893,6 +894,11 @@ async def import_cine_excel(file: UploadFile = File(...), db: Session = Depends(
         logger.error(f"Error guardando cine: {str(e)}")
         raise HTTPException(status_code=400, detail=f"No se pudo guardar. Detalle: {str(e)[:300]}")
 
+    try:
+        from services.sincronizador import marcar_cartelera_al_dia
+        marcar_cartelera_al_dia(db)      # la cartelera cargada a mano cuenta como «de hoy»
+    except Exception:
+        pass
     _reindex(db)
     print(f"  📥  Import Cine: {len(datos['funciones'])} funciones en '{cine.name}'" + (" (local creado)" if cine_creado else ""))
     msg = f"Se cargaron {len(datos['funciones'])} películas en la cartelera de '{cine.name}'."

@@ -112,6 +112,19 @@ RE_PRECIO = re.compile(r"\$?\s?(\d{1,3}(?:[.,]\d{3})+|\d{4,6})")
 # ══════════════════════════════════════════════════════════════════
 # 🎬 CINELANDIA
 # ══════════════════════════════════════════════════════════════════
+_IMAGEN = re.compile(r"\.(jpe?g|png|webp)(\?|$)", re.I)
+
+
+def _url_poster(img) -> str:
+    """Link público del póster (src o data-src de la imagen), solo si es una foto (jpg/png/webp)."""
+    from urllib.parse import urljoin
+    for attr in ("data-src", "data-lazy-src", "src"):
+        v = (img.get(attr) or "").strip()
+        if v and not v.startswith("data:") and _IMAGEN.search(v):
+            return urljoin(URL_CARTELERA, v)
+    return ""
+
+
 def leer_cartelera(html: str) -> dict:
     """
     Devuelve {"hoy": [peliculas], "proximas": [peliculas], "fecha": "AAAAMMDD"}.
@@ -134,11 +147,14 @@ def leer_cartelera(html: str) -> dict:
         if not m:
             continue
         pid = m.group(1)
-        g = grupos.setdefault(pid, {"id": pid, "textos": [], "horarios": [], "fechas": set(), "anchor": None, "alts": []})
+        g = grupos.setdefault(pid, {"id": pid, "textos": [], "horarios": [], "fechas": set(), "anchor": None, "alts": [],
+                                    "poster": ""})
         for img in a.find_all("img"):
             alt = _limpiar(img.get("alt") or "")
             if alt and alt not in g["alts"]:
                 g["alts"].append(alt)
+            if not g["poster"]:
+                g["poster"] = _url_poster(img)
         t = _limpiar(a.get_text(" "))
         fm = re.search(r"fecha=(\d{8})", a["href"])
         if fm:
@@ -210,7 +226,7 @@ def leer_cartelera(html: str) -> dict:
         fechas = sorted(g["fechas"])
         peliculas.append({
             "id": pid, "title": title, "horarios": g["horarios"], "fecha": fechas[0] if fechas else "",
-            **ficha,
+            "poster": g["poster"], **ficha,
         })
 
     # Fecha "de hoy" = la más común entre las películas con horarios
@@ -347,6 +363,75 @@ def leer_proximamente(html: str) -> list[str]:
     return titulos[:20]
 
 
+def _clave_titulo(t: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _norm(t or ""))
+
+
+def _guardar_cartelera(db: Session, cine_id: int, cart: dict, fichas: list) -> dict:
+    """Deja en cine_funciones EXACTAMENTE la cartelera de hoy de Cinelandia:
+      - la película que sigue se ACTUALIZA (horarios, ficha) y conserva su id → no pierde el póster del panel;
+      - la nueva se agrega, con el póster de Cinelandia si no tiene uno;
+      - la que ya no está en cartelera se BORRA, con sus fotos (antes se borraba todo y se volvía a crear:
+        los pósters subidos en el panel quedaban huérfanos al día siguiente).
+    """
+    from models.cine_funcion import CineFuncion
+    from models.entity_photo import EntityPhoto
+    actuales = {_clave_titulo(f.title): f for f in db.query(CineFuncion).filter(CineFuncion.store_id == cine_id).all()}
+    # Fotos huérfanas (de películas que el sistema viejo borraba cada día): fuera, para que una película nueva
+    # nunca herede el póster de otra si la base reutiliza el id.
+    vivos = [i for (i,) in db.query(CineFuncion.id).all()]
+    db.query(EntityPhoto).filter(EntityPhoto.entity_type == "cine_funcion",
+                                 ~EntityPhoto.entity_id.in_(vivos or [-1])).delete(synchronize_session=False)
+    vistas, nuevas, quitadas, posters = set(), 0, 0, 0
+    for p, fx in zip(cart["hoy"], fichas):
+        fx = fx or {}
+        clasif = p["clasificacion"] or fx.get("clasificacion", "")
+        dur = p["duracion"] or fx.get("duracion", "")
+        fmt = p["formato"] or fx.get("formato", "")
+        ficha = " · ".join(x for x in [p["genero"], clasif, fmt, dur] if x)
+        desc = ("ESTRENO · " + ficha).strip(" ·") if p["estreno"] else ficha
+        if fx.get("sinopsis"):
+            desc += "\n" + fx["sinopsis"]
+        if fx.get("trailer"):
+            desc += "\nTráiler: " + fx["trailer"]
+        clave = _clave_titulo(p["title"])
+        if not clave or clave in vistas:
+            continue
+        vistas.add(clave)
+        f = actuales.get(clave)
+        if f is None:
+            f = CineFuncion(store_id=cine_id, title=p["title"][:150])
+            db.add(f)
+            nuevas += 1
+        f.title, f.showtimes = p["title"][:150], ", ".join(p["horarios"])[:200]
+        f.description, f.is_premiere, f.active = desc.strip(), bool(p["estreno"]), True
+        db.flush()
+        if p.get("poster"):
+            fotos = db.query(EntityPhoto).filter(EntityPhoto.entity_type == "cine_funcion", EntityPhoto.entity_id == f.id).all()
+            auto = [x for x in fotos if "cinelandia" in (x.photo_url or "")]
+            if not fotos:
+                db.add(EntityPhoto(entity_type="cine_funcion", entity_id=f.id, photo_url=p["poster"][:500], label="poster"))
+                posters += 1
+            elif auto and len(auto) == len(fotos) and auto[0].photo_url != p["poster"]:
+                auto[0].photo_url = p["poster"][:500]      # el póster automático cambió en la web (nunca toca uno del panel)
+    for clave, f in actuales.items():
+        if clave not in vistas:
+            db.query(EntityPhoto).filter(EntityPhoto.entity_type == "cine_funcion", EntityPhoto.entity_id == f.id).delete()
+            db.delete(f)
+            quitadas += 1
+    db.flush()
+    return {"nuevas": nuevas, "quitadas": quitadas, "posters_nuevos": posters}
+
+
+def marcar_cartelera_al_dia(db: Session, fecha_pagina: str = "") -> None:
+    """Guarda cuándo se actualizó la cartelera (y de qué día son los horarios, AAAAMMDD) para que Any
+    nunca presente como «de hoy» una cartelera vieja (ver any/conocimiento/cine_datos.frescura)."""
+    from models.sync_estado import sync_set
+    ahora = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5)))
+    fecha = fecha_pagina if re.fullmatch(r"\d{8}", fecha_pagina or "") else ahora.strftime("%Y%m%d")
+    sync_set(db, "cine_cartelera", json.dumps({"actualizado": ahora.isoformat(timespec="minutes"), "fecha": fecha}))
+
+
 async def sincronizar_cine(db: Session) -> dict:
     """Actualiza cartelera (cine_funciones) e info extra (tarifas, confitería, estrenos) del local Cine."""
     from services.cine import find_cine_store
@@ -372,23 +457,11 @@ async def sincronizar_cine(db: Session) -> dict:
                     return {}
             fichas = await asyncio.gather(*[_ficha(p) for p in cart["hoy"]])
 
-            db.query(CineFuncion).filter(CineFuncion.store_id == cine.id).delete()
-            for p, fx in zip(cart["hoy"], fichas):
-                fx = fx or {}
-                clasif = p["clasificacion"] or fx.get("clasificacion", "")
-                dur = p["duracion"] or fx.get("duracion", "")
-                fmt = p["formato"] or fx.get("formato", "")
-                ficha = " · ".join(x for x in [p["genero"], clasif, fmt, dur] if x)
-                desc = ("ESTRENO · " + ficha).strip(" ·") if p["estreno"] else ficha
-                if fx.get("sinopsis"):
-                    desc += "\n" + fx["sinopsis"]
-                if fx.get("trailer"):
-                    desc += "\nTráiler: " + fx["trailer"]
-                db.add(CineFuncion(store_id=cine.id, title=p["title"][:150], showtimes=", ".join(p["horarios"])[:200],
-                                   description=desc.strip(), is_premiere=bool(p["estreno"]), active=True))
+            res.update(_guardar_cartelera(db, cine.id, cart, fichas))
             res["peliculas"] = len(cart["hoy"])
             res["proximas"] = len(cart["proximas"])
             db.commit()
+            marcar_cartelera_al_dia(db, cart.get("fecha") or "")
         else:
             res["errores"].append("Cartelera: la página no devolvió películas con horarios (se conservó la anterior).")
     except Exception as e:

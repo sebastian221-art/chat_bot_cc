@@ -24,7 +24,8 @@ def ficha_area(a: dict) -> dict:
     tel = str(a.get("telefono") or "")
     d = {"area": a.get("area"), "responsable": a.get("responsable"), "telefono": tel,
          "whatsapp": link_whatsapp(tel.split("·")[0]) if tel else None,
-         "correo": a.get("correo"), "ubicacion": a.get("ubicacion"), "horario": a.get("horario")}
+         "correo": a.get("correo"), "ubicacion": a.get("ubicacion"), "horario": a.get("horario"),
+         "atiende": a.get("atiende")}
     if not tel:
         d["como_contactar"] = ("por correo, o por la línea del centro comercial 317 432 0138 (Punto de Información), "
                                "que hace llegar el caso. Su número personal NO se da: si lo piden, explícalo con amabilidad.")

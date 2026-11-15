@@ -2,19 +2,21 @@
 # Para agregar un área (ej. Mantenimiento) copia un bloque y llénalo. "temas" son las palabras con las que
 # la gente pregunta por esa área. Fuente: plantilla administrativa del centro comercial (28/10/2026).
 # Correos: solo el dominio @elpuente.com.co (05/11/2026).
+# Horarios de oficina, «atiende» y parqueadero 24 horas: base del centro comercial del 14/11/2026.
 
 - area: Gerencia
   responsable: Delis González (gerente)
   # Sin teléfono: la gerente pidió que NO se dé su número (05/11/2026). Se atiende por correo o por el
   # Punto de Información (PQRS).
   correo: gerencia@elpuente.com.co
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
   temas: [gerencia, gerente, delis, quejas a la gerencia, queja formal, felicitaciones, hablar con la gerente, directivas]
 
 - area: Punto de Información (PQRS y atención al cliente)
   telefono: "3174320138"
   correo: puntodeinformacion@elpuente.com.co
   ubicacion: Pasillo Barichara
-  horario: "Domingo a miércoles 10:00 am – 7:00 pm · jueves y viernes 10:00 am – 8:00 pm · sábado 10:00 am – 9:00 pm"
+  horario: "Domingo a miércoles 10:00 am – 8:00 pm · jueves y viernes 10:00 am – 8:00 pm · sábado 10:00 am – 9:00 pm"
   temas: [pqrs, queja, quejas, reclamo, reclamos, sugerencia, peticion, atencion al cliente, objetos perdidos, registro de facturas, bonos regalo, informacion]
 
 - area: Secretaría General
@@ -26,24 +28,31 @@
 - area: Dirección Comercial
   telefono: "3176574494"
   correo: comercial@elpuente.com.co
-  temas: [direccion comercial, arriendo, arrendar, alquiler de locales, locales disponibles, abrir un local, contratos de arrendamiento]
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
+  atiende: "Arriendo de locales, locales disponibles, contratos, publicidad en pantallas, espacios, concesiones, alquiler del Auditorio Rafael Ardila Duarte, patrocinios y ferias."
+  temas: [direccion comercial, arriendo, arrendar, alquiler de locales, locales disponibles, abrir un local, contratos de arrendamiento,
+          patrocinio, patrocinios, patrocinar, concesiones, publicidad en pantallas, stand en una feria, participar en una feria]
 
 - area: Dirección de Mercadeo
   telefono: "3173671005"
   correo: mercadeo@elpuente.com.co
-  temas: [mercadeo, marketing, publicidad, pauta, alianzas, patrocinio, activaciones]
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
+  atiende: "Mercadeo, publicidad, alianzas, activaciones, Punto de Información, CRM, campañas y sorteos."
+  temas: [mercadeo, marketing, publicidad, pauta, alianzas, activaciones, crm, campañas publicitarias]
 
 - area: Contabilidad y Tesorería
   telefono: "3236168588 · 3236144888"
   correo: contabilidad@elpuente.com.co · tesoreria@elpuente.com.co
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
   temas: [contabilidad, tesoreria, pagos al centro comercial, facturacion del centro comercial, cartera, cuentas de cobro, proveedores]
 
 - area: Dirección de Operaciones
   telefono: "3176649826"
   correo: operaciones@elpuente.com.co
+  horario: "Lunes a miércoles 8:00 am – 12:00 m y 2:00 – 6:00 pm · jueves y viernes 8:00 am – 12:00 m y 2:00 – 5:00 pm · sábado 9:00 am – 1:00 pm"
   temas: [operaciones, direccion de operaciones, mantenimiento]
 
 - area: Parqueadero
   telefono: "3185221963"
-  horario: "Lunes a domingo 5:00 am – 1:00 am"
+  horario: "Parqueadero: 24 horas, los 7 días de la semana · Punto de pago: todos los días 8:00 am – 11:00 pm"
   temas: [parqueadero, parqueo, mensualidad, tickets de parqueadero, casilleros, carga de carros electricos, bicicletas]

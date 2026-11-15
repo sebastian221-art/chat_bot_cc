@@ -15,6 +15,9 @@ from ..nucleo.tipos import Adjunto, Contexto
 from .base import Datos, Flujo
 
 
+VIGENCIA_DIAS = 6     # la cartelera de Cinelandia cambia cada semana: más vieja que esto no se muestra
+
+
 def _tema(texto: str) -> set:
     t = normalizar(texto)
     temas = set()
@@ -40,6 +43,11 @@ class Cine(Flujo):
         texto = f"{ctx.mensaje} {consulta} {(d.entidades.get('pelicula') if d else '') or ''}"
         temas = _tema(texto)
         funciones = cd.cartelera(db)
+        dias = cd.frescura(db, ctx.ahora) if funciones else None
+        vieja = dias is None or dias > VIGENCIA_DIAS      # más de una semana sin actualizar: no se presenta
+        horarios_de_hoy = dias == 0
+        if vieja:
+            funciones = []
         cine = cd.local_cine(db)
         hechos: dict = {
             "cine": {"nombre": cine.nombre if cine else "Cinelandia Múltiplex", "zona": cine.zona if cine else None,
@@ -51,17 +59,29 @@ class Cine(Flujo):
         recordada = ctx.estado.ultimas_entidades.get("pelicula")
         if not peli and recordada and d and d.es_seguimiento:
             peli = next((f for f in funciones if f.title == recordada), None)
+        if funciones and not horarios_de_hoy:
+            hechos["horarios_no_confirmados"] = (
+                f"La cartelera se actualizó por última vez hace {dias} día(s): las películas siguen, pero los "
+                "HORARIOS DE HOY no están confirmados. No des horas; di que los horarios de hoy se ven en el link "
+                "oficial o en la taquilla.")
         if peli:
-            hechos["pelicula"] = {"titulo": peli.title, "funciones_hoy": peli.showtimes or "sin horarios cargados",
+            hechos["pelicula"] = {"titulo": peli.title,
+                                  "funciones_hoy": (peli.showtimes or "sin horarios cargados") if horarios_de_hoy
+                                  else "no confirmados hoy (ver el link oficial)",
                                   "estreno": bool(peli.is_premiere), "sinopsis": (peli.description or "")[:400]}
             datos.entidades["pelicula"] = peli.title
             poster = foto_principal(db, "cine_funcion", peli.id, orden=("poster", "otra"))
             if poster:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=poster, leyenda=peli.title))
         elif not temas or "cartelera" in normalizar(texto) or re.search(r"pel[ií]cula", texto, re.I):
-            hechos["cartelera_es_de"] = f"hoy, {ctx.ahora:%d/%m/%Y} (los horarios de otros días no están cargados)"
-            hechos["cartelera"] = [{"titulo": f.title, "funciones": f.showtimes or "", "estreno": bool(f.is_premiere)}
-                                   for f in funciones] or "la cartelera no está cargada en este momento"
+            if not vieja:
+                hechos["cartelera_es_de"] = (f"hoy, {ctx.ahora:%d/%m/%Y} (los horarios de otros días no están cargados)"
+                                             if horarios_de_hoy else "la semana en curso (horarios de hoy sin confirmar)")
+            hechos["cartelera"] = [{"titulo": f.title, "estreno": bool(f.is_premiere),
+                                    **({"funciones": f.showtimes or ""} if horarios_de_hoy else {})}
+                                   for f in funciones] or ("la cartelera no está actualizada en este momento: que la "
+                                                           "consulte en el link oficial" if vieja else
+                                                           "la cartelera no está cargada en este momento")
             # UN póster de referencia (el primer estreno, si hay), no uno por película (pedido 11/11)
             for f in sorted(funciones, key=lambda x: not x.is_premiere):
                 poster = foto_principal(db, "cine_funcion", f.id, orden=("poster", "otra"))
@@ -71,7 +91,11 @@ class Cine(Flujo):
                                         f"los pósters de las demás.")
                     break
         nombre_peli = d.entidades.get("pelicula") if d else None
-        if nombre_peli and not peli:
+        if vieja:
+            hechos["cartelera_no_actualizada"] = ("La cartelera de esta semana todavía no se ha actualizado: no digas qué "
+                                                  "películas hay ni sus horarios, ni que una película no está; manda al "
+                                                  "link oficial o a la taquilla.")
+        elif nombre_peli and not peli:
             hechos["pelicula_pedida_no_esta_en_cartelera"] = nombre_peli
         if "tarifas" in temas or "compra" in temas:
             hoy = cd.tarifas_del_dia(db, ctx.ahora)
