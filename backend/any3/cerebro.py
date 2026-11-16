@@ -108,8 +108,14 @@ def _parecido(a: str, b: str) -> bool:
 def repite(ctx) -> bool:
     """¿El mensaje es (casi) igual a uno de los 2 anteriores del cliente? (12/11: «Tennis», «Tennis», «TEENIS»,
     «TENNIS»: cuatro veces lo mismo y la misma respuesta que no le servía)."""
-    previos = [t.texto for t in ctx.historial if t.rol == "user"][-2:]
-    return any(_parecido(ctx.mensaje, p) for p in previos)
+    from datetime import timedelta
+    previos = [t for t in ctx.historial if t.rol == "user"][-2:]
+    # Solo cuenta si fue hace poco (15/11: «qué películas hay hoy» repetido 20 minutos después, tras una respuesta que
+    # SÍ le sirvió, se tomó como queja y Any preguntó en vez de dar la cartelera).
+    recientes = [t.texto for t in previos
+                 if t.cuando is None or ctx.ahora - (t.cuando if t.cuando.tzinfo else t.cuando.replace(tzinfo=ctx.ahora.tzinfo))
+                 <= timedelta(minutes=10)]
+    return any(_parecido(ctx.mensaje, p) for p in recientes)
 
 
 def mensajes(ctx, d: Directorio) -> list[dict]:

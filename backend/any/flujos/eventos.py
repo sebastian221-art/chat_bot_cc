@@ -5,6 +5,8 @@ dice la descripción del evento; si no lo dice, se da la línea del centro comer
 """
 from __future__ import annotations
 
+import re
+
 from ..conocimiento.fotos import foto_principal
 from ..conocimiento.texto import normalizar, palabras
 from ..conocimiento.vigencia import dias_para, fecha_inicio, vigente
@@ -80,6 +82,45 @@ def _dias_del_evento(fecha_texto, hoy):
     if (fin - ini).days > 60:
         return None
     return {ini + timedelta(days=i) for i in range((fin - ini).days + 1)}
+
+
+_PIDE_ACTIVIDADES = re.compile(r"\b(actividad\w*|programa\w*|evento\w*|agenda|talleres?|cronograma|que hay|"
+                               r"que van a hacer|planes?)\b")
+
+
+def sumar_eventos_del_local(ctx, nombre_local: str, datos: Datos) -> None:
+    """A la ficha de un local le suma sus eventos vigentes (15/11: «¿qué actividades hay en la Casa del Libro?»
+    respondía la descripción genérica y no el programa de noviembre que estaba cargado como evento).
+    Si preguntan por actividades o programación, va el programa COMPLETO y el afiche del evento."""
+    try:
+        hoy = ctx.ahora.date()
+        nombre = normalizar(nombre_local or "")
+        if len(nombre) < 5:
+            return
+        evs = [e for e in eventos_vigentes(ctx.db, hoy)
+               if re.search(rf"\b{re.escape(nombre)}\b", normalizar(f"{e.name} {e.location}"))]
+        if not evs:
+            return
+        datos.hechos["eventos_y_actividades_de_este_local"] = [ficha_evento(e, hoy) for e in evs]
+        if _PIDE_ACTIVIDADES.search(normalizar(ctx.mensaje)):
+            datos.hechos["como_responder"] = (
+                "El cliente pregunta por las actividades o la programación de este local: responde con el programa de "
+                "«eventos_y_actividades_de_este_local» COMPLETO, una línea por actividad con su día, hora y nombre, "
+                "sin resumir ni omitir ninguna (si son 11, van las 11) y con el link del grupo si viene. De la ficha "
+                "del local da solo la ubicación y el contacto en una línea. No describas las fotos.")
+            foto = foto_principal(ctx.db, "event", evs[0].id, respaldo=evs[0].photo_url)
+            if foto:
+                datos.adjuntos = [a for a in datos.adjuntos if a.tipo != "imagen"]
+                datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=evs[0].name))
+        else:
+            datos.hechos["como_usar_eventos"] = "Este local tiene un evento vigente: menciónalo en UNA línea al final."
+    except Exception as e:
+        if hasattr(ctx, "traza"):
+            ctx.traza.alerta(f"eventos del local: {e}")
+        try:
+            ctx.db.rollback()
+        except Exception:
+            pass
 
 
 MAX_AFICHES = 1     # 11/11 (pedido del centro comercial): en la lista general va UN afiche de referencia, no uno por evento

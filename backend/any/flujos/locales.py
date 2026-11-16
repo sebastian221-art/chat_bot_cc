@@ -291,6 +291,14 @@ class Locales(Flujo):
 
     async def reunir(self, ctx: Contexto) -> Datos:
         datos = await self._reunir(ctx)
+        loc = datos.hechos.get("local") if datos.hechos.get("modo") == "ficha" else None
+        if isinstance(loc, dict) and loc.get("nombre"):
+            from .eventos import sumar_eventos_del_local
+            sumar_eventos_del_local(ctx, loc["nombre"], datos)
+        return datos
+
+    async def _reunir(self, ctx: Contexto) -> Datos:
+        datos = await self._reunir(ctx)
         # "¿qué restaurante está abierto a esta hora?", "horario de los almacenes de ropa": con datos reales
         if re.search(r"horario|abiert|abren|cierran|a esta hora|ahora mismo|todavia|aun estan", normalizar(ctx.mensaje)):
             try:

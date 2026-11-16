@@ -81,7 +81,12 @@ class ServiciosMall(Flujo):
             hechos["parqueadero_oficial"] = info["parqueadero"]     # tal cual lo escribió el centro comercial
         if "wifi" in grupos and info.get("wifi"):
             hechos["wifi_oficial"] = info["wifi"]
-        if "ubicacion" in grupos:
+        # El pin y la dirección del centro comercial solo cuando preguntan por EL CENTRO COMERCIAL. «¿Dónde están
+        # los cajeros?» es dentro del mall: antes mandaba el pin de El Puente (15/11).
+        pide_el_mall = "ubicacion" in grupos and (not (grupos - {"ubicacion"}) or re.search(
+            r"\b(direccion|como (llego|llegar|se llega)|mapa|pin|ubicacion del (centro|mall|cc)|"
+            r"donde (queda|esta|es) (el )?(centro comercial|el puente|mall|cc))\b", normalizar(ctx.mensaje)))
+        if pide_el_mall:
             hechos["direccion"] = info.get("direccion") or "no tengo la dirección exacta"
             if info.get("latitud") and info.get("longitud"):
                 datos.adjuntos.append(Adjunto(tipo="ubicacion", latitud=info["latitud"], longitud=info["longitud"],

@@ -14,6 +14,13 @@ import time
 log = logging.getLogger("any.trazas")
 
 
+from contextvars import ContextVar
+
+# Por qué Any 3.0 le pasó este mensaje a Any 2.0 (tema de Any 2.0, cerebro falló…): queda como primer paso de la
+# traza. Antes no se veía y no había cómo saber por qué una respuesta salió de Any 2.0 (15/11, Casa del Libro).
+MOTIVO_ANY3: ContextVar = ContextVar("motivo_any3", default=None)
+
+
 class Traza:
     def __init__(self, telefono: str, mensaje: str, modo: str):
         self.telefono, self.mensaje, self.modo = telefono, mensaje, modo
@@ -23,6 +30,8 @@ class Traza:
         self.alertas: list[str] = []
         self.tokens = {"entrada": 0, "salida": 0}
         self.modelos: set = set()
+        if MOTIVO_ANY3.get():
+            self.paso("any3_paso_a_any2", MOTIVO_ANY3.get())
 
     def paso(self, nombre: str, detalle=None):
         ahora = time.perf_counter()
