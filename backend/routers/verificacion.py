@@ -17,6 +17,8 @@ Cómo se usa:
      Para CREAR uno nuevo, escribe «nuevo» en la columna id y llena la fila. Para BORRAR un evento, sorteo,
      promoción o dato de conocimiento, agrega una columna «borrar» y escribe «sí» en esa fila.
      Para VACIAR una celda (p. ej. un horario o un Instagram que ya no aplica), escribe «(borrar)».
+     Para SUMAR sin reescribir (palabras clave o descripción), escribe «(agregar) texto»: en las palabras
+     clave se suman los términos que no estén; en la descripción se agrega la frase al final si no está.
 
 El Instagram de un local no tiene campo propio en la base: Any lo lee del link de la carta o de
 la descripción. Si se cambia en la planilla, se escribe en la descripción ("Instagram: …").
@@ -113,10 +115,29 @@ def _a_celda(v):
     return v
 
 
+_AGREGAR = re.compile(r"^\s*\(agregar\)\s*", re.I)
+
+
+def _agregar(campo: str, texto: str, actual) -> str:
+    """«(agregar) …»: suma a lo que ya hay sin reescribirlo (18/11: los apuntes del centro comercial traen
+    productos que se AGREGAN a un local; reescribir todo el campo arriesgaba borrar lo que ya estaba)."""
+    from any.conocimiento.texto import normalizar
+    actual = str(actual or "").strip()
+    if campo == "tags":
+        ya = {normalizar(t) for t in actual.split(",") if t.strip()}
+        nuevos = [t.strip() for t in texto.split(",") if t.strip() and normalizar(t) not in ya]
+        return ", ".join([actual] + nuevos if actual else nuevos)
+    if normalizar(texto) in normalizar(actual):
+        return actual
+    return f"{actual} {texto}".strip() if actual else texto
+
+
 def _a_valor(campo: str, v, actual):
     """Convierte lo escrito en la planilla al tipo del campo."""
     if v is None:
         v = ""
+    if isinstance(v, str) and _AGREGAR.match(v) and campo in ("tags", "description", "content"):
+        return _agregar(campo, _AGREGAR.sub("", v).strip(), actual)
     if campo == "active":
         t = str(v).strip().lower()
         return t in ("sí", "si", "s", "1", "true", "x", "activo") if t else actual
@@ -371,7 +392,7 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
                         cambios.append(f"{hoja} · {obj.id} · instagram → {nuevo_ig}")
                     continue
                 actual = getattr(obj, campo, None)
-                if campo == "description" and _sin_ig(actual) == _sin_ig(nuevo):
+                if campo == "description" and not _AGREGAR.match(str(nuevo)) and _sin_ig(actual) == _sin_ig(nuevo):
                     continue      # solo difiere en el Instagram, que se maneja en su propia columna
                 try:
                     valor = _a_valor(campo, nuevo, actual)
