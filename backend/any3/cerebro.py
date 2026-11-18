@@ -254,15 +254,16 @@ def _raiz(p: str) -> str:
     return p
 
 
-def declara(local, busqueda: str) -> bool:
+def declara(local, busqueda: str, solo_productos: bool = False) -> bool:
     """¿El local escribe en sus datos (productos, rubro o descripción; no basta el nombre) lo principal de lo que se
     busca, o un sinónimo de la lista de sinónimos? Lo principal es el primer concepto con contenido («chaqueta»
     en «chaqueta de cuero», «sudadera» en «sudaderas para niños»; «tenis» incluye «calzado deportivo»).
     Es la mitad de código de «responder de lo que se sabe»."""
     from any.conocimiento.buscador import _grupo_modificador, conceptos
     from any.conocimiento.texto import contiene_frase
-    campos = (local.raices_productos | local.raices_productos_top | local.raices_rubro | local.raices_descripcion)
-    texto = " | ".join([local.rubro or ""] + list(local.productos or []))
+    campos = (local.raices_productos | local.raices_productos_top) if solo_productos else \
+        (local.raices_productos | local.raices_productos_top | local.raices_rubro | local.raices_descripcion)
+    texto = " | ".join(([] if solo_productos else [local.rubro or ""]) + list(local.productos or []))
     # «bolsos y zapatos», «tenis o sandalias»: basta con que declare una de las partes
     for parte in re.split(r"\s+(?:y|o|e|u)\s+|,|/", busqueda or ""):
         cabeza = next((c for c in conceptos(parte) if c.palabra not in _NO_CABEZA and len(c.palabra) > 2
@@ -287,6 +288,8 @@ quedan los que cumplen o venden para todos. Precio y calidad no filtran (no hay 
 Respeta el PROPÓSITO: si quiere COMPRAR algo, no entra un local donde eso solo se USA (una atracción con motos
 eléctricas para niños no vende motos); si quiere un USO concreto, no entra lo que no sirve para eso (una mochila
 artesanal tradicional no es un morral escolar; ropa deportiva no es un vestido de baño, salvo que lo declare).
+El rubro NO manda: si un local DECLARA en "vende" lo buscado, SÍ sirve aunque su rubro sea otro (una atracción
+infantil que también vende dulces, gomitas y snacks SÍ entra en «dulces» o «gomitas»).
 Si un local vende varias cosas y entre ellas está lo buscado, SÍ sirve. Ante la duda con uno de la lista, se
 queda; ante la duda con uno posible, no entra.
 Además di en "lo_declaran" TODOS los locales (de la lista y de los posibles) que DECLARAN en sus datos lo
@@ -322,6 +325,12 @@ async def revisar_lista(ctx, d: Directorio, e: Eleccion):
         ctx.traza.alerta(f"el revisor de la lista falló (se deja la elección del cerebro): {ex}")
         return
     quitar = [i for i in (str(x).strip().upper() for x in (j.get("quitar") or [])) if i in elegidos]
+    # Nunca se quita un local que tiene ESCRITO en sus datos lo buscado (18/11: Road Trip es «Entretenimiento»
+    # pero vende dulces y gomitas, y no salía en «gomitas» ni en «dulces»).
+    salvados = [i for i in quitar if declara(d.locales[i], e.busqueda or e.consulta or ctx.mensaje, solo_productos=True)]
+    if salvados:
+        ctx.traza.alerta(f"el revisor quería quitar {[d.nombre(i) for i in salvados]}, pero lo declaran: se quedan")
+        quitar = [i for i in quitar if i not in salvados]
     agregar = [i for i in (str(x).strip().upper() for x in (j.get("agregar") or [])) if i in posibles]
     if quitar and len(quitar) > len(elegidos) / 2:
         ctx.traza.alerta(f"el revisor quería quitar {len(quitar)} de {len(elegidos)}: se ignora (demasiado)")

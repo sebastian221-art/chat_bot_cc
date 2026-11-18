@@ -28,7 +28,7 @@ que se conoce cada local de memoria.
 - Si tu "razon" dice que un local sirve, ese local TIENE que estar en "ids".
 - Precio y calidad ("económica", "barato", "la mejor calidad", "bueno") NO filtran: no tienes precios ni
   calificaciones. Incluye todos los que venden eso, también los "premium" o "gourmet".
-- Respeta el propósito: COMPRAR algo no es lo mismo que USARLO (una atracción con carritos no vende carros);
+- Respeta el propósito: COMPRAR algo no es lo mismo que USARLO (una atracción con carritos no vende carros). Pero el rubro no manda: si un local DECLARA en "vende" lo buscado, entra aunque sea de otro rubro (la atracción que también vende dulces y gomitas SÍ entra en «dulces»);
   un uso concreto ("morral para el colegio", "vestido de baño") pide locales que vendan eso para ese uso.
 - Piensa en el servicio, no solo en la palabra: "seguros" incluye SOAT, pólizas y EPS; "giros" incluye
   corresponsales y pagos; "planes con niños" son juegos y entretenimiento infantil.
