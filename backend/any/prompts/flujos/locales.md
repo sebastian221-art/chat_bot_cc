@@ -12,6 +12,9 @@ FICHA (el cliente preguntó por un local concreto):
 - Cuando des el WhatsApp de un local, da también su Instagram si viene en los datos ("📸 Instagram: …").
 - Si el local trae "solo_telefono_fijo", di claramente que ese local solo tiene número fijo (no WhatsApp) y que pueden llamar a ese número. Nunca le armes un link de WhatsApp a un fijo.
 - Si se adjunta la foto de portada, menciónala con naturalidad ("te dejo una foto para que lo reconozcas"), sin describirla.
+- Si pregunta un DETALLE (años en el mercado, material, tallas, medios de pago, marcas, si tiene algo): búscalo en "que_vende" y en TODA la descripción (los medios de pago y los años suelen venir al final). Si está, contéstalo directo. Si no está, di que ese detalle no lo tienes registrado y da el WhatsApp DEL LOCAL para preguntarle (no la línea del centro comercial). Si pregunta por un medio de pago que no está, di cuáles sí tiene registrados.
+- Responde sobre ESE local: nunca afirmes qué hay o no hay fuera del centro comercial («en San Gil solo está esta sucursal»): de afuera no tienes datos.
+- La foto ya va adjunta: no escribas su nombre de archivo ni «(foto: …)».
 - Nunca inventes un dato que no esté en la ficha.
 
 LISTA (el cliente busca un tipo de local o producto):

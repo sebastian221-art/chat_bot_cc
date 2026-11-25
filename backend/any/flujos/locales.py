@@ -45,14 +45,18 @@ def quitar_rubros_como_lugar(ctx, texto: str) -> str:
         return texto
     # también el comienzo del rubro («zona de Entidades Financieras») y «área de servicios financieros»
     rubros |= {" ".join(r.split()[:2]) for r in rubros if len(r.split()[0]) >= 5}
-    lugar = re.compile(r"\b(zona|area|seccion|sector|pasillo)\b")
     inventado = re.compile(r"\b(zona|area|seccion|sector) (de |del )?(los )?(servicios? )?(financier|bancari|entidades)")
     out, quitado = [], False
     for linea in texto.split("\n"):
         frases = re.split(r"(?<=[.!?])\s+", linea)
         def mala(f: str) -> bool:
+            # 25/11: antes bastaba que la frase NOMBRARA un rubro de 3+ palabras («En MANTRA encuentras accesorios y
+            # bisutería: bolsos, termos…») para borrarla, y se iba justo la respuesta. Ahora tiene que usarlo como
+            # LUGAR: «la zona (de) Entidades Financieras», «el área de servicios financieros».
             n = normalizar(f.replace("*", ""))
-            return bool(inventado.search(n)) or any(r in n and (len(r.split()) >= 3 or lugar.search(n)) for r in rubros)
+            return bool(inventado.search(n)) or any(
+                re.search(rf"\b(zona|area|seccion|sector|pasillo)\s+(?:de\s+|del\s+)?(?:la\s+|los\s+|las\s+)?{re.escape(r)}", n)
+                for r in rubros)
         buenas = [f for f in frases if not mala(f)]
         if len(buenas) < len(frases):
             quitado = True
@@ -772,7 +776,15 @@ class Locales(Flujo):
             return f"Estos son los locales que encontré:\n{MARCA_LISTA}"
         if h.get("modo") == "ficha":
             l = h["local"]
-            partes = [f"*{l['nombre']}*" + (f" queda en {l['zona']}" if l.get("zona") else "")]
+            partes = [f"*{l['nombre']}*" + (f" queda en {l['zona']}" if l.get("zona") else "") + "."]
+            # 25/11 («¿qué productos ofrecen en Mantra?»): el respaldo salía sin lo que vende, que era la pregunta
+            vende = [v.strip() for v in str(l.get("que_vende") or "").split(",")
+                     if v.strip() and not normalizar(v).startswith(("donde ", "pasillo ", "plazoleta ", "paseo "))
+                     and normalizar(v.strip()) != normalizar(l["nombre"])]
+            if vende:
+                partes.append("🛍️ Qué vende: " + ", ".join(dict.fromkeys(vende[:14])) + ".")
+            if l.get("horario"):
+                partes.append(f"🕒 Horario: {l['horario']}")
             if l.get("whatsapp"):
                 partes.append(f"👉 {l['whatsapp']}")
             elif l.get("solo_telefono_fijo"):

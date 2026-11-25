@@ -105,9 +105,10 @@ def sumar_eventos_del_local(ctx, nombre_local: str, datos: Datos) -> None:
         if _PIDE_ACTIVIDADES.search(normalizar(ctx.mensaje)):
             datos.hechos["como_responder"] = (
                 "El cliente pregunta por las actividades o la programación de este local: responde con el programa de "
-                "«eventos_y_actividades_de_este_local» COMPLETO, una línea por actividad con su día, hora y nombre, "
-                "sin resumir ni omitir ninguna (si son 11, van las 11) y con el link del grupo si viene. De la ficha "
-                "del local da solo la ubicación y el contacto en una línea. No describas las fotos.")
+                f"«eventos_y_actividades_de_este_local», una línea por actividad con su día, hora y nombre, sin "
+                f"resumir ni omitir ninguna de las que FALTAN (hoy es {hoy:%d/%m/%Y}); las que ya pasaron no se "
+                "listan, se dicen en una frase. Con el link del grupo si viene. De la ficha del local da solo la "
+                "ubicación y el contacto en una línea. No describas las fotos.")
             foto = foto_principal(ctx.db, "event", evs[0].id, respaldo=evs[0].photo_url)
             if foto:
                 datos.adjuntos = [a for a in datos.adjuntos if a.tipo != "imagen"]

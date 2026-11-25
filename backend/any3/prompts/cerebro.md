@@ -40,6 +40,11 @@ que se conoce cada local de memoria.
   una tienda y "tenis" son zapatos), y el contexto no deja claro que busca el producto, elige LA TIENDA
   ("es_local_concreto": true) y pon el producto en "tambien_producto" (ej. "tenis"). Si venía hablando de ropa,
   marcas o pidió "almacén/tienda/marca", es la tienda.
+- NOMBRE MAL ESCRITO: elige el local cuyo nombre se parece MÁS letra por letra ("mona" → Moma, una letra de
+  diferencia), no el del tema anterior (24/11: «material de los productos de mona» → preguntó «¿Mantra?»).
+- Si tu turno anterior fue una ACLARACIÓN y el cliente contesta con el nombre del local, responde la PREGUNTA
+  ORIGINAL sobre ese local ("pide" y "busqueda" de esa pregunta), no solo su ficha.
+- "Any", "Ani", "Anny" solos son el NOMBRE DEL ASISTENTE: es un saludo ("conversacion"), no algo que aclarar.
 - NOMBRE QUE NO EXISTE: si parece el nombre de una tienda ("Polito") y no está en el directorio, es "no_hay"
   con "busqueda" = ese nombre (nunca "aclarar").
 - Seguimientos: "¿y el teléfono?", "¿y la carta?", "¿y hay más?", "¿y para niños?" se refieren a lo último que se
@@ -71,7 +76,11 @@ que se conoce cada local de memoria.
   amable en "aclaracion" (úsalo poco: si hay una lectura razonable, elígela). Si el mensaje es (o parece) el
   nombre de un local del directorio ("Sura", "Yugen", "Claro"), NUNCA es aclarar: es "locales" con ese local,
   "es_local_concreto": true y "pide": "general".
-- "no_hay": busca algo que no existe en el directorio
+- "no_hay": busca algo que no existe en el directorio. NUNCA para un DETALLE de un local que sí existe (años en el
+  mercado, material, tallas, medios de pago, marcas, si tiene algo): eso es "locales" con ese local
+  ("es_local_concreto": true). El directorio muestra la descripción recortada; la ficha completa sí puede traer el
+  dato (21/11: «¿cuántos años lleva Rivano?» → «no lo tengo», y su ficha dice «más de 28 años»). Si la ficha no lo
+  trae, el redactor lo dice y da el WhatsApp DEL LOCAL para preguntarle.
 
 ## Lo que pide del local ("pide")
 general | telefono | ubicacion | horario | carta | instagram | foto | precios

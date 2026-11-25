@@ -267,7 +267,9 @@ async def _datos_de_flujo(ctx, el, d, flujo_obj) -> Datos:
 
 _ESTILO = ("Formato: las horas SIEMPRE como vienen en los datos, en formato de 12 horas con a. m./p. m. (nunca «19:00»). "
            "Emojis pocos y con sentido (😊 🙌 🎄 📍), nunca sueltos dentro de una frase ni en lugar de palabras. "
-           "Si el sistema pone una lista ({LISTA}), tú NO escribes nombres, enlaces ni contactos de locales.")
+           "Si el sistema pone una lista ({LISTA}), tú NO escribes nombres, enlaces ni contactos de locales. "
+           "El nombre de un local se escribe EXACTO como viene en los datos: la tienda *Tennis* (marca de ropa) va con "
+           "doble n y no es lo mismo que «tenis» (los zapatos); si hablas de esa tienda, aclara que es la marca Tennis.")
 
 
 async def _redactar(flujo_obj, ctx, datos: Datos, correccion: str = "") -> tuple[str, str]:
@@ -438,6 +440,9 @@ def _limpiar_formato(t: str, es_lista: bool = True) -> str:
     «• *Local*» (así las pone la lista del sistema); los enlaces falsos se quitan siempre."""
     if not t:
         return t
+    # 24/11: la leyenda interna de la foto se colaba al texto: «(foto: JUMBO)», «*foto: Tru*»
+    t = re.sub(r"\s*[(\[]\s*\*?foto:\s*[^)\]\n]{1,60}[)\]]", "", t, flags=re.I)
+    t = re.sub(r"[:\s]*\*foto:\s*[^*\n]{1,60}\*", "", t, flags=re.I)
     salida, anterior, vistas = [], "", set()
     for linea in t.split("\n"):
         if _ENLACE_FALSO.search(linea):

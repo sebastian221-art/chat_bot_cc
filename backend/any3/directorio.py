@@ -46,6 +46,13 @@ class Directorio:
         return id_
 
 
+def _copia(o):
+    """Copia simple (sin sesión) de un registro: el directorio se guarda en caché 60 s y el objeto de la base ya no
+    sirve en el mensaje siguiente (21/11: DetachedInstanceError con un Event → respondió Any 2.0)."""
+    from types import SimpleNamespace
+    return SimpleNamespace(**{c.key: getattr(o, c.key) for c in o.__table__.columns})
+
+
 def _corto(t: str, n: int) -> str:
     t = re.sub(r"\s+", " ", t or "").strip()
     return t if len(t) <= n else t[:n].rsplit(" ", 1)[0] + "…"
@@ -151,7 +158,7 @@ def construir(db, hoy=None, compacto: bool = False) -> Directorio:
         from any.flujos.eventos import eventos_vigentes
         for e in eventos_vigentes(db, hoy):
             id_ = f"E{e.id}"
-            d.eventos[id_] = e
+            d.eventos[id_] = _copia(e)
             ev_lineas.append(" | ".join(x for x in [id_, e.name, e.date or "", e.time or "", e.location or "",
                                                      _corto(e.description or "", 160)] if x))
     except Exception:
@@ -160,11 +167,11 @@ def construir(db, hoy=None, compacto: bool = False) -> Directorio:
         from any.flujos.sorteos_promos import promos_vigentes, sorteos_vigentes
         for s in sorteos_vigentes(db, hoy):
             id_ = f"S{s.id}"
-            d.sorteos[id_] = s
+            d.sorteos[id_] = _copia(s)
             so_lineas.append(" | ".join(x for x in [id_, s.name, s.prize or "", f"hasta {s.end_date}" if s.end_date else ""] if x))
         for m in promos_vigentes(db, hoy):
             id_ = f"P{m.id}"
-            d.promos[id_] = m
+            d.promos[id_] = _copia(m)
             loc = next((l.nombre for l in d.locales.values() if m.store_id and l.id == m.store_id), "")
             pr_lineas.append(" | ".join(x for x in [id_, m.title, loc, _corto(m.description or "", 140),
                                                      f"hasta {m.valid_until}" if m.valid_until else ""] if x))

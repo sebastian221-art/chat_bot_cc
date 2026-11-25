@@ -967,6 +967,9 @@ def test_nunca_niega_lo_que_existe():
     assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros.\n\nVe a la zona de *Entidades Financieras* y pregunta.").lower()
     assert "financier" not in quitar_rubros_como_lugar(c2, "Hay cajeros. Está dentro del área de servicios financieros del mall.").lower()
     assert quitar_rubros_como_lugar(c2, "Está en la Plazoleta de Comidas La Ceiba.") == "Está en la Plazoleta de Comidas La Ceiba."
+    # 25/11: nombrar el rubro NO es usarlo como lugar (se borraba la respuesta de «¿qué venden en Mantra?»)
+    frase = "En *MANTRA* encontrarás accesorios y bisutería: bolsos, termos y relojes."
+    assert quitar_rubros_como_lugar(c2, frase) == frase
     # trazas 30/10 1:30 am: «haz el giro en los cajeros», «paga el SOAT en el cajero», «sin zona especificada»,
     # y una lista que abría con «No hay un punto para pagar el SOAT»
     from any.nucleo.guardias import quitar_afirmaciones_falsas

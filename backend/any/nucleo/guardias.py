@@ -191,7 +191,9 @@ def _cifra(x: str) -> str:
 
 
 def _cifras_validas(ctx: Contexto) -> set[str]:
-    validas = set()
+    # lo que dijo el propio cliente también vale: «¿venden productos 100 % cuero?» → la respuesta repite «100 %»
+    # (25/11: se borraba justo la línea que contestaba, y quedaba solo la ficha)
+    validas = {_cifra(m) for m in _DINERO.findall(getattr(ctx, "mensaje", "") or "")}
     for p in ctx.traza.pasos:
         if p["paso"] in PASOS_CON_DATOS:
             for m in _DINERO.findall(str(p["detalle"])):
@@ -360,6 +362,27 @@ def corregir_lugares(texto: str) -> str:
     return texto
 
 
+def _sin_dobles(t: str) -> str:
+    return re.sub(r"(.)\1+", r"\1", normalizar(t))
+
+
+def _nombre_exacto_del_local(ctx: Contexto, t: str) -> str:
+    """25/11: la tienda TENNIS salía escrita «*Tenis*» (con una n, como los zapatos) y no se distinguía de cuál era
+    cuál. Si la respuesta es la ficha de un local cuyo nombre también es una palabra común (Tennis/tenis), el nombre
+    en negrilla escrito con letras de menos o de más se cambia por el nombre exacto del local."""
+    local = str((getattr(getattr(ctx, "decision", None), "entidades", None) or {}).get("local") or "").strip()
+    if not local or normalizar(local) not in _NOMBRES_PALABRA:
+        return t
+    clave = _sin_dobles(local)
+
+    def _fijar(m):
+        dentro = m.group(1)
+        if _sin_dobles(dentro) == clave and normalizar(dentro) != normalizar(local):
+            return f"*{local}*"
+        return m.group(0)
+    return re.sub(r"\*([^*\n]{2,40})\*", _fijar, t)
+
+
 def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
     """Pedido del centro comercial: los nombres de los locales van siempre en MAYÚSCULA (ZIRUS PIZZA)."""
     if not texto:
@@ -376,6 +399,7 @@ def nombres_en_mayuscula(ctx: Contexto, texto: str) -> str:
         links.append(m.group(0))
         return f"⟦U{len(links) - 1}⟧"
     t = re.sub(r"https?://\S+", _apartar, texto)
+    t = _nombre_exacto_del_local(ctx, t)
     for n in nombres:
         patron = r"(?<![\wÁÉÍÓÚÑáéíóúñ])" + re.escape(n).replace(r"\ ", r"\s+") + r"(?![\wÁÉÍÓÚÑáéíóúñ])"
         if normalizar(n) in _NOMBRES_PALABRA:
