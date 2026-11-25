@@ -297,6 +297,12 @@ def descargar(db: Session = Depends(get_db)):
                                       f'attachment; filename="verificacion_any_{datetime.now():%Y-%m-%d}.xlsx"'})
 
 
+# Títulos más claros para la planilla que llena el centro comercial (25/11) → columna que entiende el importador
+_ALIAS_COLUMNAS = {"número de local": "consultorio / número", "n.º de local": "consultorio / número",
+                   "piso": "piso (solo Torre Médica)", "tipo de espacio": "rubro",
+                   "comentarios del centro comercial": "notas"}
+
+
 @router.post("/importar")
 async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
     from openpyxl import load_workbook
@@ -315,7 +321,7 @@ async def importar(file: UploadFile = File(...), db: Session = Depends(get_db)):
         filas = list(sh.iter_rows(values_only=True))
         if not filas:
             continue
-        cab = [str(c or "").strip() for c in filas[0]]
+        cab = [_ALIAS_COLUMNAS.get(str(c or "").strip().lower(), str(c or "").strip()) for c in filas[0]]
         pos = {titulo: cab.index(titulo) for titulo, *_ in cols if titulo in cab}
         if "borrar" in cab:
             pos["borrar"] = cab.index("borrar")
