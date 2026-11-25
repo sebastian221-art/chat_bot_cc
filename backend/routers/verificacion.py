@@ -300,7 +300,7 @@ def descargar(db: Session = Depends(get_db)):
 # Títulos más claros para la planilla que llena el centro comercial (25/11) → columna que entiende el importador
 _ALIAS_COLUMNAS = {"número de local": "consultorio / número", "n.º de local": "consultorio / número",
                    "piso": "piso (solo Torre Médica)", "tipo de espacio": "rubro",
-                   "comentarios del centro comercial": "notas"}
+                   "comentarios del centro comercial": "notas", "carta, menú o catálogo (link)": "carta o menú (link)"}
 
 
 @router.post("/importar")
