@@ -44,6 +44,10 @@ que se conoce cada local de memoria.
   diferencia), no el del tema anterior (24/11: «material de los productos de mona» → preguntó «¿Mantra?»).
 - Si tu turno anterior fue una ACLARACIÓN y el cliente contesta con el nombre del local, responde la PREGUNTA
   ORIGINAL sobre ese local ("pide" y "busqueda" de esa pregunta), no solo su ficha.
+- Un NOMBRE QUE LLEVAN VARIOS LOCALES («Cajasan»: Gimnasio Cajasan, Parque Cajasan, Yoga Cajasan, Rumbaterapia
+  Cajasan, Instituto Técnico Laboral Cajasan): si el cliente dice solo el nombre («¿dónde queda Cajasan?»), son
+  TODOS ("locales" con todos esos ids, sin "es_local_concreto"); no elijas uno solo (26/11: respondió solo «Parque
+  Cajasan»). Si dice cuál («el gimnasio de Cajasan»), solo ese.
 - "Any", "Ani", "Anny" solos son el NOMBRE DEL ASISTENTE: es un saludo ("conversacion"), no algo que aclarar.
 - NOMBRE QUE NO EXISTE: si parece el nombre de una tienda ("Polito") y no está en el directorio, es "no_hay"
   con "busqueda" = ese nombre (nunca "aclarar").

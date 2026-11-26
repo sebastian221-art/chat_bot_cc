@@ -56,6 +56,10 @@ def _conversacion(ctx, maximo: int = 8) -> str:
             if len(texto) > 500:
                 texto = texto[:500] + "…"
         lineas.append(("Cliente: " if t.rol == "user" else "Any: ") + texto)
+    # Hilo compacto (26/11): lo más viejo del hilo no va completo, solo lo que preguntó el cliente, en una línea
+    antes = [t.texto.strip()[:80] for t in ctx.historial[:-maximo] if t.rol == "user" and t.texto.strip()][-4:]
+    if antes:
+        lineas.insert(0, "(Antes en esta conversación preguntó: " + " · ".join(f"«{a}»" for a in antes) + ")")
     return "\n".join(lineas) or "(es el primer mensaje)"
 
 
@@ -325,6 +329,12 @@ async def revisar_lista(ctx, d: Directorio, e: Eleccion):
         ctx.traza.alerta(f"el revisor de la lista falló (se deja la elección del cerebro): {ex}")
         return
     quitar = [i for i in (str(x).strip().upper() for x in (j.get("quitar") or [])) if i in elegidos]
+    # Búsqueda por un NOMBRE que llevan todos los elegidos («Cajasan»): son todos, no se quita ninguno (26/11)
+    from any.conocimiento.texto import normalizar as _n
+    marca = _n(e.busqueda or "")
+    if quitar and len(marca) >= 4 and all(marca in _n(d.nombre(i)) for i in elegidos):
+        ctx.traza.alerta(f"búsqueda por el nombre «{e.busqueda}»: no se quita ninguno de sus locales")
+        quitar = []
     # Nunca se quita un local que tiene ESCRITO en sus datos lo buscado (18/11: Road Trip es «Entretenimiento»
     # pero vende dulces y gomitas, y no salía en «gomitas» ni en «dulces»).
     salvados = [i for i in quitar if declara(d.locales[i], e.busqueda or e.consulta or ctx.mensaje, solo_productos=True)]

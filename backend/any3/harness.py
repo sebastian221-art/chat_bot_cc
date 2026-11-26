@@ -522,8 +522,7 @@ def _salida(ctx, r: Respuesta, es_audio: bool) -> Respuesta:
         r.texto = _limpiar_formato(_sin_datos_vacios(r.texto), es_lista=bool(r.meta.get("lista_equidad")))
     guardias.aviso_privacidad(ctx, r)
     if r.entidades:
-        from any.nucleo.router import limpiar_entidades
-        estado.ultimas_entidades = limpiar_entidades({**estado.ultimas_entidades, **r.entidades})
+        estado.recordar(r.entidades)
         if "any3_ids" not in r.entidades:
             estado.ultimas_entidades.pop("any3_ids", None)
     estado.ultimo_flujo = r.flujo

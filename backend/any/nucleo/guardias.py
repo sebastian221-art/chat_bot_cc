@@ -466,6 +466,15 @@ def quitar_saludo_repetido(ctx: Contexto, t: str) -> str:
     return resto[:1].upper() + resto[1:]
 
 
+def _zonas_con_piso(ctx) -> set:
+    """Zonas oficiales (las del dato «zona» de cada local) que nombran un piso: «3er Piso», «Cajasan Local 301»."""
+    try:
+        from ..conocimiento.catalogo import locales
+        return {l.zona for l in locales(ctx.db) if l.zona and (_PISO.search(l.zona) or _PISO_ORDINAL.search(l.zona))}
+    except Exception:
+        return set()
+
+
 def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = r.texto or ""
     t = _ID_INTERNO.sub("", t)
@@ -490,8 +499,19 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
 
     habla_de_torre = bool(re.search(r"(?i)torre\s+(m[eé]dica|empresarial)", t))
     if r.flujo != "torre_medica" and not habla_de_torre and (_PISO.search(t) or _PISO_ORDINAL.search(t)):
-        ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t) + _PISO_ORDINAL.findall(t)}")
-        t = _PISO_ORDINAL.sub("", _PISO.sub("", t))
+        # 26/11: la zona OFICIAL de un local puede ser un piso («3er Piso» de Parque Cajasan): esa no se toca.
+        # Antes se borraba y quedaba «está en la zona ** del centro comercial» y «• PARQUE CAJASAN —».
+        guardadas = {}
+        for i, z in enumerate(sorted(_zonas_con_piso(ctx), key=len, reverse=True)):
+            marca = f"\x00{i}\x00"
+            t, n = re.subn(re.escape(z), marca, t, flags=re.I)
+            if n:
+                guardadas[marca] = z
+        if _PISO.search(t) or _PISO_ORDINAL.search(t):
+            ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t) + _PISO_ORDINAL.findall(t)}")
+            t = _PISO_ORDINAL.sub("", _PISO.sub("", t))
+        for marca, z in guardadas.items():
+            t = t.replace(marca, z)
 
     # links de WhatsApp de mentira (el modelo copió un ejemplo "57XXXXXXXXXX")
     if re.search(r"wa\.me/\S*[xX]{3,}", t):

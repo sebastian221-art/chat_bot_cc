@@ -1270,6 +1270,36 @@ def test_cartelera_se_actualiza_sin_perder_posters():
         db.rollback()
 
 
+def test_hilo_se_renueva_solo():
+    """26/11: el hilo no se pega a temas viejos. Después de una pausa larga lo anterior no es contexto, y lo
+    recordado (local, evento…) que no se vuelve a mencionar en 3 turnos se olvida solo."""
+    from datetime import datetime, timedelta
+    from any.config import ZONA_HORARIA
+    from any.nucleo import estado as est
+    from any.nucleo.guardias import borrar_datos
+    db = _db()
+    est.asegurar_tablas(db)
+    tel, ahora = "prueba-hilo", datetime.now(ZONA_HORARIA)
+    borrar_datos(db, tel)
+    try:
+        for i, (m, txt) in enumerate([(120, "viejo"), (118, "resp vieja"), (10, "ejercicio"), (9, "lista"), (1, "yoga")]):
+            est.guardar_turno(db, tel, "A", "user" if i % 2 == 0 else "assistant", txt, ahora - timedelta(minutes=m))
+        h, nueva = est.cargar_historial(db, tel, ahora)
+        assert [t.texto for t in h] == ["ejercicio", "lista", "yoga"] and not nueva
+        e = est.cargar_estado(db, tel, ahora)
+        e.recordar({"local": "Apice", "evento": "Casa del Libro"})
+        est.guardar_estado(db, e, ahora)
+        for k in range(1, 4):
+            t = ahora + timedelta(minutes=k)
+            e = est.cargar_estado(db, tel, t)
+            e.recordar({"local": "Gimnasio Cajasan"} if k == 1 else {})
+            est.guardar_estado(db, e, t)
+        assert est.cargar_estado(db, tel, ahora + timedelta(minutes=4)).ultimas_entidades == {"local": "Gimnasio Cajasan"}
+        assert est.cargar_estado(db, tel, ahora + timedelta(minutes=80)).ultimas_entidades == {}
+    finally:
+        borrar_datos(db, tel)
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

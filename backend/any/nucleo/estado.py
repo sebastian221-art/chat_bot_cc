@@ -135,6 +135,15 @@ class EstadoSesion:
     ultimas_entidades: dict = field(default_factory=dict)
     ultimo_flujo: str | None = None
     actualizado: datetime | None = None
+    edad: dict = field(default_factory=dict)        # turnos que lleva cada dato recordado sin mencionarse
+    tocadas: set = field(default_factory=set)       # datos recordados que se mencionaron en ESTE turno
+
+    def recordar(self, nuevas: dict):
+        """Suma lo que se habló en este turno a lo recordado (y marca esas claves como recientes)."""
+        from .router import limpiar_entidades
+        nuevas = limpiar_entidades(nuevas or {})
+        self.ultimas_entidades = limpiar_entidades({**self.ultimas_entidades, **nuevas})
+        self.tocadas |= set(nuevas)
 
     def activar(self, flujo: str, datos: dict | None = None):
         self.flujo_activo, self.datos = flujo, (datos or {})
@@ -147,12 +156,20 @@ def cargar_estado(db: Session, telefono: str, ahora: datetime) -> EstadoSesion:
     fila = db.get(AnyEstado, telefono)
     if not fila:
         return EstadoSesion(telefono)
+    ent = json.loads(fila.ultimas_entidades or "{}")
+    edad = ent.pop("_edad", {}) if isinstance(ent.get("_edad"), dict) else {}
     e = EstadoSesion(telefono, fila.flujo_activo, json.loads(fila.datos or "{}"),
-                     json.loads(fila.ultimas_entidades or "{}"), fila.ultimo_flujo, _utc(fila.actualizado))
+                     ent, fila.ultimo_flujo, _utc(fila.actualizado), edad)
+    pausa = _utc(ahora) - e.actualizado if e.actualizado else None
     # Un flujo con estado (p. ej. un domicilio a medias) caduca con la sesión
-    if e.actualizado and _utc(ahora) - e.actualizado > timedelta(hours=cfg().sesion_horas):
+    if pausa and pausa > timedelta(hours=cfg().sesion_horas):
         e.terminar_flujo()
-        e.ultimas_entidades = {}
+        e.ultimas_entidades, e.edad = {}, {}
+    # Hilo nuevo: lo recordado del tema anterior ya no aplica (26/11: preguntaban por Cajasan y Any seguía
+    # «recordando» Ápice y la Casa del Libro de horas antes)
+    elif pausa and pausa > timedelta(minutes=cfg().hilo_minutos):
+        e.ultimas_entidades, e.edad = {}, {}
+        e.ultimo_flujo = None
     return e
 
 
@@ -160,7 +177,16 @@ def guardar_estado(db: Session, e: EstadoSesion, ahora: datetime):
     fila = db.get(AnyEstado, e.telefono) or AnyEstado(telefono=e.telefono)
     fila.flujo_activo = e.flujo_activo
     fila.datos = json.dumps(e.datos, ensure_ascii=False)
-    fila.ultimas_entidades = json.dumps(e.ultimas_entidades, ensure_ascii=False)
+    # Lo recordado envejece: lo que no se menciona en N turnos se olvida solo (el hilo se «resetea» por partes)
+    edad = {}
+    for k in list(e.ultimas_entidades):
+        edad[k] = 0 if k in e.tocadas else int(e.edad.get(k, 0)) + 1
+        if edad[k] >= cfg().entidades_turnos:
+            e.ultimas_entidades.pop(k, None)
+            edad.pop(k)
+    e.edad, e.tocadas = edad, set()
+    fila.ultimas_entidades = json.dumps({**e.ultimas_entidades, "_edad": edad} if edad else e.ultimas_entidades,
+                                        ensure_ascii=False)
     fila.ultimo_flujo = e.ultimo_flujo
     fila.actualizado = _utc(ahora)
     db.merge(fila)
@@ -170,7 +196,9 @@ def guardar_estado(db: Session, e: EstadoSesion, ahora: datetime):
 # ── Historial ─────────────────────────────────────────────────────
 
 def cargar_historial(db: Session, telefono: str, ahora: datetime) -> tuple[list[Turno], bool]:
-    """Últimos mensajes de la sesión actual y si la sesión es nueva (más de N horas sin hablar)."""
+    """Mensajes del HILO actual y si la sesión es nueva (más de N horas sin hablar).
+    El hilo son los mensajes seguidos: si entre dos mensajes pasaron más de «hilo_minutos», lo anterior es otra
+    conversación y no se usa como contexto (sigue guardado para las trazas y el panel)."""
     from models.conversation import Conversation
     filas = (db.query(Conversation).filter(Conversation.phone_number == telefono)
              .order_by(Conversation.timestamp.desc(), Conversation.id.desc())
@@ -182,7 +210,17 @@ def cargar_historial(db: Session, telefono: str, ahora: datetime) -> tuple[list[
     turnos = [Turno("assistant" if f.role == "assistant" else "user", f.message, _utc(f.timestamp))
               for f in filas if (f.timestamp is None or _utc(f.timestamp) >= limite)
               and not (aviso and (f.message or "").startswith(aviso))]   # el aviso legal no es conversación
-    return turnos, not turnos
+    sesion_nueva = not turnos
+    hilo = timedelta(minutes=cfg().hilo_minutos)
+    corte, siguiente = 0, _utc(ahora)
+    for i in range(len(turnos) - 1, -1, -1):
+        cuando = turnos[i].cuando
+        if cuando is not None and siguiente - cuando > hilo:
+            corte = i + 1
+            break
+        if cuando is not None:
+            siguiente = cuando
+    return turnos[corte:], sesion_nueva
 
 
 def guardar_turno(db: Session, telefono: str, nombre: str, rol: str, texto: str, ahora: datetime):

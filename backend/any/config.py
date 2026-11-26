@@ -36,8 +36,13 @@ class ConfigAny:
     llm_vision: str = field(default_factory=lambda: _env(
         "ANY_LLM_VISION", "groq:" + (_env("GROQ_VISION_MODEL") or "qwen/qwen3.6-27b")))
 
-    historial_mensajes: int = field(default_factory=lambda: _int("ANY_HISTORIAL", 12))
+    historial_mensajes: int = field(default_factory=lambda: _int("ANY_HISTORIAL", 16))
     sesion_horas: int = field(default_factory=lambda: _int("ANY_SESION_HORAS", 4))
+    # Hilo de conversación (26/11): si el cliente deja de escribir más de N minutos, lo de antes ya no se usa como
+    # contexto (empieza un hilo limpio, sin tener que decir «borra mis datos»). Y lo recordado de un tema (local,
+    # evento, categoría…) se olvida solo si no se vuelve a mencionar en N turnos.
+    hilo_minutos: int = field(default_factory=lambda: _int("ANY_HILO_MINUTOS", 45))
+    entidades_turnos: int = field(default_factory=lambda: _int("ANY_ENTIDADES_TURNOS", 3))
     max_vueltas_herramientas: int = field(default_factory=lambda: _int("ANY_MAX_VUELTAS", 4))
     timeout_llm_s: int = field(default_factory=lambda: _int("ANY_TIMEOUT_LLM", 25))
 
