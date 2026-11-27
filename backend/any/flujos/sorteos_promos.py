@@ -5,6 +5,8 @@ vigentes (tabla marketing) y cómo registrar facturas (link oficial + Punto de I
 """
 from __future__ import annotations
 
+import re
+
 from ..conocimiento.buscador import buscar_conocimiento
 from ..conocimiento.catalogo import local_por_id
 from ..conocimiento.fotos import foto_principal
@@ -45,14 +47,131 @@ def ficha_sorteo(r) -> dict:
     return {k: v for k, v in d.items() if v}
 
 
-def ficha_promo(db, m) -> dict:
+_DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+# Preguntas por promociones de un local (26/11, Jumbo: «cuando pregunten por ofertas, promociones o descuentos,
+# se envían estas imágenes»)
+PIDE_PROMOS = re.compile(r"\b(promo\w*|descuento\w*|dcto|dto|oferta\w*|rebaja\w*|black|friday|weekend|2x1|"
+                         r"liquidacion\w*|en promocion|que te resuelven)\b|%")
+MAX_IMAGENES_PROMOS = 8
+
+
+def dias_de_promo(m):
+    """Promociones que se repiten («Todos los jueves en Jumbo…») → ("todos los jueves", {3}); si no, None."""
+    from ..conocimiento.vigencia import recurrencia
+    return recurrencia(m.title, m.description)
+
+
+def aplica_hoy(m, hoy) -> bool:
+    rec = dias_de_promo(m)
+    return rec is None or hoy.weekday() in rec[1]
+
+
+def ficha_promo(db, m, hoy=None) -> dict:
     d = {"titulo": m.title, "descripcion": m.description, "vigente_hasta": m.valid_until or None}
+    rec = dias_de_promo(m)
+    if rec:
+        d["dias"] = rec[0]
+        if hoy:
+            d["aplica_hoy"] = "sí" if hoy.weekday() in rec[1] else f"no (hoy es {_DIAS[hoy.weekday()]})"
     if m.store_id:
         loc = local_por_id(db, m.store_id)
         if loc:
             d["local"] = loc.nombre
             d["zona"] = loc.zona
     return {k: v for k, v in d.items() if v}
+
+
+def promos_de_locales(db, hoy, store_ids) -> list:
+    ids = {int(i) for i in store_ids if i}
+    return [m for m in promos_vigentes(db, hoy) if m.store_id in ids] if ids else []
+
+
+def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones") -> None:
+    """Pone en los datos las promociones elegidas (las que aplican HOY primero) y adjunta la imagen de cada una."""
+    hoy = ctx.ahora.date()
+    promos = sorted(promos, key=lambda m: (not aplica_hoy(m, hoy), -(m.priority or 3)))
+    datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) for m in promos]
+    imagenes = 0
+    for m in promos[:MAX_IMAGENES_PROMOS]:
+        foto = foto_principal(ctx.db, "marketing", m.id, respaldo=getattr(m, "photo_url", None))
+        if foto and not any(a.url == foto for a in datos.adjuntos):
+            datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=m.title))
+            imagenes += 1
+    if imagenes:
+        datos.hechos["imagenes"] = (f"van adjuntas {imagenes} imágenes de estas promociones (las piezas oficiales): no "
+                                    "las describas ni digas que no tienes imágenes.")
+    if any(dias_de_promo(m) for m in promos):
+        datos.hechos["como_responder_dias"] = (
+            f"Hoy es {_DIAS[hoy.weekday()]}. Algunas promociones son de un día de la semana («dias»): di primero las "
+            "que aplican hoy y luego las de los otros días, con su día. Si el cliente pregunta por un día o un "
+            "producto (carne, frutas, aseo…), da solo la que corresponde.")
+
+
+def sumar_promos_del_local(ctx, nombre_local: str, datos: Datos) -> None:
+    """A la ficha de un local le suma sus promociones vigentes. Si preguntan por promociones/descuentos/ofertas,
+    van todas con su imagen; si no, se mencionan en una línea."""
+    try:
+        from ..conocimiento.catalogo import locales
+        from ..conocimiento.texto import normalizar
+        hoy = ctx.ahora.date()
+        nombre = normalizar(nombre_local or "")
+        ids = [l.id for l in locales(ctx.db) if normalizar(l.nombre) == nombre]
+        promos = promos_de_locales(ctx.db, hoy, ids)
+        if not promos:
+            return
+        if PIDE_PROMOS.search(normalizar(ctx.mensaje)):
+            datos.adjuntos = [a for a in datos.adjuntos if a.tipo != "imagen"]
+            mostrar_promos(ctx, datos, promos, "promociones_vigentes_de_este_local")
+            datos.hechos["como_responder"] = (
+                "El cliente pregunta por las promociones de este local: responde con TODAS las de "
+                "«promociones_vigentes_de_este_local», una línea por promoción con lo que dice (porcentaje, en qué "
+                "aplica, condición y hasta cuándo). De la ficha del local da solo la ubicación y el contacto en una línea.")
+        else:
+            hoy_ = [m for m in promos if aplica_hoy(m, hoy)]
+            if hoy_:
+                datos.hechos["promociones_vigentes_de_este_local"] = [
+                    {k: v for k, v in ficha_promo(ctx.db, m, hoy).items() if k in ("titulo", "vigente_hasta", "dias")}
+                    for m in hoy_]
+                datos.hechos["como_usar_promociones"] = ("Este local tiene promociones vigentes hoy: menciónalas en "
+                                                         "UNA línea al final (solo el título).")
+    except Exception as e:
+        if hasattr(ctx, "traza"):
+            ctx.traza.alerta(f"promociones del local: {e}")
+        try:
+            ctx.db.rollback()
+        except Exception:
+            pass
+
+
+def enfocar(ctx, datos: Datos, promos: list, sorteos: list, locales_ids: list) -> None:
+    """Any 3.0: el cerebro eligió promociones (P…) o locales concretos → solo esas, con su imagen."""
+    hoy = ctx.ahora.date()
+    if not promos and locales_ids:
+        promos = promos_de_locales(ctx.db, hoy, locales_ids)
+        if not promos and not sorteos:
+            from ..conocimiento.catalogo import local_por_id
+            nombres = [l.nombre for l in (local_por_id(ctx.db, i) for i in locales_ids) if l]
+            for k in ("promociones_vigentes", "como_responder_lista"):
+                datos.hechos.pop(k, None)
+            datos.hechos["nota"] = (f"{', '.join(nombres)} no tiene promociones registradas en el centro comercial. "
+                                    "Dilo así, sin inventar, y sugiere preguntarle al local por su WhatsApp. Los "
+                                    "sorteos del centro comercial sí aplican a sus facturas.")
+            return
+    if not (promos or sorteos):
+        return
+    for k in ("sorteos_vigentes", "promociones_vigentes", "imagen", "como_responder_lista"):
+        datos.hechos.pop(k, None)
+    datos.adjuntos = []
+    if sorteos:
+        datos.hechos["sorteos"] = [ficha_sorteo(s) for s in sorteos]
+        for s in sorteos[:1]:
+            foto = foto_principal(ctx.db, "raffle", s.id, respaldo=s.photo_url, orden=("afiche", "premio", "otra"))
+            if foto:
+                datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=s.name))
+    if promos:
+        mostrar_promos(ctx, datos, promos)
+        if len(promos) == 1:
+            datos.entidades["promo"] = promos[0].title
 
 
 class SorteosPromos(Flujo):
@@ -86,14 +205,20 @@ class SorteosPromos(Flujo):
             if foto:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=s.name))
         elif p:
-            hechos["promocion"] = ficha_promo(db, p)
+            hechos["promocion"] = ficha_promo(db, p, hoy)
             datos.entidades["promo"] = p.title
             foto = foto_principal(db, "marketing", p.id, respaldo=getattr(p, "photo_url", None))
             if foto:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=p.title))
+        elif self._del_local(ctx, promos):
+            mostrar_promos(ctx, datos, self._del_local(ctx, promos))
         else:
             hechos["sorteos_vigentes"] = [ficha_sorteo(x) for x in sorteos] or "no hay sorteos vigentes"
-            hechos["promociones_vigentes"] = [ficha_promo(db, x) for x in promos] or "no hay promociones vigentes"
+            hechos["promociones_vigentes"] = [ficha_promo(db, x, hoy) for x in promos] or "no hay promociones vigentes"
+            if len(promos) > 6:
+                hechos["como_responder_lista"] = (
+                    "Son muchas promociones: agrúpalas por local, una línea por local con lo principal (porcentaje y "
+                    "hasta cuándo). Las de un día de la semana («dias») van con su día.")
             # Lista general: UNA imagen de referencia (el sorteo principal), no una por cada uno (pedido 11/11)
             for x in sorteos:
                 foto = foto_principal(db, "raffle", x.id, respaldo=x.photo_url, orden=("afiche", "premio", "otra"))
@@ -105,3 +230,14 @@ class SorteosPromos(Flujo):
             if len(promos) == 1:
                 datos.entidades["promo"] = promos[0].title
         return datos
+
+    @staticmethod
+    def _del_local(ctx, promos: list) -> list:
+        """«¿Jumbo tiene promociones?» por Any 2.0: el router reconoció el local."""
+        nombre = ((ctx.decision.entidades or {}).get("local") if ctx.decision else None) or ""
+        if not nombre:
+            return []
+        from ..conocimiento.catalogo import locales
+        from ..conocimiento.texto import normalizar
+        ids = {l.id for l in locales(ctx.db) if normalizar(l.nombre) == normalizar(nombre)}
+        return [m for m in promos if m.store_id in ids]

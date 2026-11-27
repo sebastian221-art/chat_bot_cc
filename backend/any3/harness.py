@@ -27,6 +27,7 @@ from any.conocimiento.texto import normalizar
 from any.flujos import FLUJOS
 from any.flujos.base import Datos
 from any.flujos.eventos import sumar_eventos_del_local
+from any.flujos.sorteos_promos import enfocar as enfocar_promos, sumar_promos_del_local
 from any.llm import ErrorLLM
 from any.nucleo import estado as est
 from any.nucleo import guardias, mensajes, promociones
@@ -182,6 +183,7 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
         if len(locs) == 1:
             datos = Locales()._ficha(locs[0], pide)
             sumar_eventos_del_local(ctx, locs[0].nombre, datos)
+            sumar_promos_del_local(ctx, locs[0].nombre, datos)
             if not el.es_local_concreto:
                 datos.hechos["nota"] = (f"Es el ÚNICO local que encontré para «{el.busqueda or ctx.mensaje}»: "
                                         f"dilo así, con naturalidad, y da sus datos.")
@@ -241,6 +243,11 @@ async def _datos_de_flujo(ctx, el, d, flujo_obj) -> Datos:
     les suma lo que eligió el cerebro."""
     from any.conocimiento.areas import ficha_area
     datos = await flujo_obj.reunir(ctx)
+    if el.accion == "sorteos_promos" and (el.ids_promos or el.ids):
+        # 26/11: «¿qué promociones tiene Jumbo?» → solo las de Jumbo, cada una con su imagen
+        enfocar_promos(ctx, datos, [d.promos[i] for i in el.ids_promos if i in d.promos],
+                       [d.sorteos[i] for i in el.ids_promos if i in d.sorteos],
+                       [d.locales[i].id for i in el.ids if i in d.locales])
     if el.accion == "info":
         elegidos = []
         for k in el.info_ids:

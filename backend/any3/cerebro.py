@@ -240,6 +240,9 @@ async def elegir(ctx, d: Directorio) -> Eleccion:
         r = await _llamar(ctx, construir(ctx.db, d.hoy, compacto=True), modo)
     ctx.traza.paso("directorio", modo)
     e = validar(r.json(), d)
+    from any.conocimiento.texto import normalizar as _nz
+    if e.tambien_producto and re.search(r"\btennis\b", _nz(ctx.mensaje)) and "italy" not in _nz(ctx.mensaje):
+        e.tambien_producto = ""     # 26/11: «tennis» con doble n es SOLO la tienda Tennis (no vende calzado)
     if not e.es_local_concreto and (e.accion == "locales" or (e.accion == "no_hay" and getattr(ctx, "_any3_seguras", []))):
         await revisar_lista(ctx, d, e)
     return e

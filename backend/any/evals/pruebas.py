@@ -621,7 +621,7 @@ def test_locales_seleccion_sin_ruido():
     ninos = [r.local.nombre for r in seleccionar_relevantes(buscar_locales(db, "almacen de ropa para niños"))]
     assert "Offcorss" in ninos and "Tomaticos" in ninos and "Americanino" not in ninos
     zapatos = [r.local.nombre for r in seleccionar_relevantes(buscar_locales(db, "dime todos los almacenes de zapatos"))]
-    assert {"VILLA SHOES", "RIVANO", "Tennis"} <= set(zapatos)
+    assert {"VILLA SHOES", "RIVANO", "RAMONA FLOWERS"} <= set(zapatos)     # 26/11: Tennis ya no vende calzado
     assert seleccionar_relevantes(buscar_locales(db, "Q supermercados hay"))[0].local.nombre == "Jumbo"
     assert encontrar_local(db, "la barra").nombre == "La Barra 1516"
     assert encontrar_local(db, "12b").nombre == "12B Burger Angus"
@@ -1298,6 +1298,55 @@ def test_hilo_se_renueva_solo():
         assert est.cargar_estado(db, tel, ahora + timedelta(minutes=80)).ultimas_entidades == {}
     finally:
         borrar_datos(db, tel)
+
+
+def test_promos_de_un_local_con_imagenes():
+    """26/11 (Jumbo): «cuando pregunten por ofertas, promociones o descuentos, se envían estas imágenes». Las de un día
+    de la semana van primero si son de hoy, y de pasada solo se ofrecen ese día."""
+    import asyncio
+    from datetime import datetime
+    from any.config import ZONA_HORARIA
+    from any.flujos import sorteos_promos as sp
+    from any.flujos.base import Datos
+    from any.nucleo import promociones
+    from any.nucleo.estado import EstadoSesion
+    from any.nucleo.tipos import Contexto, Decision
+    from any.nucleo.trazas import Traza
+    from any.conocimiento.catalogo import locales
+    from models.marketing import Marketing
+    db = _db()
+    loc = next(l for l in locales(db) if not l.es_torre and not l.es_servicio)
+    jueves = datetime(2026, 11, 26, 18, 0, tzinfo=ZONA_HORARIA)
+    nuevas = [Marketing(title=f"Prueba {d} de algo", description=f"Todos los {d} en la tienda: 20% de descuento.",
+                        store_id=loc.id, priority=3, active=True, photo_url=f"https://x/{d}.jpg")
+              for d in ("lunes", "jueves")]
+    nuevas.append(Marketing(title="Prueba Black", description="40% en toda la tienda.", store_id=loc.id, priority=3,
+                            active=True, valid_until="30/11/2026", photo_url="https://x/black.jpg"))
+    db.add_all(nuevas)
+    db.commit()
+    try:
+        def ctx(msg):
+            c = Contexto(db=db, telefono="prueba-promos-local", nombre="x", mensaje=msg, ahora=jueves, historial=[],
+                         sesion_nueva=False, estado=EstadoSesion("prueba-promos-local"), traza=Traza("x", "x", "prueba"))
+            c.decision = Decision("locales", {"local": loc.nombre}, False, msg, "", "t")
+            return c
+        d = Datos()
+        sp.sumar_promos_del_local(ctx(f"¿{loc.nombre} tiene descuentos?"), loc.nombre, d)
+        titulos = [p["titulo"] for p in d.hechos["promociones_vigentes_de_este_local"]]
+        assert titulos.index("Prueba jueves de algo") < titulos.index("Prueba lunes de algo")
+        assert {a.url for a in d.adjuntos} >= {"https://x/lunes.jpg", "https://x/jueves.jpg", "https://x/black.jpg"}
+        d = Datos()
+        sp.sumar_promos_del_local(ctx(f"¿Dónde queda {loc.nombre}?"), loc.nombre, d)
+        titulos = [p["titulo"] for p in d.hechos.get("promociones_vigentes_de_este_local", [])]
+        assert not d.adjuntos and "Prueba lunes de algo" not in titulos and "Prueba jueves de algo" in titulos
+        d = asyncio.run(sp.SorteosPromos().reunir(ctx(f"promociones de {loc.nombre}")))
+        assert any(a.url == "https://x/black.jpg" for a in d.adjuntos) and "promociones" in d.hechos
+        pasada = [x[4]["nombre"] for x in promociones.vigentes(db, jueves.date())]
+        assert "Prueba jueves de algo" in pasada and "Prueba lunes de algo" not in pasada
+    finally:
+        for m in nuevas:
+            db.delete(m)
+        db.commit()
 
 
 # ── Mini corredor ─────────────────────────────────────────────────

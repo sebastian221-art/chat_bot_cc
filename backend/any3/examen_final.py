@@ -58,7 +58,7 @@ PRODUCTOS: list[tuple[str, set, set]] = [
     ("Tag para pagar peajes", {"Gopass"}, {"Nissan"}),
     ("Lavar el casco de la moto", {"King Helmets"}, {"Speed Clean Car"}),
     ("Paquete de viaje a Cartagena", {"Jottatravel"}, {"TOTTO"}),
-    ("Afiliarme a la caja de compensación", {"Parque Cajasan"}, {"Jottatravel"}),
+    ("Afiliarme a la caja de compensación", {"Cajasan Punto de Atención"}, {"Jottatravel"}),
     ("Crédito de una cooperativa", {"Comuldesa"}, {"Casino Diamonds"}),
     ("Retirar plata de Nequi", {"Paga Facil"}, {"Casino Diamonds"}),
     ("Jugar ruleta o tragamonedas", {"Casino Diamonds"}, {"Happylandia"}),

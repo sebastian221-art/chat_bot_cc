@@ -106,7 +106,11 @@ def vigentes(db, hoy: date) -> list[tuple]:
         if vigente(r.end_date, hoy):
             out.append(("raffle", r.id, r.priority or 3, hoy,
                         {"tipo": "sorteo", "nombre": r.name, "premio": suavizar(r.prize, nombres), "hasta": r.end_date}))
+    from ..conocimiento.vigencia import recurrencia
     for m in db.query(Marketing).filter(Marketing.active.is_(True)).all():
+        rec = recurrencia(m.title, m.description)
+        if rec and hoy.weekday() not in rec[1]:
+            continue        # «Jueves de Juguetería» (Jumbo) solo se ofrece de pasada el jueves
         if vigente(m.valid_until, hoy):
             out.append(("marketing", m.id, m.priority or 3, hoy,
                         {"tipo": "promocion", "nombre": m.title, "detalle": suavizar((m.description or "")[:160], nombres),

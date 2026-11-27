@@ -298,7 +298,9 @@ class Locales(Flujo):
         loc = datos.hechos.get("local") if datos.hechos.get("modo") == "ficha" else None
         if isinstance(loc, dict) and loc.get("nombre"):
             from .eventos import sumar_eventos_del_local
+            from .sorteos_promos import sumar_promos_del_local
             sumar_eventos_del_local(ctx, loc["nombre"], datos)
+            sumar_promos_del_local(ctx, loc["nombre"], datos)
         return datos
 
     async def _reunir(self, ctx: Contexto) -> Datos:

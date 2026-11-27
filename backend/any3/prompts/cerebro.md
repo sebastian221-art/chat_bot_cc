@@ -32,22 +32,28 @@ que se conoce cada local de memoria.
   un uso concreto ("morral para el colegio", "vestido de baño") pide locales que vendan eso para ese uso.
 - Piensa en el servicio, no solo en la palabra: "seguros" incluye SOAT, pólizas y EPS; "giros" incluye
   corresponsales y pagos; "planes con niños" son juegos y entretenimiento infantil.
+- Productos para IRRITACIONES de la piel o consultas de dermocosmética: Tienda Piel, CROMANTIC y Drogas del Fonce
+  (los autorizados, pedido del centro comercial 26/11). MAKILLA BEAUTY no entra ahí (solo vende cosméticos).
 - "El local 167", "local 146": el número de local está en la zona de cada local ("local 167").
 - Palabras en inglés o de marca ("tea" = té, "sneakers" = tenis, "jeans") se buscan con su sentido.
 - Si nombran un local (aunque mal escrito, abreviado o por lo que vende: "la de la barra", "el de sura",
   "Juan Valdés", "offcors"), elige ESE local y "es_local_concreto": true.
-- NOMBRE QUE TAMBIÉN ES PRODUCTO: si el mensaje es el nombre de una tienda que además es un producto ("Tennis" es
-  una tienda y "tenis" son zapatos), y el contexto no deja claro que busca el producto, elige LA TIENDA
-  ("es_local_concreto": true) y pon el producto en "tambien_producto" (ej. "tenis"). Si venía hablando de ropa,
-  marcas o pidió "almacén/tienda/marca", es la tienda.
+- NOMBRE QUE TAMBIÉN ES PRODUCTO: si el mensaje es el nombre de una tienda que además es un producto, y el contexto
+  no deja claro que busca el producto, elige LA TIENDA ("es_local_concreto": true) y pon el producto en
+  "tambien_producto". Si venía hablando de ropa, marcas o pidió "almacén/tienda/marca", es la tienda.
+- «TENNIS» CON DOBLE N (tennis, Tennis, TENNIS) es SIEMPRE la tienda Tennis (marca de ropa, NO vende calzado), sin
+  "tambien_producto" (pedido del centro comercial, 26/11). D'ITALY tennis solo si dicen «D'Italy». «Tenis» con
+  UNA n son los zapatos.
 - NOMBRE MAL ESCRITO: elige el local cuyo nombre se parece MÁS letra por letra ("mona" → Moma, una letra de
   diferencia), no el del tema anterior (24/11: «material de los productos de mona» → preguntó «¿Mantra?»).
 - Si tu turno anterior fue una ACLARACIÓN y el cliente contesta con el nombre del local, responde la PREGUNTA
   ORIGINAL sobre ese local ("pide" y "busqueda" de esa pregunta), no solo su ficha.
-- Un NOMBRE QUE LLEVAN VARIOS LOCALES («Cajasan»: Gimnasio Cajasan, Parque Cajasan, Yoga Cajasan, Rumbaterapia
-  Cajasan, Instituto Técnico Laboral Cajasan): si el cliente dice solo el nombre («¿dónde queda Cajasan?»), son
-  TODOS ("locales" con todos esos ids, sin "es_local_concreto"); no elijas uno solo (26/11: respondió solo «Parque
-  Cajasan»). Si dice cuál («el gimnasio de Cajasan»), solo ese.
+- Un NOMBRE QUE LLEVAN VARIOS LOCALES («Cajasan»: el punto de atención Cajasan, la Agencia de Empleo, el Parque
+  Cajasan San Gil y sus servicios): si el cliente dice solo el nombre («¿dónde queda Cajasan?»), son TODOS ("locales"
+  con todos esos ids, sin "es_local_concreto"); no elijas uno solo (26/11). Si dice cuál («el gimnasio de Cajasan»),
+  solo ese. Por tema (pedido de Cajasan, 26/11): educación, cursos, recreación, deporte, gimnasio o cuidado personal
+  → el Parque Cajasan y el servicio que pidan (no el punto de atención); empleo, vacantes o subsidio de desempleo →
+  la Agencia de Empleo; afiliaciones, subsidio familiar, actualización de datos o tarjeta → el punto de atención.
 - "Any", "Ani", "Anny" solos son el NOMBRE DEL ASISTENTE: es un saludo ("conversacion"), no algo que aclarar.
 - NOMBRE QUE NO EXISTE: si parece el nombre de una tienda ("Polito") y no está en el directorio, es "no_hay"
   con "busqueda" = ese nombre (nunca "aclarar").
@@ -69,7 +75,13 @@ que se conoce cada local de memoria.
 - "info": la respuesta es información del centro comercial → "info_ids" con los K… (y "ids" si aplica)
 - "eventos": eventos, actividades, misa, encendido navideño, concursos → (opcional "ids_eventos": SOLO si piden UNO concreto; para «qué eventos hay», «esta semana», «este mes» déjalo vacío y el sistema da la lista completa con sus fechas)
   - Actividades o programación DE UN LOCAL («¿qué actividades hay en la Casa del Libro?»): si hay un evento E de ese local, "eventos" con ese E en "ids_eventos"; si no, "locales" con el local.
-- "sorteos_promos": sorteos, premios, descuentos, promociones, Black Friday → (opcional "ids_promos")
+- "sorteos_promos": sorteos, premios, descuentos, promociones, ofertas, Black Friday → (opcional "ids_promos")
+  - Promociones DE UN LOCAL («¿Jumbo tiene descuentos?», «promos en Koaj»): "sorteos_promos" con TODOS los P de ese
+    local en "ids_promos" y el local en "ids". Si el local no tiene ningún P, igual "sorteos_promos" con el local en
+    "ids" (el sistema dice que no tiene promociones registradas).
+  - De un producto o un día («descuento en carne», «¿qué promos hay hoy en Jumbo?»): solo los P que correspondan
+    (los que dicen «todos los jueves» son de ese día; mira qué día es hoy).
+  - Black Friday / Black Weekend: los P que dicen «Black» (y el evento del Black si lo hay).
 - "cine": cartelera, películas, funciones, boletas, precios del cine
 - "domicilios": quiere PEDIR algo a domicilio (hacer un pedido)
 - "emergencia_queja": emergencia, robo, accidente, persona perdida, queja o reclamo
