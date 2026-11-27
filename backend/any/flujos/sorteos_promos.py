@@ -52,7 +52,8 @@ _DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domin
 # se envían estas imágenes»)
 PIDE_PROMOS = re.compile(r"\b(promo\w*|descuento\w*|dcto|dto|oferta\w*|rebaja\w*|black|friday|weekend|2x1|"
                          r"liquidacion\w*|en promocion|que te resuelven)\b|%")
-MAX_IMAGENES_PROMOS = 8
+MAX_IMAGENES_PROMOS = 8       # cuando piden promociones concretas
+MAX_IMAGENES_GENERAL = 3      # pregunta general: solo las de hoy (27/11: 8 imágenes «parece spam»)
 
 
 def dias_de_promo(m):
@@ -116,11 +117,21 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
             nombres = ", ".join(_DIAS[i] for i in sorted(pedidos))
             datos.hechos["dia_pedido"] = f"El cliente pregunta por {nombres}: responde solo con las de ese día, con detalle."
     promos = sorted(promos, key=lambda m: (not aplica_hoy(m, hoy), -(m.priority or 3)))
-    datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) for m in promos]
+    por_dia = any(dias_de_promo(m) for m in promos)
+    if especificas or not por_dia:
+        datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) for m in promos]
+    else:
+        # General con promociones por día: las de HOY con detalle; las de otros días, solo su título (que ya dice el
+        # día y el porcentaje), para que el texto las nombre TODAS sin volverse eterno.
+        datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) if aplica_hoy(m, hoy) else
+                               {k: v for k, v in ficha_promo(ctx.db, m, hoy).items() if k in ("titulo", "dias")}
+                               for m in promos]
     if especificas:
         con_imagen = promos
+    elif por_dia:
+        con_imagen = [m for m in promos if aplica_hoy(m, hoy)][:MAX_IMAGENES_GENERAL]   # las de hoy primero (ya ordenadas)
     else:
-        con_imagen = [m for m in promos if aplica_hoy(m, hoy)]      # las de hoy (y las que valen todos los días)
+        con_imagen = promos[:MAX_IMAGENES_GENERAL]
     imagenes = 0
     for m in con_imagen[:MAX_IMAGENES_PROMOS]:
         foto = foto_principal(ctx.db, "marketing", m.id, respaldo=getattr(m, "photo_url", None))
@@ -134,11 +145,15 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
     if not especificas and len(con_imagen) < len(promos):
         datos.hechos["como_ofrecer_mas"] = ("Al final ofrece en UNA línea: si quiere la imagen o el detalle de otro día o "
                                             "de una promoción, que te diga cuál.")
-    if any(dias_de_promo(m) for m in promos):
+    if por_dia:
         datos.hechos["como_responder_dias"] = (
-            f"Hoy es {_DIAS[hoy.weekday()]}. Algunas promociones son de un día de la semana («dias»): di primero las "
-            "que aplican hoy y luego las de los otros días, una línea por día (día: en qué y cuánto). Si el cliente "
-            "pregunta por un día o un producto (carne, vinos, aseo…), da solo la que corresponde, con su detalle.")
+            f"Hoy es {_DIAS[hoy.weekday()]}. Son promociones de un día de la semana («dias»). "
+            + ("Responde con el detalle de estas." if especificas or datos.hechos.get("dia_pedido") else
+               "Nómbralas TODAS: primero las de HOY (una línea cada una, con porcentaje y medio de pago) y después UNA "
+               "línea por cada uno de los otros días de la semana, en orden, con lo que trae ese día (ej. «Viernes: "
+               "charcutería 15% o 20% y vinos paga 2 lleva 3»). No omitas ningún día.")
+            + " Una promoción de otro día SIGUE VIGENTE: nunca digas que «no hay» o que «no está activa»; di qué día "
+              "aplica (ej. «el descuento en carne es los miércoles»).")
 
 
 def sumar_promos_del_local(ctx, nombre_local: str, datos: Datos) -> None:
@@ -204,8 +219,20 @@ def enfocar(ctx, datos: Datos, promos: list, sorteos: list, locales_ids: list) -
             if foto:
                 datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=s.name))
     if promos:
-        todas_del_local = {m.id for m in promos_de_locales(ctx.db, hoy, {m.store_id for m in promos})}
-        especificas = {m.id for m in promos} != todas_del_local     # eligió algunas (un producto, una promoción)
+        from ..conocimiento.texto import normalizar
+        msg = normalizar(ctx.mensaje)
+        tiendas = {m.store_id for m in promos if m.store_id}
+        todas_del_local = promos_de_locales(ctx.db, hoy, tiendas)
+        especificas = len(promos) <= 2      # «la de vinos», «descuento en carne»: esa(s), con su imagen
+        if len(tiendas) == 1 and (len(promos) >= 3 or dias_pedidos(ctx.mensaje, hoy)):
+            # 27/11: «¿Jumbo tiene promociones?» → el cerebro eligió 10 de 11 y salieron 8 imágenes. Pregunta general
+            # = TODAS las del local en el texto y solo las imágenes de hoy; con un día, todas las de ese día.
+            promos, especificas = todas_del_local or promos, False
+        if re.search(r"\bblack\b", msg):
+            # 27/11: «¿qué promociones hay por el Black?» → el cerebro dejó por fuera Koaj, YOYO, Americanino…
+            ya = {m.id for m in promos}
+            promos = promos + [m for m in promos_vigentes(ctx.db, hoy)
+                               if m.id not in ya and re.search(r"\bblack\b", normalizar(f"{m.title} {m.description}"))]
         mostrar_promos(ctx, datos, promos, especificas=especificas)
         if len(promos) == 1:
             datos.entidades["promo"] = promos[0].title

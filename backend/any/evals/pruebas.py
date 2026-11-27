@@ -1344,6 +1344,11 @@ def test_promos_de_un_local_con_imagenes():
         sp.sumar_promos_del_local(ctx(f"¿Dónde queda {loc.nombre}?"), loc.nombre, d)
         titulos = [p["titulo"] for p in d.hechos.get("promociones_vigentes_de_este_local", [])]
         assert not d.adjuntos and "Prueba lunes de algo" not in titulos and "Prueba jueves de algo" in titulos
+        # 27/11: el cerebro elige casi todas → es pregunta general: texto de todas, imágenes solo de hoy
+        c = ctx(f"¿{loc.nombre} tiene promociones?")
+        d = Datos()
+        sp.enfocar(c, d, nuevas, [], [loc.id])
+        assert len(d.hechos["promociones"]) == 3 and "https://x/lunes.jpg" not in {a.url for a in d.adjuntos}
         d = asyncio.run(sp.SorteosPromos().reunir(ctx(f"promociones de {loc.nombre}")))
         assert any(a.url == "https://x/black.jpg" for a in d.adjuntos) and "promociones" in d.hechos
         pasada = [x[4]["nombre"] for x in promociones.vigentes(db, jueves.date())]
