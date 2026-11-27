@@ -1334,7 +1334,12 @@ def test_promos_de_un_local_con_imagenes():
         sp.sumar_promos_del_local(ctx(f"¿{loc.nombre} tiene descuentos?"), loc.nombre, d)
         titulos = [p["titulo"] for p in d.hechos["promociones_vigentes_de_este_local"]]
         assert titulos.index("Prueba jueves de algo") < titulos.index("Prueba lunes de algo")
-        assert {a.url for a in d.adjuntos} >= {"https://x/lunes.jpg", "https://x/jueves.jpg", "https://x/black.jpg"}
+        # pregunta general: el texto de todas, pero solo las imágenes de las que aplican hoy (jueves)
+        assert {a.url for a in d.adjuntos} == {"https://x/jueves.jpg", "https://x/black.jpg"}
+        d = Datos()
+        sp.sumar_promos_del_local(ctx(f"¿Qué promociones tiene {loc.nombre} el lunes?"), loc.nombre, d)
+        assert [a.url for a in d.adjuntos] == ["https://x/lunes.jpg"]
+        assert [p["titulo"] for p in d.hechos["promociones_vigentes_de_este_local"]] == ["Prueba lunes de algo"]
         d = Datos()
         sp.sumar_promos_del_local(ctx(f"¿Dónde queda {loc.nombre}?"), loc.nombre, d)
         titulos = [p["titulo"] for p in d.hechos.get("promociones_vigentes_de_este_local", [])]

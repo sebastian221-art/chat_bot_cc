@@ -81,6 +81,8 @@ que se conoce cada local de memoria.
     "ids" (el sistema dice que no tiene promociones registradas).
   - De un producto o un día («descuento en carne», «¿qué promos hay hoy en Jumbo?»): solo los P que correspondan
     (los que dicen «todos los jueves» son de ese día; mira qué día es hoy).
+  - Más detalle de UNA promoción («la de vinos», «esa del jueves», «más info de esa»): solo ese P (el sistema manda
+    su imagen).
   - Black Friday / Black Weekend: los P que dicen «Black» (y el evento del Black si lo hay).
 - "cine": cartelera, películas, funciones, boletas, precios del cine
 - "domicilios": quiere PEDIR algo a domicilio (hacer un pedido)
