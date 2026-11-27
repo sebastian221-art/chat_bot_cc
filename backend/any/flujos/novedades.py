@@ -22,6 +22,18 @@ _TRES = (re.compile(r"\bevento\w*|\bactividad\w*|\bplanes\b"), re.compile(r"\bso
          re.compile(r"\bpromo\w*|\bdescuento\w*|\boferta\w*"))
 
 
+_TIEMPO = re.compile(r"\b(este mes|esta semana|hoy|manana|fin de semana|finde|diciembre|enero|navidad|vacaciones|"
+                     r"temporada|de nuevo|novedad\w*)\b")
+
+
+def es_pregunta_general_fuerte(mensaje: str) -> bool:
+    """Más estricta: con un periodo («este mes», «esta semana»…) y corta. Sirve para corregir al cerebro aunque haya
+    elegido locales («¿qué hay en el mall de zapatos?» NO entra: no dice periodo)."""
+    t = normalizar(mensaje)
+    return es_pregunta_general(mensaje) and bool(_TIEMPO.search(t)) and len(t.split()) <= 10 or \
+        sum(1 for r in _TRES if r.search(t)) >= 2
+
+
 def es_pregunta_general(mensaje: str) -> bool:
     t = normalizar(mensaje)
     if sum(1 for r in _TRES if r.search(t)) >= 2:       # «todo: eventos, sorteos o promociones»

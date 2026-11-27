@@ -1380,6 +1380,8 @@ def test_novedades_una_sola_foto():
     assert not novedades.es_pregunta_general("¿qué eventos hay este mes?")
     assert not novedades.es_pregunta_general("¿qué promociones hay en el mall?")
     assert novedades.es_pregunta_general("no me refiero a todo lo que hay para hacer eventos sorteos o promociones")
+    assert novedades.es_pregunta_general_fuerte("¿Qué hay este mes en el mall?")     # aunque el cerebro elija locales
+    assert not novedades.es_pregunta_general_fuerte("¿qué hay en el mall de zapatos?")
     from any3.harness import _limpiar_formato
     t = _limpiar_formato("• *Koaj* – 10 %\n\n📎 https://chatbotcc-production.up.railway.app/uploads/6a36.jpg  \n\n¿Algo más?")
     assert "uploads" not in t and "Koaj" in t and "¿Algo más?" in t

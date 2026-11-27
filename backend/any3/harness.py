@@ -28,7 +28,7 @@ from any.flujos import FLUJOS
 from any.flujos.base import Datos
 from any.flujos.eventos import sumar_eventos_del_local
 from any.flujos.sorteos_promos import enfocar as enfocar_promos, sumar_promos_del_local
-from any.flujos.novedades import es_pregunta_general, reunir as reunir_novedades
+from any.flujos.novedades import es_pregunta_general, es_pregunta_general_fuerte, reunir as reunir_novedades
 from any.llm import ErrorLLM
 from any.nucleo import estado as est
 from any.nucleo import guardias, mensajes, promociones
@@ -336,11 +336,13 @@ def _quitar_de_lista(ctx, datos: Datos, quitar: list[str], busqueda: str) -> Dat
 
 
 async def _responder(ctx, el, d) -> Respuesta:
-    if el.accion in ("aclarar", "conversacion", "info") and es_pregunta_general(ctx.mensaje):
+    if ((el.accion in ("aclarar", "conversacion", "info") and es_pregunta_general(ctx.mensaje))
+            or (el.accion in ("locales", "no_hay") and es_pregunta_general_fuerte(ctx.mensaje))):
         # 27/11: al repetir «¿qué hay este mes en el mall?» el cerebro pidió aclarar dos veces, aun cuando el
         # cliente dijo «todo lo que hay: eventos, sorteos o promociones». Eso se responde con todo junto.
         el.accion, el.aclaracion = "eventos", ""
         el.ids_eventos, el.ids_promos, el.ids = [], [], []
+        # (y al repetirla eligió «locales» con Ibiza Social Club como «el local nuevo del mes»)
         ctx.traza.alerta("pregunta general (qué hay en el centro comercial): eventos, sorteos y promociones juntos")
     if el.accion == "aclarar":
         # 12/11: «¿Podrías especificar a qué te refieres con 'Polito'?» salía seco, sin la voz de Any.

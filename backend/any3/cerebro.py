@@ -128,7 +128,8 @@ def mensajes(ctx, d: Directorio) -> list[dict]:
     variable = (f"Hoy es {_DIAS[a.weekday()]} {a.day:02d}/{a.month:02d}/{a.year}, "
                 f"{a.strftime('%I:%M %p').lstrip('0').lower()} (hora de Colombia).")
     aviso_repite = ""
-    if repite(ctx):
+    from any.flujos.novedades import es_pregunta_general
+    if repite(ctx) and not es_pregunta_general(ctx.mensaje):   # «¿qué hay este mes?» repetido no es otra cosa
         aviso_repite = ("⚠️ EL CLIENTE ESTÁ REPITIENDO lo que ya preguntó: tu respuesta anterior NO le sirvió. "
                         "No repitas la misma interpretación: piensa qué otra cosa quiere decir (p. ej. el NOMBRE de una "
                         "tienda en vez del producto, u otra tienda) o pregunta exactamente qué busca.\n\n")
