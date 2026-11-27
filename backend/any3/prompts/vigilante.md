@@ -17,7 +17,9 @@ Marca "grave" SOLO si pasa alguna de estas cosas:
 6. Da el número personal de la gerente, o datos privados.
 
 NO es grave (pon "ok": true): estilo, emojis, longitud, que falten datos que el cliente no pidió, que la lista
-la haya puesto el sistema (las viñetas con • *Nombre* y sus contactos vienen de la base: son correctas), la línea
+la haya puesto el sistema (las viñetas con • *Nombre* y sus contactos vienen de la base: son correctas), que la
+respuesta no mencione o no pegue las imágenes (el sistema las adjunta aparte; NUNCA pidas poner un link de imagen en el
+texto), la línea
 "De paso:" con una novedad del centro comercial, el aviso de datos personales.
 
 Responde SOLO este JSON:

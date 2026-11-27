@@ -120,6 +120,7 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
     if not especificas and len(promos) > 6 and len({m.store_id for m in promos}) > 2:
         # muchas de varios locales (el Black, «todas las del mall»): una línea por local, armada por código
         datos.hechos["promociones_por_local"] = resumen_por_local(ctx.db, promos, hoy)
+        datos.meta["sin_listas_anteriores"] = True
         datos.hechos["como_responder_lista"] = (
             "Nombra TODAS: una línea por local con «•», el nombre del local en negrita y su resumen de "
             "«promociones_por_local» tal cual (puedes acortar las palabras, no quitar promociones). No agregues "
@@ -318,6 +319,7 @@ class SorteosPromos(Flujo):
             if len(promos) > 6:
                 # 27/11: una línea por local, armada por código (antes 35 líneas y 20 s)
                 hechos["promociones_por_local"] = resumen_por_local(db, promos, hoy)
+                datos.meta["sin_listas_anteriores"] = True
                 hechos["como_responder_lista"] = (
                     "Nombra TODAS: una línea por local con «•», el nombre del local en negrita y su resumen de "
                     "«promociones_por_local» tal cual (puedes acortar las palabras, no quitar promociones). Las del "

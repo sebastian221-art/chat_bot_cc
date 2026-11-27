@@ -18,8 +18,16 @@ _CATEGORIA = re.compile(r"\b(evento\w*|promo\w*|descuento\w*|oferta\w*|sorteo\w*
                         r"comer|comida|restaurante\w*|tienda\w*|local\w*|ropa|black)\b")
 
 
+_TRES = (re.compile(r"\bevento\w*|\bactividad\w*|\bplanes\b"), re.compile(r"\bsorteo\w*|\brifa\w*"),
+         re.compile(r"\bpromo\w*|\bdescuento\w*|\boferta\w*"))
+
+
 def es_pregunta_general(mensaje: str) -> bool:
     t = normalizar(mensaje)
+    if sum(1 for r in _TRES if r.search(t)) >= 2:       # «todo: eventos, sorteos o promociones»
+        return True
+    if re.search(r"\btodo lo que hay\b|\bque hay para hacer\b|\btodo lo del mes\b", t):
+        return True
     return bool(_PREGUNTA.search(t) and _PERIODO.search(t) and not _CATEGORIA.search(t))
 
 
@@ -48,6 +56,7 @@ async def reunir(ctx) -> Datos:
         "mensajes anteriores). Aunque ya lo hayas respondido antes en la conversación, ármalo de nuevo con ESTOS "
         "datos: no copies la respuesta anterior. Al final, una línea: si quiere más de alguno, que te diga cuál.")
     datos.meta["sin_promo"] = True
+    datos.meta["sin_listas_anteriores"] = True
     la_mas_actual.poner(datos, la_mas_actual.elegir(ctx.db, hoy, eventos=evs, sorteos=sorteos, promos=promos),
                         len(evs) + len(sorteos) + len(promos))
     datos.hechos.pop("como_ofrecer_mas", None)   # ya va en como_responder

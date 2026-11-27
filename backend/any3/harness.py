@@ -336,6 +336,12 @@ def _quitar_de_lista(ctx, datos: Datos, quitar: list[str], busqueda: str) -> Dat
 
 
 async def _responder(ctx, el, d) -> Respuesta:
+    if el.accion in ("aclarar", "conversacion", "info") and es_pregunta_general(ctx.mensaje):
+        # 27/11: al repetir «¿qué hay este mes en el mall?» el cerebro pidió aclarar dos veces, aun cuando el
+        # cliente dijo «todo lo que hay: eventos, sorteos o promociones». Eso se responde con todo junto.
+        el.accion, el.aclaracion = "eventos", ""
+        el.ids_eventos, el.ids_promos, el.ids = [], [], []
+        ctx.traza.alerta("pregunta general (qué hay en el centro comercial): eventos, sorteos y promociones juntos")
     if el.accion == "aclarar":
         # 12/11: «¿Podrías especificar a qué te refieres con 'Polito'?» salía seco, sin la voz de Any.
         ctx.decision = Decision("conversacion", {}, False, el.consulta, el.razon, "any3")
@@ -454,6 +460,10 @@ def _limpiar_formato(t: str, es_lista: bool = True) -> str:
     «• *Local*» (así las pone la lista del sistema); los enlaces falsos se quitan siempre."""
     if not t:
         return t
+    # 27/11: el vigilante pidió «adjunta la imagen» y el redactor pegó «📎 https://…/uploads/….jpg» en el texto;
+    # las imágenes van aparte, un link a nuestras propias fotos nunca va en el texto
+    t = re.sub(r"[^\S\n]*(?:📎|🖼️?|📷)?[^\S\n]*(?:\[[^\]\n]*\]\()?https?://\S+/uploads/\S+?\.(?:jpe?g|png|webp|gif)\)?",
+               "", t, flags=re.I)
     # 24/11: la leyenda interna de la foto se colaba al texto: «(foto: JUMBO)», «*foto: Tru*»
     t = re.sub(r"\s*[(\[]\s*\*?foto:\s*[^)\]\n]{1,60}[)\]]", "", t, flags=re.I)
     t = re.sub(r"[:\s]*\*foto:\s*[^*\n]{1,60}\*", "", t, flags=re.I)

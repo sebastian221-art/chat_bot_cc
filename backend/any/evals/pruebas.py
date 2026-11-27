@@ -1379,6 +1379,10 @@ def test_novedades_una_sola_foto():
     assert novedades.es_pregunta_general("que planes hay para el fin de semana en el centro comercial")
     assert not novedades.es_pregunta_general("¿qué eventos hay este mes?")
     assert not novedades.es_pregunta_general("¿qué promociones hay en el mall?")
+    assert novedades.es_pregunta_general("no me refiero a todo lo que hay para hacer eventos sorteos o promociones")
+    from any3.harness import _limpiar_formato
+    t = _limpiar_formato("• *Koaj* – 10 %\n\n📎 https://chatbotcc-production.up.railway.app/uploads/6a36.jpg  \n\n¿Algo más?")
+    assert "uploads" not in t and "Koaj" in t and "¿Algo más?" in t
     db = _db()
     jueves = datetime(2026, 11, 26, 18, 0, tzinfo=ZONA_HORARIA)
     ev_hoy = Event(name="Prueba evento de hoy", date="26/11/2026", time="5:00 p. m.", location="Plazoleta",

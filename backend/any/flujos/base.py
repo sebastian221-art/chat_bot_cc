@@ -117,6 +117,10 @@ class Flujo:
             if t.rol != "user":   # la novedad del día, el aviso de datos y el recordatorio del pedido no son el tema
                 texto = "\n".join(l for l in texto.split("\n")
                                   if not re.search(r"(?i)de paso|ley 1581|sigue abierto", l)).strip() or texto
+                if datos.meta.get("sin_listas_anteriores") and texto.count("\n•") + texto.count("\n- ") >= 6:
+                    # 27/11: al repetir «¿qué promociones hay?», el redactor copiaba su lista anterior (con datos
+                    # que ya no venían) en vez de armarla con los de este turno
+                    texto = "(aquí respondiste con una lista; ya no aplica: usa solo los datos de este turno)"
             msgs.append({"role": t.rol, "content": texto})
         consulta = ctx.decision.consulta if ctx.decision and ctx.decision.consulta else ""
         contenido = ctx.mensaje
