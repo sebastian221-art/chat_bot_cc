@@ -26,8 +26,7 @@ def es_pregunta_general(mensaje: str) -> bool:
 async def reunir(ctx) -> Datos:
     from . import la_mas_actual
     from .eventos import Eventos, eventos_vigentes
-    from .sorteos_promos import SorteosPromos, dias_de_promo, promos_vigentes, sorteos_vigentes
-    from ..conocimiento.catalogo import local_por_id
+    from .sorteos_promos import SorteosPromos, promos_vigentes, sorteos_vigentes
     hoy = ctx.ahora.date()
     datos = await Eventos().reunir(ctx)
     sp = await SorteosPromos().reunir(ctx)
@@ -37,20 +36,16 @@ async def reunir(ctx) -> Datos:
         datos.hechos.pop(k, None)
     datos.hechos["sorteos_vigentes"] = sp.hechos.get("sorteos_vigentes") or "no hay sorteos vigentes"
     datos.hechos["registro_de_facturas"] = sp.hechos.get("registro_de_facturas")
-    por_local: dict[str, list] = {}
-    for m in promos:
-        loc = local_por_id(ctx.db, m.store_id) if m.store_id else None
-        rec = dias_de_promo(m)
-        dia_en_titulo = re.search(r"\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\b", normalizar(m.title))
-        linea = m.title + (f" ({rec[0]})" if rec and not dia_en_titulo else "")
-        por_local.setdefault(loc.nombre if loc else "Centro Comercial El Puente", []).append(linea)
+    from .sorteos_promos import resumen_por_local
+    por_local = resumen_por_local(ctx.db, promos, hoy)
     datos.hechos["promociones_por_local"] = por_local or "no hay promociones vigentes"
     datos.hechos["como_responder"] = (
         "El cliente pregunta qué hay en el centro comercial (en general o en un periodo). Responde en tres bloques "
-        "cortos, cada uno con su título en negrita: *Eventos* (todos los que faltan en el periodo que pide, una línea "
-        "cada uno con su fecha), *Sorteos* (una línea cada uno, con el registro de facturas) y *Promociones* (UNA "
-        "línea por local con lo principal; si un local tiene promociones por día de la semana, resúmelas en esa "
-        "línea). No omitas ninguno. Al final, una línea: si quiere más de alguno, que te diga cuál.")
+        "cortos, cada uno con su título en negrita: *Eventos* (todos los de «eventos_vigentes» que faltan en el periodo "
+        "que pide, una línea cada uno con su fecha), *Sorteos* (una línea cada uno, con el registro de facturas) y "
+        "*Promociones* (UNA línea por local con su resumen de «promociones_por_local» tal cual; puedes acortar las "
+        "palabras, no quitar promociones). No omitas ninguno y no agregues nada que no esté en estos datos (ni de "
+        "mensajes anteriores). Al final, una línea: si quiere más de alguno, que te diga cuál.")
     datos.meta["sin_promo"] = True
     la_mas_actual.poner(datos, la_mas_actual.elegir(ctx.db, hoy, eventos=evs, sorteos=sorteos, promos=promos),
                         len(evs) + len(sorteos) + len(promos))

@@ -117,7 +117,14 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
             datos.hechos["dia_pedido"] = f"El cliente pregunta por {nombres}: responde solo con las de ese día, con detalle."
     promos = sorted(promos, key=lambda m: (not aplica_hoy(m, hoy), -(m.priority or 3)))
     por_dia = any(dias_de_promo(m) for m in promos)
-    if especificas or not por_dia:
+    if not especificas and len(promos) > 6 and len({m.store_id for m in promos}) > 2:
+        # muchas de varios locales (el Black, «todas las del mall»): una línea por local, armada por código
+        datos.hechos["promociones_por_local"] = resumen_por_local(ctx.db, promos, hoy)
+        datos.hechos["como_responder_lista"] = (
+            "Nombra TODAS: una línea por local con «•», el nombre del local en negrita y su resumen de "
+            "«promociones_por_local» tal cual (puedes acortar las palabras, no quitar promociones). No agregues "
+            "detalles que no estén ahí.")
+    elif especificas or not por_dia:
         datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) for m in promos]
     else:
         # General con promociones por día: las de HOY con detalle; las de otros días, solo su título (que ya dice el
@@ -149,6 +156,37 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
                "charcutería 15% o 20% y vinos paga 2 lleva 3»). No omitas ningún día.")
             + " Una promoción de otro día SIGUE VIGENTE: nunca digas que «no hay» o que «no está activa»; di qué día "
               "aplica (ej. «el descuento en carne es los miércoles»).")
+
+
+def resumen_por_local(db, promos: list, hoy) -> dict:
+    """27/11: la lista general del centro comercial salió con 35 líneas (8 de Jumbo). Una línea lista por local:
+    «Jumbo»: «Lunes de Mercado y Aseo (20% con Tarjeta Cencosud); Martes de …» · «Koaj»: «Black: del 10% al 50% …;
+    Jeans desde $79.900». Las del centro comercial (sin local) llevan su descripción corta, porque el título solo
+    («Mensualidad de parqueadero») no dice nada."""
+    grupos: dict[str, list] = {}
+    for m in promos:
+        loc = local_por_id(db, m.store_id) if m.store_id else None
+        grupos.setdefault(loc.nombre if loc else "", []).append(m)
+    out = {}
+    for nombre, ms in grupos.items():
+        from .la_mas_actual import _cercania_promo
+        ms = sorted(ms, key=lambda m: (_cercania_promo(m, hoy), m.id or 0))   # las de hoy y luego por día de la semana
+        partes = []
+        for m in ms:
+            t = m.title.strip()
+            if nombre:
+                t = re.sub(rf"^(?:{re.escape(nombre)}\s*:\s*)", "", t, flags=re.I)
+                t = re.sub(rf"^(Black|Descuentos?)\s+en\s+{re.escape(nombre)}\s*:\s*", r"\1: ", t, flags=re.I)
+                t = re.sub(rf"^{re.escape(nombre)}\s*:\s*", "", t, flags=re.I)
+            if not nombre or not re.search(r"\d", t):
+                # el título solo («Cinelandia», «Mensualidad de parqueadero») no dice nada: va su descripción corta
+                corta = (m.description or "").strip().split(". ")[0][:140]
+                t = f"{t}: {corta}" if corta and corta.lower() not in t.lower() else t
+            if m.valid_until and nombre:
+                t += f" (hasta el {m.valid_until})"
+            partes.append(t)
+        out[nombre or "Centro Comercial El Puente"] = "; ".join(partes)
+    return out
 
 
 def sumar_promos_del_local(ctx, nombre_local: str, datos: Datos) -> None:
@@ -277,11 +315,16 @@ class SorteosPromos(Flujo):
             mostrar_promos(ctx, datos, self._del_local(ctx, promos))
         else:
             hechos["sorteos_vigentes"] = [ficha_sorteo(x) for x in sorteos] or "no hay sorteos vigentes"
-            hechos["promociones_vigentes"] = [ficha_promo(db, x, hoy) for x in promos] or "no hay promociones vigentes"
             if len(promos) > 6:
+                # 27/11: una línea por local, armada por código (antes 35 líneas y 20 s)
+                hechos["promociones_por_local"] = resumen_por_local(db, promos, hoy)
                 hechos["como_responder_lista"] = (
-                    "Son muchas promociones: agrúpalas por local, una línea por local con lo principal (porcentaje y "
-                    "hasta cuándo). Las de un día de la semana («dias») van con su día.")
+                    "Nombra TODAS: una línea por local con «•», el nombre del local en negrita y su resumen de "
+                    "«promociones_por_local» tal cual (puedes acortar las palabras, no quitar promociones). Las del "
+                    "Centro Comercial El Puente primero. No agregues detalles que no estén ahí.")
+            else:
+                hechos["promociones_vigentes"] = ([ficha_promo(db, x, hoy) for x in promos]
+                                                  or "no hay promociones vigentes")
             # Lista general: el texto con todos y UNA imagen, la más actual (pedidos 11/11 y 27/11)
             from . import la_mas_actual
             la_mas_actual.poner(datos, la_mas_actual.elegir(db, hoy, sorteos=sorteos, promos=promos),

@@ -85,6 +85,8 @@ que se conoce cada local de memoria.
     (los que dicen «todos los jueves» son de ese día; mira qué día es hoy).
   - Más detalle de UNA promoción («la de vinos», «esa del jueves», «más info de esa»): solo ese P (el sistema manda
     su imagen).
+  - TODAS las del centro comercial («¿qué promociones hay en el mall?»): "ids_promos" VACÍO (el sistema da la lista
+    completa agrupada por local); no las enumeres.
   - Black Friday / Black Weekend: los P que dicen «Black» (y el evento del Black si lo hay).
 - "cine": cartelera, películas, funciones, boletas, precios del cine
 - "domicilios": quiere PEDIR algo a domicilio (hacer un pedido)
