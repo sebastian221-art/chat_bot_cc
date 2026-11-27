@@ -321,7 +321,8 @@ class SorteosPromos(Flujo):
                 hechos["como_responder_lista"] = (
                     "Nombra TODAS: una línea por local con «•», el nombre del local en negrita y su resumen de "
                     "«promociones_por_local» tal cual (puedes acortar las palabras, no quitar promociones). Las del "
-                    "Centro Comercial El Puente primero. No agregues detalles que no estén ahí.")
+                    "Centro Comercial El Puente primero. No agregues detalles que no estén ahí. Aunque ya hayas "
+                    "respondido esto antes en la conversación, ármala de nuevo con ESTOS datos: no copies la anterior.")
             else:
                 hechos["promociones_vigentes"] = ([ficha_promo(db, x, hoy) for x in promos]
                                                   or "no hay promociones vigentes")

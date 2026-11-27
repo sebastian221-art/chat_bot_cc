@@ -45,7 +45,8 @@ async def reunir(ctx) -> Datos:
         "que pide, una línea cada uno con su fecha), *Sorteos* (una línea cada uno, con el registro de facturas) y "
         "*Promociones* (UNA línea por local con su resumen de «promociones_por_local» tal cual; puedes acortar las "
         "palabras, no quitar promociones). No omitas ninguno y no agregues nada que no esté en estos datos (ni de "
-        "mensajes anteriores). Al final, una línea: si quiere más de alguno, que te diga cuál.")
+        "mensajes anteriores). Aunque ya lo hayas respondido antes en la conversación, ármalo de nuevo con ESTOS "
+        "datos: no copies la respuesta anterior. Al final, una línea: si quiere más de alguno, que te diga cuál.")
     datos.meta["sin_promo"] = True
     la_mas_actual.poner(datos, la_mas_actual.elegir(ctx.db, hoy, eventos=evs, sorteos=sorteos, promos=promos),
                         len(evs) + len(sorteos) + len(promos))
