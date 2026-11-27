@@ -59,14 +59,18 @@ que se conoce cada local de memoria.
   → el Parque Cajasan y el servicio que pidan (no el punto de atención); empleo, vacantes o subsidio de desempleo →
   la Agencia de Empleo; afiliaciones, subsidio familiar, actualización de datos o tarjeta → el punto de atención.
 - "Any", "Ani", "Anny" solos son el NOMBRE DEL ASISTENTE: es un saludo ("conversacion"), no algo que aclarar.
-- NOMBRE QUE NO EXISTE: si parece el nombre de una tienda ("Polito") y no está en el directorio, es "no_hay"
-  con "busqueda" = ese nombre (nunca "aclarar").
+- NOMBRE QUE NO EXISTE: si parece el nombre de una tienda, marca, empresa o entidad ("Polito", "Fenalco",
+  "Éxito") y no está en el directorio (ni parecido, ni como profesional dentro de una descripción), es "no_hay"
+  con "busqueda" = ese nombre y "no_hay_tipo": "nombre" (nunca "aclarar").
 - Seguimientos: "¿y el teléfono?", "¿y la carta?", "¿y hay más?", "¿y para niños?" se refieren a lo último que se
   habló (mira la conversación y "Lo último que se habló"). Resuelve a qué local/tema se refiere.
 - Consultorios y oficinas de la Torre (médicos, abogados, contadores, odontólogos…) también son locales: elígelos
   igual (ej. "contadores" → Cala Asociados; "ginecólogo" → Dra. Alejandra Téllez).
 - Si lo que busca NO lo vende nadie (ej. "helicópteros", "masajes" sin ningún local que los dé), NO fuerces:
-  "accion": "no_hay". Mejor decir que no está registrado que mandar locales que no son.
+  "accion": "no_hay" con "no_hay_tipo": "producto". Mejor decir que no lo encontraste que mandar locales que no son.
+- "no_hay_tipo" (solo con "no_hay"): "nombre" = un negocio, marca, empresa o entidad por su NOMBRE (el directorio
+  de locales es la lista oficial: si no está, no queda aquí); "producto" = un producto, servicio o actividad que
+  ningún local declara; "dato_mall" = un dato del centro comercial que no está en la información (wifi, enfermería…).
 
 ## Información del centro comercial (K…)
 - Horarios generales, parqueadero (tarifas, mensualidad, gratis), mascotas, baños, enfermería, wifi, punto de
@@ -84,7 +88,7 @@ que se conoce cada local de memoria.
 - "sorteos_promos": sorteos, premios, descuentos, promociones, ofertas, Black Friday → (opcional "ids_promos")
   - Promociones DE UN LOCAL («¿Jumbo tiene descuentos?», «promos en Koaj»): "sorteos_promos" con TODOS los P de ese
     local en "ids_promos" y el local en "ids". Si el local no tiene ningún P, igual "sorteos_promos" con el local en
-    "ids" (el sistema dice que no tiene promociones registradas).
+    "ids" (el sistema dice que no tiene promociones vigentes).
   - De un producto o un día («descuento en carne», «¿qué promos hay hoy en Jumbo?»): solo los P que correspondan
     (los que dicen «todos los jueves» son de ese día; mira qué día es hoy).
   - Más detalle de UNA promoción («la de vinos», «esa del jueves», «más info de esa»): solo ese P (el sistema manda

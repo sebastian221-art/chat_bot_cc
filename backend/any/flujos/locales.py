@@ -552,7 +552,7 @@ class Locales(Flujo):
                 datos = self._datos_lista(parecidos, termino, pide)
                 lineas = {l.nombre: linea_consultorio(l) for l in parecidos}
                 datos.meta.update(lista="\n".join(lineas.values()), lineas_equidad=lineas, lista_equidad=list(lineas))
-                datos.hechos["nota"] = (f"No hay un local o consultorio llamado así registrado. Dilo en una frase y "
+                datos.hechos["nota"] = (f"No hay un local o consultorio con ese nombre en el centro comercial. Dilo en una frase (sin «no lo tengo registrado») y "
                                         f"ofrece estos consultorios de la Torre Médica que hacen algo parecido.")
                 if len(termino.split()) > 4:      # no recordar la pregunta entera como «categoría»
                     datos.entidades.pop("categoria", None)

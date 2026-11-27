@@ -223,14 +223,12 @@ def _datos(ctx, el, d) -> tuple[str, Datos | None]:
         return flujo, datos
 
     if el.accion == "no_hay":
+        # 27/11 (administración del centro comercial): «no lo tengo registrado» suena a «la administración no cargó
+        # ese dato». Se responde según QUÉ no se encontró (ver no_encontrado.py).
+        from any.conocimiento.no_encontrado import como_responder_no_hay
+        tipo, como, extra = como_responder_no_hay(ctx, el)
         hechos = {"modo": "info_relacionada" if info else "sin_resultados", "busqueda": el.busqueda or ctx.mensaje,
-                  "linea_del_centro_comercial": LINEA_MALL,
-                  "como_responder": ("Di con calidez que no lo tienes registrado en el centro comercial (sin inventar "
-                                     "alternativas). Si el cliente ya dijo claro qué busca (un producto o servicio, ej. "
-                                     "«veterinario»), NO le preguntes qué busca: ofrece la línea del centro comercial "
-                                     "para confirmarlo y ayuda con otra cosa. Si el pedido es vago, pregunta qué necesita. "
-                                     "Si es el nombre de una tienda, sugiere confirmarlo en el Punto de Información o en "
-                                     "la línea del centro comercial.")}
+                  "que_no_se_encontro": tipo, "linea_del_centro_comercial": LINEA_MALL, "como_responder": como, **extra}
         if info:
             hechos["info_oficial_relacionada"] = info
         return flujo, Datos(hechos=hechos, entidades={"categoria": el.busqueda} if el.busqueda else {})
@@ -531,7 +529,7 @@ def _linea_tambien(el, d, texto: str) -> str:
     if not nombres:
         return texto
     linea = ("También podrías preguntar en " + ", ".join(f"*{n}*" for n in nombres[:-1])
-             + (" o " if len(nombres) > 1 else "") + f"*{nombres[-1]}*" + " (no lo tienen registrado; confírmalo por WhatsApp).")
+             + (" o " if len(nombres) > 1 else "") + f"*{nombres[-1]}*" + " (confírmalo con ellos por WhatsApp).")
     lineas = texto.split("\n")
     ult = max((i for i, l in enumerate(lineas) if l.strip().startswith(("👉", "•"))), default=None)
     if ult is None:

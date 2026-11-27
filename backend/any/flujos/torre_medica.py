@@ -163,8 +163,8 @@ class TorreMedica(Flujo):
         if not en_numero:
             hechos["modo"] = "numero_sin_registro"
             hechos["nota"] = (f"No hay ninguna oficina o consultorio registrado con el número {numero} en el directorio. "
-                              "NO digas que está vacía (puede que no esté registrada): di que no la tienes en el "
-                              "directorio y ofrece la línea del centro comercial 317 432 0138.")
+                              "NO digas que está vacía: di que de esa oficina no tienes información y que en la línea del "
+                              "centro comercial (317 432 0138) te orientan. Sin «registrado» ni «directorio».")
             return Datos(hechos=hechos, meta={})
         hechos["modo"] = "coinciden"
         hechos["busqueda"] = f"oficina {numero}"

@@ -512,6 +512,11 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
     t = formato_whatsapp(t)
     t = quitar_saludo_repetido(ctx, t)
     t = quitar_afirmaciones_falsas(ctx, t)
+    try:        # 27/11: «no lo tengo registrado» suena a que la administración no cargó el dato
+        from ..conocimiento.no_encontrado import suavizar
+        t = suavizar(t)
+    except Exception:
+        pass
     t = quitar_numeros_privados(ctx, t)
     try:
         from ..flujos.locales import quitar_rubros_como_lugar

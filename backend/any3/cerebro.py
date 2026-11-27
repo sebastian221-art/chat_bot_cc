@@ -41,6 +41,7 @@ class Eleccion:
     descartados: list = field(default_factory=list)   # IDs que la IA dio y no existen (para la traza)
     tambien_producto: str = ""                         # el nombre de la tienda también es un producto («Tennis»)
     tambien: list = field(default_factory=list)        # locales que podrían tenerlo pero no lo declaran
+    no_hay_tipo: str = ""                              # nombre | producto | dato_mall (27/11, ver harness)
 
     def dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items() if v not in (None, "", [], False)}
@@ -169,7 +170,8 @@ def validar(j: dict, d: Directorio) -> Eleccion:
                  busqueda=str(j.get("busqueda") or "").strip()[:80], consulta=str(j.get("consulta") or "").strip()[:300],
                  certeza=str(j.get("certeza") or "alta").strip().lower(), aclaracion=str(j.get("aclaracion") or "").strip(),
                  razon=str(j.get("razon") or "").strip()[:300], descartados=descartados,
-                 tambien_producto=str(j.get("tambien_producto") or "").strip()[:60])
+                 tambien_producto=str(j.get("tambien_producto") or "").strip()[:60],
+                 no_hay_tipo=str(j.get("no_hay_tipo") or "").strip().lower()[:20])
     if e.accion == "locales" and not e.ids:
         e.accion = "info" if e.info_ids else "no_hay"
     if e.accion == "info" and not e.info_ids and e.ids:

@@ -1441,6 +1441,36 @@ def test_fallas_del_27_11():
     assert promociones._corto("Uno dos tres. Cuatro cinco seis siete ocho nueve diez once doce.", 20).endswith(".")
 
 
+def test_no_encontrado_segun_que():
+    """27/11 (administración): nada de «no lo tengo registrado». Un negocio por su nombre → «no queda aquí»;
+    un producto → «no encontré un local que lo ofrezca»; un dato del centro comercial → Punto de Información."""
+    from types import SimpleNamespace as N
+    from any.conocimiento.no_encontrado import como_responder_no_hay, suavizar, tipo_de_no_hay
+    from models.store import Store
+    db = _db()
+    s = Store(name="Prueba Fenalcito", category="Local Comercial", floor="Nivel 1", location_hint="", active=False)
+    db.add(s)
+    db.commit()
+    try:
+        pasos = []
+        ctx = N(db=db, mensaje="¿Prueba Fenalcito queda en el cc?", traza=N(paso=lambda *a: pasos.append(a)))
+        el = N(busqueda="Prueba Fenalcito", no_hay_tipo="")
+        assert tipo_de_no_hay(ctx, el)[0] == "nombre"
+        tipo, como, _ = como_responder_no_hay(ctx, el)
+        assert "no queda en el Centro Comercial El Puente" in como and pasos and pasos[0][0] == "no_queda_aqui"
+        ctx.mensaje = "¿dónde venden repuestos de lavadora?"
+        assert tipo_de_no_hay(ctx, N(busqueda="repuestos de lavadora", no_hay_tipo=""))[0] == "producto"
+        ctx.mensaje = "¿hay wifi?"
+        assert tipo_de_no_hay(ctx, N(busqueda="wifi", no_hay_tipo=""))[0] == "dato_mall"
+        assert tipo_de_no_hay(ctx, N(busqueda="Éxito", no_hay_tipo="nombre"))[0] == "nombre"
+    finally:
+        db.delete(s)
+        db.commit()
+    t = suavizar("¡Uy! La Dra. X no está registrada en nuestro directorio del Centro Comercial El Puente.")
+    assert "registrad" not in t and "directorio" not in t
+    assert suavizar("Mira el directorio de la Torre Médica") == "Mira el directorio de la Torre Médica"
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

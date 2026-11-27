@@ -239,7 +239,7 @@ def enfocar(ctx, datos: Datos, promos: list, sorteos: list, locales_ids: list) -
             nombres = [l.nombre for l in (local_por_id(ctx.db, i) for i in locales_ids) if l]
             for k in ("promociones_vigentes", "como_responder_lista"):
                 datos.hechos.pop(k, None)
-            datos.hechos["nota"] = (f"{', '.join(nombres)} no tiene promociones registradas en el centro comercial. "
+            datos.hechos["nota"] = (f"{', '.join(nombres)} no tiene promociones vigentes en el centro comercial. "
                                     "Dilo así, sin inventar, y sugiere preguntarle al local por su WhatsApp. Los "
                                     "sorteos del centro comercial sí aplican a sus facturas.")
             return
