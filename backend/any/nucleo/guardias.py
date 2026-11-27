@@ -466,6 +466,28 @@ def quitar_saludo_repetido(ctx: Contexto, t: str) -> str:
     return resto[:1].upper() + resto[1:]
 
 
+def _nucleo_piso(frase: str) -> str:
+    t = normalizar(frase)
+    t = re.sub(r"^(?:en el|en|del|el)\s+", "", t.strip(" ()"))
+    return t.strip()
+
+
+def _pisos_de_locales_nombrados(ctx, texto: str) -> set:
+    """Pisos que dicen los datos (descripción, zona, piso) de los locales que nombra la respuesta."""
+    try:
+        from ..conocimiento.catalogo import locales
+        nt = normalizar(texto)
+        out = set()
+        for l in locales(ctx.db):
+            if len(l.nombre) > 3 and normalizar(l.nombre) in nt:
+                dato = f"{l.descripcion or ''} {l.zona or ''} {l.piso or ''}"
+                for m in list(_PISO.finditer(dato)) + list(_PISO_ORDINAL.finditer(dato)):
+                    out.add(_nucleo_piso(m.group(0)))
+        return out
+    except Exception:
+        return set()
+
+
 def _zonas_con_piso(ctx) -> set:
     """Zonas oficiales (las del dato «zona» de cada local) que nombran un piso: «3er Piso», «Cajasan Local 301»."""
     try:
@@ -508,8 +530,22 @@ def revisar_salida(ctx: Contexto, r: Respuesta) -> Respuesta:
             if n:
                 guardadas[marca] = z
         if _PISO.search(t) or _PISO_ORDINAL.search(t):
-            ctx.traza.alerta(f"se quitó mención de piso/nivel: {_PISO.findall(t) + _PISO_ORDINAL.findall(t)}")
-            t = _PISO_ORDINAL.sub("", _PISO.sub("", t))
+            # 27/11: «¿En qué piso está el pádel?» → su descripción dice «rooftop (sexto piso…)» y se borraba («está en
+            # el rooftop,,»). Un piso que dicen los datos del local que se nombra se deja.
+            del_dato = _pisos_de_locales_nombrados(ctx, t)
+            quitados = []
+
+            def _quitar(m):
+                nucleo = _nucleo_piso(m.group(0))
+                if nucleo and nucleo in del_dato:
+                    return m.group(0)
+                quitados.append(m.group(0))
+                return ""
+            t = _PISO_ORDINAL.sub(_quitar, _PISO.sub(_quitar, t))
+            if quitados:
+                ctx.traza.alerta(f"se quitó mención de piso/nivel: {quitados}")
+            t = re.sub(r"[ \t]*,[ \t]*,", ",", t)
+            t = re.sub(r"[ \t]+([,;])", r"\1", t)
         for marca, z in guardadas.items():
             t = t.replace(marca, z)
 

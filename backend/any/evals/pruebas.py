@@ -1412,6 +1412,35 @@ def test_novedades_una_sola_foto():
         db.commit()
 
 
+def test_fallas_del_27_11():
+    """27/11: doctora por nombre, horario en lista, dos «De paso», piso que dice el propio dato."""
+    from types import SimpleNamespace as N
+    from any.conocimiento.personas import locales_por_persona
+    from any.flujos.locales import linea_lista
+    from any.nucleo import promociones
+    L = [N(nombre="Mediwork", descripcion="Especialistas: nutricionista Juliana Pinto; neurocirujano Dr. Diego Devia."),
+         N(nombre="Clínica X", descripcion="Torre Médica, piso 2.")]
+    assert [l.nombre for l in locales_por_persona("Quiero una cita con la dra. juliana pinto", L)] == ["Mediwork"]
+    assert locales_por_persona("quiero cita en la torre médica", L) == []
+    loc = N(nombre="ESSA", zona="Plazoleta Guanentá", es_torre=False, whatsapp=None, fijo=None, horario="Lun-Vie 7 a 4",
+            descripcion="", productos=[], carta_link=None)
+    assert "🕒 Lun-Vie 7 a 4" in linea_lista(loc, con_horario=True) and "🕒" not in linea_lista(loc)
+
+    class _DB:
+        def add(self, x): pass
+        def commit(self): pass
+        def rollback(self): pass
+    from datetime import datetime
+    ctx = N(db=_DB(), telefono="x", ahora=datetime(2026, 11, 27))
+    promo = {"entity_type": "marketing", "entity_id": 1, "datos": {"tipo": "promocion", "nombre":
+             "Black en STOP JEANS: hasta 50% en referencias seleccionadas", "detalle": "Hasta 50%.", "hasta": "30/11/2026"}}
+    t, agregada = promociones.asegurar(ctx, promo, "No está.\n\nDe paso: Black en STOP JEANS – hasta 50 % en referencias.")
+    assert not agregada and t.count("De paso") == 1
+    t, agregada = promociones.asegurar(ctx, promo, "Hola.\n\nDe paso: Feria Navideña todo el mes.")
+    assert agregada and t.count("De paso") == 1 and "STOP JEANS" in t
+    assert promociones._corto("Uno dos tres. Cuatro cinco seis siete ocho nueve diez once doce.", 20).endswith(".")
+
+
 # ── Mini corredor ─────────────────────────────────────────────────
 
 def main():

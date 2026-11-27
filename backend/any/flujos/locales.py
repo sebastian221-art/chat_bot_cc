@@ -261,9 +261,10 @@ puedo puede quiero necesito busco me te se lo le por favor si no tambien ustedes
 """.split())
 
 
-def linea_lista(loc: Local) -> str:
+def linea_lista(loc: Local, con_horario: bool = False) -> str:
     """• *Nombre* — Zona
-         👉 WhatsApp · 📸 Instagram   (los dos contactos, siempre que existan)"""
+         👉 WhatsApp · 📸 Instagram   (los dos contactos, siempre que existan)
+         🕒 Horario                    (si preguntaron el horario: 27/11, ESSA)"""
     if loc.es_torre:     # oficinas de la Torre: piso y oficina, que es como las encuentran
         lugar = ", ".join(x for x in [loc.piso, f"oficina {loc.numero}" if loc.numero and loc.numero.upper() != "S/N" else ""] if x)
         linea = f"• *{loc.nombre}* — Torre Médica" + (f", {lugar}" if lugar else "")
@@ -277,7 +278,10 @@ def linea_lista(loc: Local) -> str:
     ig = instagram_de(loc)
     if ig:
         contactos.append(f"📸 {ig}")
-    return linea + ("\n   " + " · ".join(contactos) if contactos else "")
+    linea += ("\n   " + " · ".join(contactos) if contactos else "")
+    if con_horario and loc.horario:
+        linea += f"\n   🕒 {loc.horario}"
+    return linea
 
 
 def _quita_pedido(texto: str) -> str:
@@ -692,7 +696,9 @@ class Locales(Flujo):
 
     def _datos_lista(self, seleccion: list, termino: str, pide: str | None) -> Datos:
         seleccion = sorted({l.id: l for l in seleccion}.values(), key=lambda l: normalizar(l.nombre))
-        lineas = {l.nombre: linea_lista(l) for l in seleccion}
+        # 27/11: «¿en qué horario me atienden en la ESSA?» (dos ESSA) → la lista salía sin horario, el vigilante la
+        # rechazó dos veces y quedó la de respaldo, también sin horario. Si piden horario, va en cada línea.
+        lineas = {l.nombre: linea_lista(l, con_horario=(pide == "horario")) for l in seleccion}
         hechos = {
             "modo": "lista", "busqueda": termino, "cantidad": len(seleccion),
             "locales_para_tu_contexto": [{"nombre": l.nombre, "rubro": l.rubro, "que_vende": ", ".join(l.productos[:8]),
@@ -702,6 +708,10 @@ class Locales(Flujo):
                              f"{MARCA_LISTA} (ahí el sistema pone la lista completa con zona y WhatsApp); "
                              f"opcional: una línea final corta. NO escribas tú los locales.",
         }
+        if pide:
+            hechos["lo_que_pide"] = pide
+        if pide == "horario":
+            hechos["como_escribir"] += " El horario de cada local ya va en la lista (🕒): no lo repitas."
         if pide == "carta":
             hechos["filtro"] = ("Los locales de la lista tienen carta o menú en línea (por eso están). Dilo así: "
                                 "\"estos tienen carta\" y que te pidan la de cuál. No digas que TODOS los del centro "

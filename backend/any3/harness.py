@@ -28,6 +28,7 @@ from any.flujos import FLUJOS
 from any.flujos.base import Datos
 from any.flujos.eventos import sumar_eventos_del_local
 from any.flujos.sorteos_promos import enfocar as enfocar_promos, sumar_promos_del_local
+from any.conocimiento.personas import locales_por_persona
 from any.flujos.novedades import es_pregunta_general, es_pregunta_general_fuerte, reunir as reunir_novedades
 from any.llm import ErrorLLM
 from any.nucleo import estado as est
@@ -336,6 +337,15 @@ def _quitar_de_lista(ctx, datos: Datos, quitar: list[str], busqueda: str) -> Dat
 
 
 async def _responder(ctx, el, d) -> Respuesta:
+    # 27/11: «Quiero una cita con la dra. Juliana Pinto» → «no está registrada» (está en la descripción de Mediwork,
+    # que el directorio corta). Un profesional por su nombre se busca por código en las descripciones.
+    persona = locales_por_persona(ctx.mensaje, d.locales.values())
+    if persona and el.accion in ("no_hay", "aclarar", "info", "conversacion", "locales") \
+            and not ({f"L{l.id}" for l in persona} & set(el.ids)):
+        el.accion, el.aclaracion = "locales", ""
+        el.ids = [f"L{l.id}" for l in persona][:3]
+        el.es_local_concreto = len(el.ids) == 1
+        ctx.traza.alerta(f"profesional por nombre: atiende en {', '.join(l.nombre for l in persona[:3])}")
     if ((el.accion in ("aclarar", "conversacion", "info") and es_pregunta_general(ctx.mensaje))
             or (el.accion in ("locales", "no_hay") and es_pregunta_general_fuerte(ctx.mensaje))):
         # 27/11: al repetir «¿qué hay este mes en el mall?» el cerebro pidió aclarar dos veces, aun cuando el
@@ -382,6 +392,11 @@ async def _responder(ctx, el, d) -> Respuesta:
         datos = await reunir_novedades(ctx)
     if datos is None:
         datos = await _datos_de_flujo(ctx, el, d, flujo_obj)
+    if persona and el.accion == "locales":
+        datos.hechos["profesional_que_busca"] = (
+            "El cliente busca a un profesional por su nombre y, según la descripción, atiende en "
+            + ", ".join(l.nombre for l in persona[:3]) + ". Dilo con claridad (sí atiende ahí), con lo que hace según "
+            "los datos, y da el teléfono/WhatsApp del local para pedir la cita. No digas que no está registrado.")
     ctx.traza.paso("datos_reunidos", {"flujo": nombre_flujo, "hechos": datos.hechos,
                                       "adjuntos": [a.dict() for a in datos.adjuntos]})
 

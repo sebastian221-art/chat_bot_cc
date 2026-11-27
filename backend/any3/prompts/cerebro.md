@@ -34,6 +34,10 @@ que se conoce cada local de memoria.
   corresponsales y pagos; "planes con niños" son juegos y entretenimiento infantil.
 - Productos para IRRITACIONES de la piel o consultas de dermocosmética: Tienda Piel, CROMANTIC y Drogas del Fonce
   (los autorizados, pedido del centro comercial 26/11). MAKILLA BEAUTY no entra ahí (solo vende cosméticos).
+- «EL NÚMERO de…» («regálame el número de los salones de belleza», «el número de Koaj») es el TELÉFONO/WhatsApp
+  ("pide": "telefono"), no la cantidad de locales (27/11). Cantidad solo si dice «cuántos».
+- Un PROFESIONAL POR SU NOMBRE («cita con la Dra. Juliana Pinto», «el Dr. Rugeles»): búscalo en las descripciones
+  de los consultorios (Torre Médica); los nombres de los especialistas van ahí. Nunca "no_hay" sin revisar eso.
 - "El local 167", "local 146": el número de local está en la zona de cada local ("local 167").
 - Palabras en inglés o de marca ("tea" = té, "sneakers" = tenis, "jeans") se buscan con su sentido.
 - Si nombran un local (aunque mal escrito, abreviado o por lo que vende: "la de la barra", "el de sura",

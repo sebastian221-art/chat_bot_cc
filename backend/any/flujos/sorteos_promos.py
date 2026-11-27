@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 
+from ..conocimiento.texto import normalizar
 from ..conocimiento.buscador import buscar_conocimiento
 from ..conocimiento.catalogo import local_por_id
 from ..conocimiento.fotos import foto_principal
@@ -167,7 +168,9 @@ def resumen_por_local(db, promos: list, hoy) -> dict:
     grupos: dict[str, list] = {}
     for m in promos:
         loc = local_por_id(db, m.store_id) if m.store_id else None
-        grupos.setdefault(loc.nombre if loc else "", []).append(m)
+        # las promociones del propio centro comercial están a nombre de «Administración del Centro Comercial»
+        nombre_loc = loc.nombre if loc and not normalizar(loc.nombre).startswith("administracion") else ""
+        grupos.setdefault(nombre_loc, []).append(m)
     out = {}
     for nombre, ms in grupos.items():
         from .la_mas_actual import _cercania_promo

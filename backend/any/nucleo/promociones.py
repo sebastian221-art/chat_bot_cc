@@ -113,7 +113,7 @@ def vigentes(db, hoy: date) -> list[tuple]:
             continue        # «Jueves de Juguetería» (Jumbo) solo se ofrece de pasada el jueves
         if vigente(m.valid_until, hoy):
             out.append(("marketing", m.id, m.priority or 3, hoy,
-                        {"tipo": "promocion", "nombre": m.title, "detalle": suavizar((m.description or "")[:160], nombres),
+                        {"tipo": "promocion", "nombre": m.title, "detalle": suavizar(_corto(m.description or "", 160), nombres),
                          "hasta": m.valid_until}))
     return out
 
@@ -171,6 +171,17 @@ def elegir(ctx, flujo: str) -> dict | None:
     return {"entity_type": tipo, "entity_id": id_, "datos": {k: v for k, v in datos.items() if v}}
 
 
+def _corto(t: str, n: int) -> str:
+    """Corta en una frase o palabra completa (27/11: «Todo hasta el 30 de no (hasta el 30/11/2026)»)."""
+    t = " ".join(t.split())
+    if len(t) <= n:
+        return t
+    frase = t[:n].rsplit(". ", 1)[0]
+    if len(frase) >= n * 0.5:
+        return frase.rstrip(".") + "."
+    return t[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def linea(datos: dict) -> str:
     """Línea de respaldo con los datos reales (solo si la IA no la mencionó)."""
     n = datos.get("nombre", "")
@@ -195,8 +206,23 @@ def asegurar(ctx, promo: dict, texto: str) -> tuple[str, bool]:
     nombre = _plano(promo["datos"].get("nombre", ""))
     agregada = False
     if nombre and nombre not in _plano(texto):
-        texto = (texto.rstrip() + "\n\n" + linea(promo["datos"])).strip()
-        agregada = True
+        # 27/11: el redactor escribe su propio «De paso: Black en STOP JEANS – hasta 50 %…» (resumido) y el código
+        # agregaba otro debajo: dos «De paso» seguidos. Si ya hay un «De paso» que nombra la misma novedad, se deja;
+        # si nombra otra cosa, se cambia por la línea con los datos reales.
+        claves = {w for w in normalizar(promo["datos"].get("nombre", "")).split() if len(w) > 3}
+        lineas = texto.split("\n")
+        de_paso = [i for i, l in enumerate(lineas) if "de paso" in normalizar(l)]
+        def _coincide(l):
+            palabras = set(normalizar(l).split())
+            return claves and len(claves & palabras) >= max(1, round(len(claves) * 0.5))
+        if de_paso and any(_coincide(lineas[i]) for i in de_paso):
+            pass
+        else:
+            if de_paso:
+                lineas = [l for i, l in enumerate(lineas) if i not in de_paso]
+            texto = ("\n".join(lineas).rstrip() + "\n\n" + linea(promo["datos"])).strip()
+            texto = re.sub(r"\n{3,}", "\n\n", texto)
+            agregada = True
     from models.promotion_shown import PromotionShown
     try:
         ctx.db.add(PromotionShown(phone_number=ctx.telefono[:20], entity_type=promo["entity_type"],
