@@ -53,7 +53,6 @@ _DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domin
 PIDE_PROMOS = re.compile(r"\b(promo\w*|descuento\w*|dcto|dto|oferta\w*|rebaja\w*|black|friday|weekend|2x1|"
                          r"liquidacion\w*|en promocion|que te resuelven)\b|%")
 MAX_IMAGENES_PROMOS = 8       # cuando piden promociones concretas
-MAX_IMAGENES_GENERAL = 3      # pregunta general: solo las de hoy (27/11: 8 imágenes «parece spam»)
 
 
 def dias_de_promo(m):
@@ -126,25 +125,21 @@ def mostrar_promos(ctx, datos: Datos, promos: list, clave: str = "promociones", 
         datos.hechos[clave] = [ficha_promo(ctx.db, m, hoy) if aplica_hoy(m, hoy) else
                                {k: v for k, v in ficha_promo(ctx.db, m, hoy).items() if k in ("titulo", "dias")}
                                for m in promos]
+    from . import la_mas_actual
     if especificas:
-        con_imagen = promos
-    elif por_dia:
-        con_imagen = [m for m in promos if aplica_hoy(m, hoy)][:MAX_IMAGENES_GENERAL]   # las de hoy primero (ya ordenadas)
+        # pidió una(s) en especial (o un día): esas, con su imagen
+        imagenes = 0
+        for m in promos[:MAX_IMAGENES_PROMOS]:
+            foto = foto_principal(ctx.db, "marketing", m.id, respaldo=getattr(m, "photo_url", None))
+            if foto and not any(a.url == foto for a in datos.adjuntos):
+                datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=m.title))
+                imagenes += 1
+        if imagenes:
+            datos.hechos["imagenes"] = (f"va(n) adjunta(s) {imagenes} imagen(es) de esta(s) promoción(es): no las "
+                                        "describas ni ofrezcas mandarlas.")
     else:
-        con_imagen = promos[:MAX_IMAGENES_GENERAL]
-    imagenes = 0
-    for m in con_imagen[:MAX_IMAGENES_PROMOS]:
-        foto = foto_principal(ctx.db, "marketing", m.id, respaldo=getattr(m, "photo_url", None))
-        if foto and not any(a.url == foto for a in datos.adjuntos):
-            datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=m.title))
-            imagenes += 1
-    if imagenes:
-        cuales = "de las promociones de HOY" if not especificas and len(con_imagen) < len(promos) else "de estas promociones"
-        datos.hechos["imagenes"] = (f"van adjuntas {imagenes} imágenes {cuales} (las piezas oficiales): no las describas "
-                                    "ni digas que no tienes imágenes.")
-    if not especificas and len(con_imagen) < len(promos):
-        datos.hechos["como_ofrecer_mas"] = ("Al final ofrece en UNA línea: si quiere la imagen o el detalle de otro día o "
-                                            "de una promoción, que te diga cuál.")
+        # 27/11: pregunta general → el texto con TODAS y UNA sola foto: la más actual (la de hoy)
+        la_mas_actual.poner(datos, la_mas_actual.elegir(ctx.db, hoy, promos=promos), len(promos))
     if por_dia:
         datos.hechos["como_responder_dias"] = (
             f"Hoy es {_DIAS[hoy.weekday()]}. Son promociones de un día de la semana («dias»). "
@@ -234,6 +229,10 @@ def enfocar(ctx, datos: Datos, promos: list, sorteos: list, locales_ids: list) -
             promos = promos + [m for m in promos_vigentes(ctx.db, hoy)
                                if m.id not in ya and re.search(r"\bblack\b", normalizar(f"{m.title} {m.description}"))]
         mostrar_promos(ctx, datos, promos, especificas=especificas)
+        if sorteos and not especificas:
+            from . import la_mas_actual
+            la_mas_actual.poner(datos, la_mas_actual.elegir(ctx.db, hoy, sorteos=sorteos, promos=promos),
+                                len(sorteos) + len(promos))
         if len(promos) == 1:
             datos.entidades["promo"] = promos[0].title
 
@@ -283,14 +282,10 @@ class SorteosPromos(Flujo):
                 hechos["como_responder_lista"] = (
                     "Son muchas promociones: agrúpalas por local, una línea por local con lo principal (porcentaje y "
                     "hasta cuándo). Las de un día de la semana («dias») van con su día.")
-            # Lista general: UNA imagen de referencia (el sorteo principal), no una por cada uno (pedido 11/11)
-            for x in sorteos:
-                foto = foto_principal(db, "raffle", x.id, respaldo=x.photo_url, orden=("afiche", "premio", "otra"))
-                if foto:
-                    datos.adjuntos.append(Adjunto(tipo="imagen", url=foto, leyenda=x.name))
-                    hechos["imagen"] = (f"se adjunta UNA imagen de referencia: la de «{x.name}». No digas que envías "
-                                        f"imágenes de los demás.")
-                    break
+            # Lista general: el texto con todos y UNA imagen, la más actual (pedidos 11/11 y 27/11)
+            from . import la_mas_actual
+            la_mas_actual.poner(datos, la_mas_actual.elegir(db, hoy, sorteos=sorteos, promos=promos),
+                                len(sorteos) + len(promos))
             if len(promos) == 1:
                 datos.entidades["promo"] = promos[0].title
         return datos

@@ -28,6 +28,7 @@ from any.flujos import FLUJOS
 from any.flujos.base import Datos
 from any.flujos.eventos import sumar_eventos_del_local
 from any.flujos.sorteos_promos import enfocar as enfocar_promos, sumar_promos_del_local
+from any.flujos.novedades import es_pregunta_general, reunir as reunir_novedades
 from any.llm import ErrorLLM
 from any.nucleo import estado as est
 from any.nucleo import guardias, mensajes, promociones
@@ -349,6 +350,10 @@ async def _responder(ctx, el, d) -> Respuesta:
         return Respuesta(texto, "conversacion", meta={"any3": {"accion": "aclarar"}})
 
     nombre_flujo, datos = _datos(ctx, el, d)
+    general = (el.accion in ("eventos", "sorteos_promos") and not (el.ids_eventos or el.ids_promos or el.ids)
+               and es_pregunta_general(ctx.mensaje))
+    if general:             # 27/11: «¿qué hay este mes en el mall?» → eventos, sorteos y promociones, una sola foto
+        nombre_flujo, datos = "eventos", None
     flujo_obj = FLUJOS[nombre_flujo]
     entidades = {}
     if el.accion == "locales" and len(el.ids) == 1:
@@ -365,6 +370,8 @@ async def _responder(ctx, el, d) -> Respuesta:
     except Exception as e:
         ctx.traza.alerta(f"regla de promociones falló: {e}")
         ctx.db.rollback()
+    if datos is None and general:
+        datos = await reunir_novedades(ctx)
     if datos is None:
         datos = await _datos_de_flujo(ctx, el, d, flujo_obj)
     ctx.traza.paso("datos_reunidos", {"flujo": nombre_flujo, "hechos": datos.hechos,

@@ -1334,8 +1334,8 @@ def test_promos_de_un_local_con_imagenes():
         sp.sumar_promos_del_local(ctx(f"¿{loc.nombre} tiene descuentos?"), loc.nombre, d)
         titulos = [p["titulo"] for p in d.hechos["promociones_vigentes_de_este_local"]]
         assert titulos.index("Prueba jueves de algo") < titulos.index("Prueba lunes de algo")
-        # pregunta general: el texto de todas, pero solo las imágenes de las que aplican hoy (jueves)
-        assert {a.url for a in d.adjuntos} == {"https://x/jueves.jpg", "https://x/black.jpg"}
+        # 27/11 pregunta general: el texto de todas y UNA sola foto, la más actual (la del jueves, hoy)
+        assert [a.url for a in d.adjuntos] == ["https://x/jueves.jpg"] and len(titulos) == 3
         d = Datos()
         sp.sumar_promos_del_local(ctx(f"¿Qué promociones tiene {loc.nombre} el lunes?"), loc.nombre, d)
         assert [a.url for a in d.adjuntos] == ["https://x/lunes.jpg"]
@@ -1348,14 +1348,61 @@ def test_promos_de_un_local_con_imagenes():
         c = ctx(f"¿{loc.nombre} tiene promociones?")
         d = Datos()
         sp.enfocar(c, d, nuevas, [], [loc.id])
-        assert len(d.hechos["promociones"]) == 3 and "https://x/lunes.jpg" not in {a.url for a in d.adjuntos}
+        assert len(d.hechos["promociones"]) == 3 and [a.url for a in d.adjuntos] == ["https://x/jueves.jpg"]
         d = asyncio.run(sp.SorteosPromos().reunir(ctx(f"promociones de {loc.nombre}")))
-        assert any(a.url == "https://x/black.jpg" for a in d.adjuntos) and "promociones" in d.hechos
+        assert [a.url for a in d.adjuntos] == ["https://x/jueves.jpg"] and len(d.hechos["promociones"]) == 3
+        # una en especial → esa, con su foto
+        d = Datos()
+        sp.enfocar(ctx("más información de la Black"), d, [nuevas[2]], [], [loc.id])
+        assert [a.url for a in d.adjuntos] == ["https://x/black.jpg"]
         pasada = [x[4]["nombre"] for x in promociones.vigentes(db, jueves.date())]
         assert "Prueba jueves de algo" in pasada and "Prueba lunes de algo" not in pasada
     finally:
         for m in nuevas:
             db.delete(m)
+        db.commit()
+
+
+def test_novedades_una_sola_foto():
+    """27/11: «¿qué hay este mes en el mall?» → eventos, sorteos y promociones en el texto, y UNA foto: la más actual."""
+    import asyncio
+    from datetime import datetime
+    from any.config import ZONA_HORARIA
+    from any.flujos import novedades
+    from any.flujos.la_mas_actual import elegir
+    from any.nucleo.estado import EstadoSesion
+    from any.nucleo.tipos import Contexto, Decision
+    from any.nucleo.trazas import Traza
+    from models.event import Event
+    from models.marketing import Marketing
+    assert novedades.es_pregunta_general("¿Qué hay este mes en el mall?")
+    assert novedades.es_pregunta_general("que planes hay para el fin de semana en el centro comercial")
+    assert not novedades.es_pregunta_general("¿qué eventos hay este mes?")
+    assert not novedades.es_pregunta_general("¿qué promociones hay en el mall?")
+    db = _db()
+    jueves = datetime(2026, 11, 26, 18, 0, tzinfo=ZONA_HORARIA)
+    ev_hoy = Event(name="Prueba evento de hoy", date="26/11/2026", time="5:00 p. m.", location="Plazoleta",
+                   description="prueba", photo_url="https://x/evento_hoy.jpg")
+    ev_lejos = Event(name="Prueba evento lejano", date="20/12/2026", location="Plazoleta", description="prueba",
+                     photo_url="https://x/evento_lejos.jpg")
+    promo = Marketing(title="Prueba jueves de novedades", description="Todos los jueves: 10%.", priority=5, active=True,
+                      photo_url="https://x/promo_jueves.jpg")
+    db.add_all([ev_hoy, ev_lejos, promo])
+    db.commit()
+    try:
+        assert elegir(db, jueves.date(), eventos=[ev_lejos, ev_hoy], promos=[promo]).url == "https://x/evento_hoy.jpg"
+        assert elegir(db, jueves.date(), eventos=[ev_lejos], promos=[promo]).url == "https://x/promo_jueves.jpg"
+        c = Contexto(db=db, telefono="prueba-novedades", nombre="x", mensaje="¿Qué hay este mes en el mall?",
+                     ahora=jueves, historial=[], sesion_nueva=False, estado=EstadoSesion("prueba-novedades"),
+                     traza=Traza("x", "x", "prueba"))
+        c.decision = Decision("eventos", {}, False, c.mensaje, "", "t")
+        d = asyncio.run(novedades.reunir(c))
+        assert [a.url for a in d.adjuntos if a.tipo == "imagen"] == ["https://x/evento_hoy.jpg"]
+        assert {"eventos_vigentes", "sorteos_vigentes", "promociones_por_local"} <= set(d.hechos)
+        assert "afiches" not in d.meta
+    finally:
+        for x in (ev_hoy, ev_lejos, promo):
+            db.delete(x)
         db.commit()
 
 

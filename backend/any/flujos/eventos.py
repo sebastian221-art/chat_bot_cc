@@ -172,8 +172,10 @@ class Eventos(Flujo):
             def nucleo(n):   # "Run Run Kids 2026" también vale escrito "Run Run Kids"
                 import re
                 return re.sub(r"\s*\b\d{4}\b\s*$", "", normalizar(n)).strip()
-            nombrados = sorted((t.find(nucleo(n)), n) for n in afiches if nucleo(n) and nucleo(n) in t)
-            for _, n in nombrados[:MAX_AFICHES]:
+            # 27/11: de los que nombra la respuesta, va el afiche del MÁS ACTUAL (el que es hoy o el más próximo)
+            cerca = datos.meta.get("cercania") or {}
+            nombrados = sorted((cerca.get(n, 99), t.find(nucleo(n)), n) for n in afiches if nucleo(n) and nucleo(n) in t)
+            for *_, n in nombrados[:MAX_AFICHES]:
                 if afiches[n] not in ya:
                     datos.adjuntos.append(Adjunto(tipo="imagen", url=afiches[n], leyenda=n))
         return _quitar_promesa_de_afiches(ctx, texto, sum(1 for a in datos.adjuntos if a.tipo == "imagen"))
@@ -206,6 +208,8 @@ class Eventos(Flujo):
                 if f:
                     afiches[x.name] = f
             datos.meta["afiches"] = afiches
+            from .la_mas_actual import _cercania_evento
+            datos.meta["cercania"] = {x.name: _cercania_evento(x, hoy) for x in evs}
             if afiches:
                 # Antes decía «los afiches se envían aparte» y el modelo prometía «los afiches de ambos eventos»
                 # aunque solo uno tuviera afiche. Ahora sabe cuáles tienen, y no debe hablar de afiches.

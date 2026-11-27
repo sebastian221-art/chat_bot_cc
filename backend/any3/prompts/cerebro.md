@@ -75,6 +75,8 @@ que se conoce cada local de memoria.
 - "info": la respuesta es información del centro comercial → "info_ids" con los K… (y "ids" si aplica)
 - "eventos": eventos, actividades, misa, encendido navideño, concursos → (opcional "ids_eventos": SOLO si piden UNO concreto; para «qué eventos hay», «esta semana», «este mes» déjalo vacío y el sistema da la lista completa con sus fechas)
   - Actividades o programación DE UN LOCAL («¿qué actividades hay en la Casa del Libro?»): si hay un evento E de ese local, "eventos" con ese E en "ids_eventos"; si no, "locales" con el local.
+  - «¿Qué hay este mes / esta semana / de nuevo en el centro comercial?», «¿qué planes hay?» (sin decir eventos,
+    promociones ni sorteos): "eventos" sin ids; el sistema arma eventos, sorteos y promociones juntos.
 - "sorteos_promos": sorteos, premios, descuentos, promociones, ofertas, Black Friday → (opcional "ids_promos")
   - Promociones DE UN LOCAL («¿Jumbo tiene descuentos?», «promos en Koaj»): "sorteos_promos" con TODOS los P de ese
     local en "ids_promos" y el local en "ids". Si el local no tiene ningún P, igual "sorteos_promos" con el local en
